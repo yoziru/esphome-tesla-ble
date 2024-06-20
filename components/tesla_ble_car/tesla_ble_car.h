@@ -9,6 +9,8 @@
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
 
+#include "vcsec.pb.h"
+
 namespace TeslaBLE {
     class Client;
 }
@@ -31,6 +33,8 @@ class TeslaBLECar : public ble_client::BLEClientNode {
  public:
   TeslaBLECar();
   void startPair(void);
+  void wakeVehicle(void);
+  void sendCommand(VCSEC_RKEAction_E action);
 
   // void update() override;
 
@@ -60,6 +64,14 @@ class TeslaBLEPair : public Action<Ts...>, public Parented<TeslaBLECar> {
     public:
         void play(Ts... x) override { 
             this->parent_->startPair();
+        }
+};
+
+template<typename... Ts>
+class TeslaBLEWake : public Action<Ts...>, public Parented<TeslaBLECar> {
+    public:
+        void play(Ts... x) override { 
+            this->parent_->wakeVehicle();
         }
 };
 

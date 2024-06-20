@@ -21,6 +21,12 @@ button:
     on_press:
       - tesla_ble_car.pair:
 
+  - platform: template
+    name: Wake up
+    icon: mdi:sleep-off
+    on_press:
+      - tesla_ble_car.wake:
+
 # Enable this to scan for BLE devices
 # tesla_ble_listener:
 

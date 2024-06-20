@@ -133,7 +133,7 @@ namespace esphome
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
       this->read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
       this->write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
-      this->isAuthenticated = false;
+      this->isAuthenticated = true;
       ESP_LOGI(TAG, "Tesla BLE Car component started");
     }
 
@@ -151,7 +151,7 @@ namespace esphome
           ESP_LOGE(TAG, "Failed to build whitelist message");
           return;
         }
-        ESP_LOGD(TAG, "Whitelist message length: %d", whitelist_message_length);
+        ESP_LOGV(TAG, "Whitelist message length: %d", whitelist_message_length);
 
         auto write_status_tap =
               esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, whitelist_message_length, whitelist_message_buffer, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
@@ -186,10 +186,39 @@ namespace esphome
       // }
     }
 
+    void TeslaBLECar::sendCommand(VCSEC_RKEAction_E action) {
+      if (this->isAuthenticated == false) {
+        ESP_LOGW(TAG, "Not authenticated yet");
+        return;
+      }
+
+      unsigned char action_message_buffer[200];
+      size_t action_message_buffer_length = 0;
+      int return_code = m_pClient->BuildActionMessage(
+          &action, action_message_buffer, &action_message_buffer_length);
+
+      if (return_code != 0) {
+        ESP_LOGE(TAG, "Failed to build action message");
+        return;
+      }
+
+      auto err = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, action_message_buffer_length, action_message_buffer, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (err) {
+        ESP_LOGW(TAG, "Error sending write value to BLE gattc server, error=%d", err);
+        return;
+      }
+      ESP_LOGI(TAG, "Command sent");
+    }
+
+    void TeslaBLECar::wakeVehicle() {
+      ESP_LOGI(TAG, "Waking vehicle");
+      this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+    }
+
     void TeslaBLECar::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                           esp_ble_gattc_cb_param_t *param)
     {
-      ESP_LOGD(TAG, "GATTC event %d", event);
+      ESP_LOGV(TAG, "GATTC event %d", event);
       switch (event)
       {
       case ESP_GATTC_OPEN_EVT:
@@ -275,7 +304,7 @@ namespace esphome
         //   this->read_battery_(param->notify.value, param->notify.value_len);
         // }
 
-        ESP_LOGD(TAG, "ESP_GATTC_NOTIFY_EVT, value_len=%d", param->notify.value_len);
+        ESP_LOGV(TAG, "ESP_GATTC_NOTIFY_EVT, value_len=%d", param->notify.value_len);
         VCSEC_FromVCSECMessage message_o = VCSEC_FromVCSECMessage_init_zero;
         int return_code = m_pClient->ParseFromVCSECMessage(param->notify.value, param->notify.value_len, &message_o);
         if (return_code != 0)
