@@ -1,0 +1,23 @@
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    icon: mdi:wifi
+
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+    icon: mdi:clock-outline
+
+time:
+  - platform: homeassistant
+    id: esptime
+
+text_sensor:
+  - platform: version
+    name: "Version"
+    icon: mdi:cube-outline
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+

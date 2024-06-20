@@ -1,0 +1,9 @@
+substitutions:
+  friendly_name: "ESP32-EVB Tesla BLE"
+  devicename: "olimex-esp32-evb-tesla-ble"
+  device_description: "Olimex ESP32-EVB"
+
+esp32:
+  board: esp32-evb
+  framework:
+    type: esp-idf

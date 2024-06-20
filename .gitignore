@@ -1,0 +1,8 @@
+__pycache__
+.esphome
+secrets.yaml
+.vscode
+.DS_Store
+.venv
+firmware.bin.gz
+foo

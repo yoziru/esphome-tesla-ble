@@ -1,0 +1,13 @@
+name: Build and Publish ESPHome firmware and website
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    uses: ./.github/workflows/publish-common.yml
+    with:
+      files: tesla-ble-m5stack-atoms3.yml,tesla-ble-m5stack-nanoc6.yml
+      name: ESPHome Tesla BLE

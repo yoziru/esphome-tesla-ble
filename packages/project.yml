@@ -1,0 +1,14 @@
+external_components:
+  - components: [ tesla_ble_listener, tesla_ble_car ]
+    source: components
+
+esp32_ble_tracker:
+tesla_ble_listener:
+
+ble_client:
+  - mac_address: !secret ble_mac_address
+    id: ble_tesla_id
+
+tesla_ble_car:
+  ble_client_id: ble_tesla_id
+  id: tesla_ble_car_id
