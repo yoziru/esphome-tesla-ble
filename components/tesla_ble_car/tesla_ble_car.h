@@ -26,6 +26,7 @@ static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 class TeslaBLECar : public ble_client::BLEClientNode {
  public:
   TeslaBLECar();
+  void startPair(void);
 
   // void update() override;
 

@@ -12,3 +12,11 @@ esp32_ble_tracker:
     - then:
         - lambda: |-
              ESP_LOGD("ble_auto", "The scan has ended!");
+
+button:
+  - platform: template
+    id: ble_pair
+    name: BLE Pair _Start_
+    icon: "mdi:check-underline"
+    # on_press:
+    #   - tesla_ble_car.pair:
