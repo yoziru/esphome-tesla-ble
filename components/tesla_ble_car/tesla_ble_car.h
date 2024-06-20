@@ -23,11 +23,11 @@ static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";
 static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
 static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 
-class TeslaBLECar : public ble_client::BLEClientNode {
+class TeslaBLECar : public PollingComponent, public ble_client::BLEClientNode {
  public:
   TeslaBLECar();
 
-  // void update() override;
+  void update() override;
 
   void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                            esp_ble_gattc_cb_param_t *param) override;

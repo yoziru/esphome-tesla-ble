@@ -92,17 +92,17 @@ void TeslaBLECar::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t 
   }
 }
 
-// void TeslaBLECar::update() {
-//   if (this->node_state != espbt::ClientState::ESTABLISHED) {
-//     if (!this->parent()->enabled) {
-//       ESP_LOGW(TAG, "Reconnecting to device");
-//       this->parent()->set_enabled(true);
-//       this->parent()->connect();
-//     } else {
-//       ESP_LOGW(TAG, "Connection in progress");
-//     }
-//   }
-// }
+void TeslaBLECar::update() {
+  if (this->node_state != espbt::ClientState::ESTABLISHED) {
+    if (!this->parent()->enabled) {
+      ESP_LOGW(TAG, "Reconnecting to device");
+      this->parent()->set_enabled(true);
+      this->parent()->connect();
+    } else {
+      ESP_LOGW(TAG, "Connection in progress");
+    }
+  }
+}
 
 void TeslaBLECar::test() {
     unsigned char private_key_buffer[300];

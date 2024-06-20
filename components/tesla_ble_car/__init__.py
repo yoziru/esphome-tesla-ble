@@ -19,7 +19,7 @@ CONFIG_SCHEMA = (
             cv.GenerateID(CONF_ID): cv.declare_id(TeslaBLECar),
         }
     )
-    .extend(cv.polling_component_schema("1min"))
+    .extend(cv.polling_component_schema("5s"))
     .extend(ble_client.BLE_CLIENT_SCHEMA)
     .extend(cv.COMPONENT_SCHEMA)
 )
