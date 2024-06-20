@@ -37,6 +37,7 @@ class TeslaBLECar : public ble_client::BLEClientNode {
   void lockVehicle(void);
   void unlockVehicle(void);
   void sendCommand(VCSEC_RKEAction_E action);
+  void sendEphemeralKeyRequest(void);
 
   // void update() override;
 

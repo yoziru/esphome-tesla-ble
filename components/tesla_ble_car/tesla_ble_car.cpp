@@ -164,6 +164,27 @@ namespace esphome
       }
     }
 
+    void TeslaBLECar::sendEphemeralKeyRequest() {
+        unsigned char ephemeral_key_message_buffer[256];
+        size_t ephemeral_key_message_length = 0;
+        int return_code = m_pClient->BuildEphemeralKeyMessage(
+            ephemeral_key_message_buffer, &ephemeral_key_message_length);
+
+        if (return_code != 0) {
+          ESP_LOGE(TAG, "Failed to build whitelist message\n");
+          return;
+        }
+        ESP_LOGV(TAG, "Ephemeral key message length: %d", ephemeral_key_message_length);
+
+        auto write_status_wait =
+            esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, ephemeral_key_message_length, ephemeral_key_message_buffer, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+        if (write_status_wait) {
+          ESP_LOGW(TAG, "Error sending write value to BLE gattc server, status=%d", write_status_wait);
+          return;
+        }
+        ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
+    }
+
     void TeslaBLECar::sendCommand(VCSEC_RKEAction_E action) {
       if (this->isAuthenticated == false) {
         ESP_LOGW(TAG, "Not authenticated yet");
@@ -295,6 +316,11 @@ namespace esphome
         if (param->notify.conn_id != this->parent()->get_conn_id()) {
           ESP_LOGW(TAG, "Received notify from unknown connection");
           return;
+        }
+
+        if (this->isAuthenticated == false) {
+          ESP_LOGW(TAG, "Not authenticated yet, sending ephemeral key");
+          this->sendEphemeralKeyRequest();
         }
 
         ESP_LOGD(TAG, "ESP_GATTC_NOTIFY_EVT, value_len=%d", param->notify.value_len);
