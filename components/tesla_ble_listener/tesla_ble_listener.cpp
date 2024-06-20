@@ -8,7 +8,6 @@ namespace esphome {
 namespace tesla_ble_listener {
 
 static const char *const TAG = "tesla_ble_listener";
-static const char *const TESLA_VIN = "XP7YGCEK4NB022648";
 
 bool TeslaBLEListener::parse_device(const esp32_ble_tracker::ESPBTDevice &device) {
   for (auto &it : device.get_manufacturer_datas()) {
@@ -23,23 +22,9 @@ bool TeslaBLEListener::parse_device(const esp32_ble_tracker::ESPBTDevice &device
       sn |= ((uint32_t) it.data[3] << 24);
 
       // only log if device name is not empty
-      if (device.get_name() != "") {
+      if (not device.get_name().empty()) {
+        // device name should match sha1 of VIN
         ESP_LOGD(TAG, "Found possible Tesla device Serial: %" PRIu32 " | Name: %s | MAC: %s", sn, device.get_name().c_str(), device.address_str().c_str());
-        // device name should match sha1 of VIN (sha1 should be S7079c5022536d6bdC)
-        // 
-        // std::string vin = TESLA_VIN;
-        // std::vector<uint8_t> vinBytes(vin.begin(), vin.end());
-        // std::array<uint8_t, 20> digest;
-        // sha1(vinBytes.data(), vinBytes.size(), digest.data());
-
-        // char tesla_vin_sha1[32];
-        // snprintf(tesla_vin_sha1, sizeof(tesla_vin_sha1), "S%02x%02x%02x%02x%02x%02x%02x%02x",
-        //      digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7]);
-
-        if (device.get_name() == "S7079c5022536d6bdC") {
-          ESP_LOGD(TAG, "-> Device name: %s", device.get_name().c_str());
-          return true;
-        }
       }
     }
   }
