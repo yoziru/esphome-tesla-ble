@@ -17,6 +17,6 @@ button:
   - platform: template
     id: ble_pair
     name: BLE Pair _Start_
-    icon: "mdi:check-underline"
-    # on_press:
-    #   - tesla_ble_car.pair:
+    icon: mdi:bluetooth-connect
+    on_press:
+      - tesla_ble_car.pair:

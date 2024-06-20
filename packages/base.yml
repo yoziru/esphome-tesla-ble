@@ -19,11 +19,12 @@ packages:
   project: !include project.yml
 
 logger:
-  level: VERY_VERBOSE
+  level: DEBUG
   logs:
-    wifi: DEBUG
+    wifi: INFO
     uptime: INFO
     esp32_ble_tracker: INFO
+    esp32_ble: DEBUG
     light: INFO
     api: INFO
 

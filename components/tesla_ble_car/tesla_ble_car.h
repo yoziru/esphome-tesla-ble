@@ -51,5 +51,13 @@ class TeslaBLECar : public ble_client::BLEClientNode {
   // void set_response_timeout_();
 };
 
+template<typename... Ts>
+class TeslaBLEPair : public Action<Ts...>, public Parented<TeslaBLECar> {
+    public:
+        void play(Ts... x) override { 
+            this->parent_->startPair();
+        }
+};
+
 }  // namespace tesla_ble_car
 }  // namespace esphome
