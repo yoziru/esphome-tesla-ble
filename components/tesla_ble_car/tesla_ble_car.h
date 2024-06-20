@@ -48,7 +48,6 @@ class TeslaBLECar : public PollingComponent, public ble_client::BLEClientNode {
   void response_pending_();
   void response_received_();
   void set_response_timeout_();
-  void test();
 };
 
 }  // namespace tesla_ble_car

@@ -14,7 +14,7 @@ namespace esphome
     TeslaBLECar::TeslaBLECar()
         : m_pClient(new TeslaBLE::Client{})
     {
-      ESP_LOGI(TAG, "Starting");
+      ESP_LOGI(TAG, "Starting Tesla BLE Car component");
 
       esp_err_t err = nvs_flash_init();
       if (err != ESP_OK)
@@ -136,11 +136,13 @@ namespace esphome
       this->read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
       this->write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
       this->isAuthenticated = false;
+      ESP_LOGI(TAG, "Tesla BLE Car component started");
     }
 
     void TeslaBLECar::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                           esp_ble_gattc_cb_param_t *param)
     {
+      ESP_LOGD(TAG, "GATTC event %d", event);
       switch (event)
       {
       case ESP_GATTC_OPEN_EVT:
@@ -159,7 +161,7 @@ namespace esphome
           }
           this->write_handle_ = writeCharacteristic->handle;
 
-          if (isAuthenticated == false)
+          if (this->isAuthenticated == false)
           {
             unsigned char whitelist_message_buffer[200];
             size_t whitelist_message_length = 0;
@@ -187,7 +189,7 @@ namespace esphome
             // }
           }
 
-          while (isAuthenticated == false) {
+          while (this->isAuthenticated == false) {
             unsigned char ephemeral_key_message_buffer[200];
             size_t ephemeral_key_message_length = 0;
             int return_code = m_pClient->BuildEphemeralKeyMessage(
@@ -297,25 +299,6 @@ namespace esphome
         {
           ESP_LOGW(TAG, "Connection in progress");
         }
-      }
-    }
-
-    void TeslaBLECar::test()
-    {
-      unsigned char private_key_buffer[300];
-      size_t private_key_length = 0;
-      m_pClient->GetPrivateKey(private_key_buffer, sizeof(private_key_buffer), &private_key_length);
-      ESP_LOGD(TAG, "Private key: %s\n", private_key_buffer);
-
-      unsigned char message_buffer[200];
-      size_t message_buffer_length = 0;
-      m_pClient->BuildWhiteListMessage(message_buffer, &message_buffer_length);
-
-      auto chr_status = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, message_buffer_length, message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
-      if (chr_status)
-      {
-        ESP_LOGW(TAG, "Error sending the white list message, status=%d", chr_status);
-        return;
       }
     }
 

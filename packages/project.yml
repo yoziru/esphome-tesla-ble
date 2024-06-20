@@ -3,12 +3,11 @@ external_components:
     source: components
 
 esp32_ble_tracker:
-tesla_ble_listener:
-
-ble_client:
-  - mac_address: !secret ble_mac_address
-    id: ble_tesla_id
-
-tesla_ble_car:
-  ble_client_id: ble_tesla_id
-  id: tesla_ble_car_id
+  # scan_parameters:
+  #   interval: 1s
+  #   window: 250ms
+    # continuous: false
+  on_scan_end:
+    - then:
+        - lambda: |-
+             ESP_LOGD("ble_auto", "The scan has ended!");

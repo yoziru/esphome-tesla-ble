@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-BOARD := m5stack-atoms3
+BOARD := m5stack-nanoc6
 TARGET := tesla-ble-$(BOARD).yml
 
 compile: .esphome/build/tesla-ble/.pioenvs/tesla-ble/firmware.bin .esphome/build/tesla-ble/$(TARGET).touchfile  ## Read the configuration and compile the binary.

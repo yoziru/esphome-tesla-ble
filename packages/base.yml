@@ -19,7 +19,11 @@ packages:
   project: !include project.yml
 
 logger:
-  level: DEBUG
+  level: VERY_VERBOSE
+  logs:
+    wifi: DEBUG
+    uptime: INFO
+
 
 api:
   encryption:

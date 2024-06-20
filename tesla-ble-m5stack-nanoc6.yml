@@ -4,3 +4,21 @@ packages:
 
 dashboard_import:
   package_import_url: github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.yml
+
+# Enable this to scan for BLE devices
+# tesla_ble_listener:
+
+ble_client:
+  - mac_address: !secret ble_mac_address
+    id: ble_tesla_id
+    on_connect:
+      then:
+        - logger.log: "Connected to Tesla BLE"
+        # - esp32_ble_tracker.stop_scan:
+    on_disconnect:
+      then:
+        - logger.log: "Disconnected from Tesla BLE"
+
+tesla_ble_car:
+  ble_client_id: ble_tesla_id
+  id: tesla_ble_car_id
