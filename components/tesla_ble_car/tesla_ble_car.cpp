@@ -171,7 +171,7 @@ namespace esphome
             ephemeral_key_message_buffer, &ephemeral_key_message_length);
 
         if (return_code != 0) {
-          ESP_LOGE(TAG, "Failed to build whitelist message\n");
+          ESP_LOGE(TAG, "Failed to build whitelist message");
           return;
         }
         ESP_LOGV(TAG, "Ephemeral key message length: %d", ephemeral_key_message_length);
@@ -182,7 +182,7 @@ namespace esphome
           ESP_LOGW(TAG, "Error sending write value to BLE gattc server, status=%d", write_status_wait);
           return;
         }
-        ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
+        ESP_LOGI(TAG, "Waiting for keycard to be tapped...");
     }
 
     void TeslaBLECar::sendCommand(VCSEC_RKEAction_E action) {
@@ -328,7 +328,7 @@ namespace esphome
         int return_code = m_pClient->ParseFromVCSECMessage(param->notify.value, param->notify.value_len, &message_o);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to parse incoming message\n");
+          ESP_LOGE(TAG, "Failed to parse incoming message");
           return;
         }
 
@@ -336,7 +336,7 @@ namespace esphome
         {
         case VCSEC_AuthenticationRequest_sessionInfo_tag:
         {
-          ESP_LOGI(TAG, "Received ephemeral key\n");
+          ESP_LOGI(TAG, "Received ephemeral key");
 
           esp_err_t err =
               nvs_set_blob(this->storage_handle_, "tesla_key",
