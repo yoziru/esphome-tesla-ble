@@ -34,13 +34,15 @@ class TeslaBLECar : public PollingComponent, public ble_client::BLEClientNode {
 
  protected:
   TeslaBLE::Client* m_pClient;
+  uint32_t storage_handle_;
   uint16_t handle_;
-  uint16_t acp_handle_{0};
+  uint16_t read_handle_{0};
   uint16_t write_handle_{0};
 
   espbt::ESPBTUUID service_uuid_;
   espbt::ESPBTUUID read_uuid_;
   espbt::ESPBTUUID write_uuid_;
+  bool isAuthenticated;
 
   uint8_t responses_pending_{0};
   void response_pending_();
