@@ -134,7 +134,7 @@ namespace esphome
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
       this->read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
       this->write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
-      this->isAuthenticated = true;
+      this->isAuthenticated = false;
       ESP_LOGI(TAG, "Tesla BLE Car component started");
     }
 
@@ -162,47 +162,7 @@ namespace esphome
         }
         ESP_LOGI(TAG, "Please tap your card on the reader now..");
       }
-
-      // while (this->isAuthenticated == false) {
-      //   unsigned char ephemeral_key_message_buffer[256];
-      //   size_t ephemeral_key_message_length = 0;
-      //   int return_code = m_pClient->BuildEphemeralKeyMessage(
-      //       ephemeral_key_message_buffer, &ephemeral_key_message_length);
-
-      //   if (return_code != 0) {
-      //     ESP_LOGE(TAG, "Failed to build whitelist message\n");
-      //     return;
-      //   }
-      //   ESP_LOGD(TAG, "Ephemeral key message length: %d", ephemeral_key_message_length);
-
-
-      //   auto write_status_wait =
-      //       esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, ephemeral_key_message_length, ephemeral_key_message_buffer, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-      //   if (write_status_wait) {
-      //     ESP_LOGW(TAG, "Error sending write value to BLE gattc server, status=%d", write_status_wait);
-      //     return;
-      //   }
-      //   ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
-      //   usleep(10000000);
-      // }
     }
-
-    // void TeslaBLECar::ephemeralKey() {
-    //     unsigned char ephemeral_key_message_buffer[256];
-    //     size_t ephemeral_key_message_length = 0;
-    //     int return_code = client.BuildEphemeralKeyMessage(
-    //         ephemeral_key_message_buffer, &ephemeral_key_message_length);
-
-    //     if (return_code != 0) {
-    //       ESP_LOGE(TAG, "Failed to build whitelist message\n");
-    //       continue;
-    //     }
-
-    //     if (writeCharacteristic->writeValue(ephemeral_key_message_buffer,
-    //                                         ephemeral_key_message_length)) {
-    //       ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
-    //     }
-    // }
 
     void TeslaBLECar::sendCommand(VCSEC_RKEAction_E action) {
       if (this->isAuthenticated == false) {
@@ -332,11 +292,10 @@ namespace esphome
 
       case ESP_GATTC_NOTIFY_EVT:
       {
-        if (param->notify.conn_id != this->parent()->get_conn_id())
-          break;
-        // if (param->notify.handle == this->read_handle_) {
-        //   this->read_battery_(param->notify.value, param->notify.value_len);
-        // }
+        if (param->notify.conn_id != this->parent()->get_conn_id()) {
+          ESP_LOGW(TAG, "Received notify from unknown connection");
+          return;
+        }
 
         ESP_LOGD(TAG, "ESP_GATTC_NOTIFY_EVT, value_len=%d", param->notify.value_len);
         VCSEC_FromVCSECMessage message_o = VCSEC_FromVCSECMessage_init_zero;
@@ -346,74 +305,102 @@ namespace esphome
           ESP_LOGE(TAG, "Failed to parse incoming message\n");
           return;
         }
-        // message_o.which_sub_message
-        // pb_size_t which_sub_message;
-        ESP_LOGD(TAG, "Which sub message: %u", message_o.which_sub_message);
-        ESP_LOGD(TAG, "Has active key: %d", message_o.sub_message.activeKey.has_activeKey);
-        TeslaBLE::DumpBuffer("\n", message_o.sub_message.activeKey.activeKey.publicKeySHA1, 4);
-        ESP_LOGD(TAG, "Charge port close: %d", message_o.sub_message.capabilities.chargePortClose);
-        ESP_LOGD(TAG, "Charge port open: %d", message_o.sub_message.capabilities.chargePortOpen);
-        VCSEC_CommandStatus commandStatus = message_o.sub_message.commandStatus;
-        // VCSEC_OperationStatus_E_OPERATIONSTATUS_OK = 0,
-        // VCSEC_OperationStatus_E_OPERATIONSTATUS_WAIT = 1,
-        // VCSEC_OperationStatus_E_OPERATIONSTATUS_ERROR = 2
-        ESP_LOGD(TAG, "commandStatus.operationStatus: %d", commandStatus.operationStatus);
-        ESP_LOGD(TAG, "commandStatus submessage: %u", commandStatus.which_sub_message);
-        ESP_LOGD(TAG, "commandStatus signed message counter: %lu", commandStatus.sub_message.signedMessageStatus.counter);
-        ESP_LOGD(TAG, "commandStatus whitelist operationStatus: %u", commandStatus.sub_message.whitelistOperationStatus.operationStatus);
-        ESP_LOGD(TAG, "commandStatus whitelist has_signerOfOperation: %d", commandStatus.sub_message.whitelistOperationStatus.has_signerOfOperation);
-        ESP_LOGD(TAG, "commandStatus whitelistOperationInformation: %d", commandStatus.sub_message.whitelistOperationStatus.whitelistOperationInformation);
-        // pb_callback_t vin_callback = message_o.sub_message.vehicleInfo.VIN;
-        // ESP_LOGD(TAG, "VIN: %s", vin);
-        break;
+
+        switch (message_o.which_sub_message)
+        {
+        case VCSEC_AuthenticationRequest_sessionInfo_tag:
+        {
+          ESP_LOGI(TAG, "Received ephemeral key\n");
+
+          esp_err_t err =
+              nvs_set_blob(this->storage_handle_, "tesla_key",
+                          message_o.sub_message.sessionInfo.publicKey.bytes,
+                          message_o.sub_message.sessionInfo.publicKey.size);
+
+          if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to save tesla key: %s", esp_err_to_name(err));
+            return;
+          }
+
+          int result_code =
+              m_pClient->LoadTeslaKey(message_o.sub_message.sessionInfo.publicKey.bytes,
+                                  message_o.sub_message.sessionInfo.publicKey.size);
+
+          if (result_code != 0) {
+            ESP_LOGE(TAG, "Failed load tesla key");
+            return;
+          }
+
+          this->isAuthenticated = true;
+        }
+        case VCSEC_AuthenticationRequest_reasonsForAuth_tag:
+        {
+          ESP_LOGI(TAG, "Received new counter from the car: %lu", message_o.sub_message.commandStatus.sub_message.signedMessageStatus.counter);
+          m_pClient->SetCounter(&message_o.sub_message.commandStatus.sub_message.signedMessageStatus.counter);
+
+          esp_err_t err = nvs_set_u32(this->storage_handle_, "counter",
+                                      message_o.sub_message.commandStatus.sub_message.signedMessageStatus.counter);
+          if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to save counter: %s", esp_err_to_name(err));
+          }
+        }
+        case VCSEC_FromVCSECMessage_authenticationRequest_tag:
+        {
+          ESP_LOGI(TAG, "Received authentication request %d",
+                   message_o.sub_message.authenticationRequest.requestedLevel);
+        }
+        case VCSEC_FromVCSECMessage_vehicleStatus_tag:
+        {
+          ESP_LOGI(TAG, "Received vehicle status");
+          ESP_LOGI(TAG, "Car is \"%s\"",
+                  message_o.sub_message.vehicleStatus.vehicleLockState ? "locked"
+                                                                        : "unlocked");
+          ESP_LOGI(TAG, "Car is \"%s\"",
+                  message_o.sub_message.vehicleStatus.vehicleSleepStatus
+                      ? "awake"
+                      : "sleeping");
+          ESP_LOGI(TAG, "Charge port is \"%s\"",
+                  message_o.sub_message.vehicleStatus.closureStatuses.chargePort
+                      ? "open"
+                      : "closed");
+          ESP_LOGI(TAG, "Front driver door is \"%s\"",
+                  message_o.sub_message.vehicleStatus.closureStatuses.frontDriverDoor
+                      ? "open"
+                      : "closed");
+          ESP_LOGI(
+              TAG, "Front passenger door is \"%s\"",
+              message_o.sub_message.vehicleStatus.closureStatuses.frontPassengerDoor
+                  ? "open"
+                  : "closed");
+          ESP_LOGI(TAG, "Rear driver door is \"%s\"",
+                  message_o.sub_message.vehicleStatus.closureStatuses.rearDriverDoor
+                      ? "open"
+                      : "closed");
+          ESP_LOGI(
+              TAG, "Rear passenger door is \"%s\"",
+              message_o.sub_message.vehicleStatus.closureStatuses.rearPassengerDoor
+                  ? "open"
+                  : "closed");
+          ESP_LOGI(TAG, "Front trunk is \"%s\"",
+                  message_o.sub_message.vehicleStatus.closureStatuses.frontTrunk
+                      ? "open"
+                      : "closed");
+          ESP_LOGI(TAG, "Rear trunk is \"%s\"",
+                  message_o.sub_message.vehicleStatus.closureStatuses.rearTrunk
+                      ? "open"
+                      : "closed");
+        }
+        }
+
+        esp_err_t err = nvs_commit(this->storage_handle_);
+        if (err != ESP_OK) {
+          ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(err));
+        }
       }
 
       default:
         break;
       }
     }
-
-    // void TeslaBLECar::update()
-    // {
-    //   if (this->node_state != espbt::ClientState::ESTABLISHED)
-    //   {
-    //     if (!this->parent()->enabled)
-    //     {
-    //       ESP_LOGW(TAG, "Reconnecting to device");
-    //       this->parent()->set_enabled(true);
-    //       this->parent()->connect();
-    //     }
-    //     else
-    //     {
-    //       ESP_LOGW(TAG, "Connection in progress");
-    //     }
-    //   }
-    // }
-
-    // void TeslaBLECar::response_pending_()
-    // {
-    //   this->responses_pending_++;
-    //   this->set_response_timeout_();
-    // }
-
-    // void TeslaBLECar::response_received_()
-    // {
-    //   if (--this->responses_pending_ == 0)
-    //   {
-    //     // This instance must not stay connected
-    //     // so other clients can connect to it (e.g. the
-    //     // mobile app).
-    //     this->parent()->set_enabled(false);
-    //   }
-    // }
-
-    // void TeslaBLECar::set_response_timeout_()
-    // {
-    //   this->set_timeout("response_timeout", 5 * 1000, [this]()
-    //                     {
-    // this->responses_pending_ = 1;
-    // this->response_received_(); });
-    // }
-
   } // namespace tesla_ble_car
 } // namespace esphome
