@@ -16,6 +16,7 @@ namespace esphome
         : m_pClient(new TeslaBLE::Client{})
     {
       ESP_LOGI(TAG, "Starting Tesla BLE Car component");
+      this->isAuthenticated = false;
 
       esp_err_t err = nvs_flash_init();
       if (err != ESP_OK)
@@ -134,7 +135,6 @@ namespace esphome
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
       this->read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
       this->write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
-      this->isAuthenticated = false;
       ESP_LOGI(TAG, "Tesla BLE Car component started");
     }
 
