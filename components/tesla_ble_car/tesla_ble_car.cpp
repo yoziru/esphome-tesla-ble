@@ -173,11 +173,10 @@ namespace esphome
             }
 
             auto write_status =
-                esp_ble_gattc_write_char_descr(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_,
-                                               whitelist_message_length, whitelist_message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+                esp_ble_gattc_write_char_descr(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, whitelist_message_length, whitelist_message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
             if (write_status)
             {
-              ESP_LOGW(TAG, "Error sending CCC descriptor write request, status=%d", write_status);
+              ESP_LOGW(TAG, "Error sending key write request, status=%d", write_status);
               break;
             }
             ESP_LOGI(TAG, "Please tap your card on the reader now..");
@@ -186,6 +185,28 @@ namespace esphome
             //                                     whitelist_message_length)) {
             //   ESP_LOGI(TAG, "Please tap your card on the reader now..");
             // }
+          }
+
+          while (isAuthenticated == false) {
+            unsigned char ephemeral_key_message_buffer[200];
+            size_t ephemeral_key_message_length = 0;
+            int return_code = m_pClient->BuildEphemeralKeyMessage(
+                ephemeral_key_message_buffer, &ephemeral_key_message_length);
+
+            if (return_code != 0) {
+              ESP_LOGE(TAG, "Failed to build whitelist message\n");
+              continue;
+            }
+
+            auto write_status = esp_ble_gattc_write_char_descr(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, ephemeral_key_message_length, ephemeral_key_message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+            if (write_status)
+            {
+              ESP_LOGW(TAG, "Error sending key write request, status=%d", write_status);
+              break;
+            }
+            ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
+
+            usleep(10000000);
           }
         }
         break;
