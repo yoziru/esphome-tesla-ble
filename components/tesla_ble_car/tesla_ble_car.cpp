@@ -230,7 +230,7 @@ namespace esphome
         // }
 
         // ensure that the client will be disconnected even if no responses arrive
-        this->set_response_timeout_();
+        // this->set_response_timeout_();
 
         break;
       }
@@ -280,47 +280,47 @@ namespace esphome
       }
     }
 
-    void TeslaBLECar::update()
-    {
-      if (this->node_state != espbt::ClientState::ESTABLISHED)
-      {
-        if (!this->parent()->enabled)
-        {
-          ESP_LOGW(TAG, "Reconnecting to device");
-          this->parent()->set_enabled(true);
-          this->parent()->connect();
-        }
-        else
-        {
-          ESP_LOGW(TAG, "Connection in progress");
-        }
-      }
-    }
+    // void TeslaBLECar::update()
+    // {
+    //   if (this->node_state != espbt::ClientState::ESTABLISHED)
+    //   {
+    //     if (!this->parent()->enabled)
+    //     {
+    //       ESP_LOGW(TAG, "Reconnecting to device");
+    //       this->parent()->set_enabled(true);
+    //       this->parent()->connect();
+    //     }
+    //     else
+    //     {
+    //       ESP_LOGW(TAG, "Connection in progress");
+    //     }
+    //   }
+    // }
 
-    void TeslaBLECar::response_pending_()
-    {
-      this->responses_pending_++;
-      this->set_response_timeout_();
-    }
+    // void TeslaBLECar::response_pending_()
+    // {
+    //   this->responses_pending_++;
+    //   this->set_response_timeout_();
+    // }
 
-    void TeslaBLECar::response_received_()
-    {
-      if (--this->responses_pending_ == 0)
-      {
-        // This instance must not stay connected
-        // so other clients can connect to it (e.g. the
-        // mobile app).
-        this->parent()->set_enabled(false);
-      }
-    }
+    // void TeslaBLECar::response_received_()
+    // {
+    //   if (--this->responses_pending_ == 0)
+    //   {
+    //     // This instance must not stay connected
+    //     // so other clients can connect to it (e.g. the
+    //     // mobile app).
+    //     this->parent()->set_enabled(false);
+    //   }
+    // }
 
-    void TeslaBLECar::set_response_timeout_()
-    {
-      this->set_timeout("response_timeout", 5 * 1000, [this]()
-                        {
-    this->responses_pending_ = 1;
-    this->response_received_(); });
-    }
+    // void TeslaBLECar::set_response_timeout_()
+    // {
+    //   this->set_timeout("response_timeout", 5 * 1000, [this]()
+    //                     {
+    // this->responses_pending_ = 1;
+    // this->response_received_(); });
+    // }
 
   } // namespace tesla_ble_car
 } // namespace esphome
