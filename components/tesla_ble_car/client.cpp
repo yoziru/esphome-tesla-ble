@@ -406,7 +406,7 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
       VCSEC_UnsignedMessage_WhitelistOperation_tag;
   unsigned_message.sub_message.WhitelistOperation = whitelist;
 
-  pb_ostream_t unsigned_message_size_stream = {nullptr};
+  pb_ostream_t unsigned_message_size_stream = {nullptr, 0, 0, 0, nullptr};
   bool unsigned_message_size_stream_status =
       pb_encode(&unsigned_message_size_stream, VCSEC_UnsignedMessage_fields,
                 &unsigned_message);
@@ -438,7 +438,7 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
   vcsec_message.sub_message.signedMessage.protobufMessageAsBytes.size =
       unsigned_message_size_stream.bytes_written;
 
-  pb_ostream_t vcsec_message_size_stream = {nullptr};
+  pb_ostream_t vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
   bool vcsec_message_size_stream_status = pb_encode(
       &vcsec_message_size_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
   if (!vcsec_message_size_stream_status) {
@@ -527,7 +527,7 @@ int Client::BuildEphemeralKeyMessage(unsigned char *output_buffer,
 int Client::BuildUnsignedToMessage(VCSEC_UnsignedMessage *message,
                                    unsigned char *output_buffer,
                                    size_t *output_length) {
-  pb_ostream_t unsigned_message_size_stream = {nullptr};
+  pb_ostream_t unsigned_message_size_stream = {nullptr, 0, 0, 0, nullptr};
   bool unsigned_message_size_stream_status = pb_encode(
       &unsigned_message_size_stream, VCSEC_UnsignedMessage_fields, message);
   if (!unsigned_message_size_stream_status) {
@@ -552,7 +552,7 @@ int Client::BuildUnsignedToMessage(VCSEC_UnsignedMessage *message,
   vcsec_message.which_sub_message = VCSEC_ToVCSECMessage_unsignedMessage_tag;
   vcsec_message.sub_message.unsignedMessage = *message;
 
-  pb_ostream_t vcsec_message_size_stream = {nullptr};
+  pb_ostream_t vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
   bool vcsec_message_size_stream_status = pb_encode(
       &vcsec_message_size_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
   if (!vcsec_message_size_stream_status) {
@@ -592,7 +592,7 @@ int Client::BuildSignedToMessage(VCSEC_UnsignedMessage *message,
   vcsec_message.which_sub_message = VCSEC_ToVCSECMessage_unsignedMessage_tag;
   vcsec_message.sub_message.unsignedMessage = *message;
 
-  pb_ostream_t vcsec_message_size_stream = {nullptr};
+  pb_ostream_t vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
   bool vcsec_message_stream_status = pb_encode(
       &vcsec_message_size_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
   if (!vcsec_message_stream_status) {
@@ -646,7 +646,7 @@ int Client::BuildSignedToMessage(VCSEC_UnsignedMessage *message,
   encrypted_vcsec_message.sub_message.signedMessage.signatureType =
       VCSEC_SignatureType_SIGNATURE_TYPE_AES_GCM;
 
-  pb_ostream_t encrypted_vcsec_message_size_stream = {nullptr};
+  pb_ostream_t encrypted_vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
   bool encrypted_vcsec_message_size_stream_status =
       pb_encode(&encrypted_vcsec_message_size_stream,
                 VCSEC_ToVCSECMessage_fields, &encrypted_vcsec_message);

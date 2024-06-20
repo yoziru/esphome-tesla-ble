@@ -175,13 +175,11 @@ namespace esphome
             }
 
             auto write_status =
-                esp_ble_gattc_write_char_descr(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, whitelist_message_length, whitelist_message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+                esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, whitelist_message_length, whitelist_message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
             if (write_status)
             {
-              ESP_LOGW(TAG, "Error sending key write request, status=%d", write_status);
-              break;
+              ESP_LOGI(TAG, "Please tap your card on the reader now..");
             }
-            ESP_LOGI(TAG, "Please tap your card on the reader now..");
 
             // if (writeCharacteristic->writeValue(whitelist_message_buffer,
             //                                     whitelist_message_length)) {
@@ -200,14 +198,11 @@ namespace esphome
               continue;
             }
 
-            auto write_status = esp_ble_gattc_write_char_descr(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, ephemeral_key_message_length, ephemeral_key_message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+            auto write_status = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, ephemeral_key_message_length, ephemeral_key_message_buffer, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
             if (write_status)
             {
-              ESP_LOGW(TAG, "Error sending key write request, status=%d", write_status);
-              break;
+              ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
             }
-            ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
-
             usleep(10000000);
           }
         }
