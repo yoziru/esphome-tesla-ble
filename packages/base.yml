@@ -23,6 +23,9 @@ logger:
   logs:
     wifi: DEBUG
     uptime: INFO
+    esp32_ble_tracker: INFO
+    light: INFO
+    api: INFO
 
 
 api:
@@ -47,5 +50,11 @@ wifi:
   ap:
     ssid: ${device_name}-ap
     password: !secret wifi_hotspot_password
+  # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
+  on_connect:
+    - esp32_ble_tracker.start_scan:
+       continuous: true
+  on_disconnect:
+    - esp32_ble_tracker.stop_scan:
 
 captive_portal:

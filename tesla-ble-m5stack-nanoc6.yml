@@ -14,7 +14,6 @@ ble_client:
     on_connect:
       then:
         - logger.log: "Connected to Tesla BLE"
-        # - esp32_ble_tracker.stop_scan:
     on_disconnect:
       then:
         - logger.log: "Disconnected from Tesla BLE"
