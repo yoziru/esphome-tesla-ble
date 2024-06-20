@@ -116,7 +116,7 @@ int Client::GetPrivateKey(unsigned char *output_buffer,
       &this->private_key_context_, output_buffer, output_buffer_length);
 
   if (return_code != 0) {
-    printf("Failed to write private key");
+    printf("Failed to write private key\n");
     return 1;
   }
 
@@ -409,12 +409,13 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
       VCSEC_UnsignedMessage_WhitelistOperation_tag;
   unsigned_message.sub_message.WhitelistOperation = whitelist;
 
-  pb_ostream_t unsigned_message_size_stream = {nullptr, 0, 0, 0, nullptr};
+  unsigned char unsigned_encode_buffer[256];
+  pb_ostream_t unsigned_message_size_stream = pb_ostream_from_buffer(unsigned_encode_buffer, sizeof unsigned_encode_buffer);
   bool unsigned_message_size_stream_status =
       pb_encode(&unsigned_message_size_stream, VCSEC_UnsignedMessage_fields,
                 &unsigned_message);
   if (!unsigned_message_size_stream_status) {
-    printf("Failed to encode unsigned message: %s",
+    printf("Failed to encode unsigned message: %s\n",
            PB_GET_ERROR(&unsigned_message_size_stream));
     return 1;
   }
@@ -427,7 +428,7 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
                 &unsigned_message);
 
   if (!unsigned_message_status) {
-    printf("Failed to encode unsigned message: %s",
+    printf("Failed to encode unsigned message: %s\n",
            PB_GET_ERROR(&unsigned_message_stream));
     return 1;
   }
@@ -441,11 +442,12 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
   vcsec_message.sub_message.signedMessage.protobufMessageAsBytes.size =
       unsigned_message_size_stream.bytes_written;
 
-  pb_ostream_t vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
+	unsigned char vcsec_encode_buffer[256];
+  pb_ostream_t vcsec_message_size_stream = pb_ostream_from_buffer(vcsec_encode_buffer, sizeof vcsec_encode_buffer);
   bool vcsec_message_size_stream_status = pb_encode(
       &vcsec_message_size_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
   if (!vcsec_message_size_stream_status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&vcsec_message_size_stream));
     return 1;
   }
@@ -456,7 +458,7 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
   bool to_status = pb_encode(&vcsec_message_stream, VCSEC_ToVCSECMessage_fields,
                              &vcsec_message);
   if (!to_status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&vcsec_message_stream));
     return 1;
   }
@@ -530,11 +532,12 @@ int Client::BuildEphemeralKeyMessage(unsigned char *output_buffer,
 int Client::BuildUnsignedToMessage(VCSEC_UnsignedMessage *message,
                                    unsigned char *output_buffer,
                                    size_t *output_length) {
-  pb_ostream_t unsigned_message_size_stream = {nullptr, 0, 0, 0, nullptr};
+  unsigned char unsigned_message_encode_buffer[256];
+  pb_ostream_t unsigned_message_size_stream = pb_ostream_from_buffer(unsigned_message_encode_buffer, sizeof unsigned_message_encode_buffer);
   bool unsigned_message_size_stream_status = pb_encode(
       &unsigned_message_size_stream, VCSEC_UnsignedMessage_fields, message);
   if (!unsigned_message_size_stream_status) {
-    printf("Failed to encode message: %s",
+    printf("Failed to encode message: %s\n",
            PB_GET_ERROR(&unsigned_message_size_stream));
     return 1;
   }
@@ -546,7 +549,7 @@ int Client::BuildUnsignedToMessage(VCSEC_UnsignedMessage *message,
                           VCSEC_UnsignedMessage_fields, message);
 
   if (!status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&unsigned_message_stream));
     return 1;
   }
@@ -555,11 +558,12 @@ int Client::BuildUnsignedToMessage(VCSEC_UnsignedMessage *message,
   vcsec_message.which_sub_message = VCSEC_ToVCSECMessage_unsignedMessage_tag;
   vcsec_message.sub_message.unsignedMessage = *message;
 
-  pb_ostream_t vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
+  unsigned char vcsec_encode_buffer[256];
+  pb_ostream_t vcsec_message_size_stream = pb_ostream_from_buffer(vcsec_encode_buffer, sizeof vcsec_encode_buffer);
   bool vcsec_message_size_stream_status = pb_encode(
       &vcsec_message_size_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
   if (!vcsec_message_size_stream_status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&vcsec_message_size_stream));
     return 1;
   }
@@ -570,7 +574,7 @@ int Client::BuildUnsignedToMessage(VCSEC_UnsignedMessage *message,
   bool vcsec_message_status = pb_encode(
       &vcsec_message_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
   if (!vcsec_message_status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&vcsec_message_size_stream));
     return 1;
   }
@@ -595,11 +599,12 @@ int Client::BuildSignedToMessage(VCSEC_UnsignedMessage *message,
   vcsec_message.which_sub_message = VCSEC_ToVCSECMessage_unsignedMessage_tag;
   vcsec_message.sub_message.unsignedMessage = *message;
 
-  pb_ostream_t vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
+  unsigned char vcsec_encode_buffer[256];
+  pb_ostream_t vcsec_message_size_stream = pb_ostream_from_buffer(vcsec_encode_buffer, sizeof vcsec_encode_buffer);
   bool vcsec_message_stream_status = pb_encode(
       &vcsec_message_size_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
   if (!vcsec_message_stream_status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&vcsec_message_size_stream));
     return 1;
   }
@@ -612,7 +617,7 @@ int Client::BuildSignedToMessage(VCSEC_UnsignedMessage *message,
       &vcsec_message_stream, VCSEC_ToVCSECMessage_fields, &vcsec_message);
 
   if (!vcsec_message_status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&vcsec_message_stream));
     return 1;
   }
@@ -649,12 +654,13 @@ int Client::BuildSignedToMessage(VCSEC_UnsignedMessage *message,
   encrypted_vcsec_message.sub_message.signedMessage.signatureType =
       VCSEC_SignatureType_SIGNATURE_TYPE_AES_GCM;
 
-  pb_ostream_t encrypted_vcsec_message_size_stream = {nullptr, 0, 0, 0, nullptr};
+  unsigned char encrypted_vcsec_encode_buffer[256];
+  pb_ostream_t encrypted_vcsec_message_size_stream = pb_ostream_from_buffer(encrypted_vcsec_encode_buffer, sizeof encrypted_vcsec_encode_buffer);
   bool encrypted_vcsec_message_size_stream_status =
       pb_encode(&encrypted_vcsec_message_size_stream,
                 VCSEC_ToVCSECMessage_fields, &encrypted_vcsec_message);
   if (!encrypted_vcsec_message_size_stream_status) {
-    printf("Failed to encode vcsec message: %s",
+    printf("Failed to encode vcsec message: %s\n",
            PB_GET_ERROR(&encrypted_vcsec_message_size_stream));
     return 1;
   }
@@ -668,7 +674,7 @@ int Client::BuildSignedToMessage(VCSEC_UnsignedMessage *message,
       pb_encode(&encrypted_vcsec_message_stream, VCSEC_ToVCSECMessage_fields,
                 &encrypted_vcsec_message);
   if (!to_status) {
-    printf("Failed to encode message: %s",
+    printf("Failed to encode message: %s\n",
            PB_GET_ERROR(&encrypted_vcsec_message_stream));
     return 1;
   }

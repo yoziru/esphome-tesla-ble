@@ -142,7 +142,7 @@ namespace esphome
       ESP_LOGI(TAG, "Starting pairing");
       if (this->isAuthenticated == false)
       {
-        unsigned char whitelist_message_buffer[200];
+        unsigned char whitelist_message_buffer[256];
         size_t whitelist_message_length = 0;
         int return_code = m_pClient->BuildWhiteListMessage(
             whitelist_message_buffer, &whitelist_message_length);
@@ -164,7 +164,7 @@ namespace esphome
       }
 
       // while (this->isAuthenticated == false) {
-      //   unsigned char ephemeral_key_message_buffer[200];
+      //   unsigned char ephemeral_key_message_buffer[256];
       //   size_t ephemeral_key_message_length = 0;
       //   int return_code = m_pClient->BuildEphemeralKeyMessage(
       //       ephemeral_key_message_buffer, &ephemeral_key_message_length);
@@ -188,7 +188,7 @@ namespace esphome
     }
 
     // void TeslaBLECar::ephemeralKey() {
-    //     unsigned char ephemeral_key_message_buffer[200];
+    //     unsigned char ephemeral_key_message_buffer[256];
     //     size_t ephemeral_key_message_length = 0;
     //     int return_code = client.BuildEphemeralKeyMessage(
     //         ephemeral_key_message_buffer, &ephemeral_key_message_length);
@@ -210,7 +210,7 @@ namespace esphome
         return;
       }
 
-      unsigned char action_message_buffer[200];
+      unsigned char action_message_buffer[256];
       size_t action_message_buffer_length = 0;
       int return_code = m_pClient->BuildActionMessage(
           &action, action_message_buffer, &action_message_buffer_length);
