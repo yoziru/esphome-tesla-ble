@@ -34,6 +34,8 @@ class TeslaBLECar : public ble_client::BLEClientNode {
   TeslaBLECar();
   void startPair(void);
   void wakeVehicle(void);
+  void lockVehicle(void);
+  void unlockVehicle(void);
   void sendCommand(VCSEC_RKEAction_E action);
 
   // void update() override;

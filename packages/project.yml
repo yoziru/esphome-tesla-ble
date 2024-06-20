@@ -19,13 +19,24 @@ button:
     name: Pair BLE key
     icon: mdi:bluetooth-connect
     on_press:
-      - tesla_ble_car.pair:
+      - lambda: id(tesla_ble_car_id)->startPair();
 
   - platform: template
     name: Wake up
     icon: mdi:sleep-off
     on_press:
-      - tesla_ble_car.wake:
+      - lambda: id(tesla_ble_car_id)->wakeVehicle();
+
+# Example configuration entry
+lock:
+  - platform: template
+    name: "Doors"
+    optimistic: true
+    # assumed_state: true
+    lock_action:
+      - lambda: id(tesla_ble_car_id)->lockVehicle();
+    unlock_action:
+      - lambda: id(tesla_ble_car_id)->unlockVehicle();
 
 # Enable this to scan for BLE devices
 # tesla_ble_listener:

@@ -1,6 +1,7 @@
 #include "tesla_ble_car.h"
 #include "client.h"
 #include "esphome/core/log.h"
+
 #include "utils.h"
 
 #include <nvs_flash.h>
@@ -85,7 +86,7 @@ namespace esphome
         }
 
         ESP_LOGI(TAG, "Private key loaded successfully");
-        TeslaBLE::DumpBuffer("\n", private_key_buffer, required_private_key_size);
+        // TeslaBLE::DumpBuffer("\n", private_key_buffer, required_private_key_size);
       }
 
       size_t required_tesla_key_size = 0;
@@ -186,6 +187,23 @@ namespace esphome
       // }
     }
 
+    // void TeslaBLECar::ephemeralKey() {
+    //     unsigned char ephemeral_key_message_buffer[200];
+    //     size_t ephemeral_key_message_length = 0;
+    //     int return_code = client.BuildEphemeralKeyMessage(
+    //         ephemeral_key_message_buffer, &ephemeral_key_message_length);
+
+    //     if (return_code != 0) {
+    //       ESP_LOGE(TAG, "Failed to build whitelist message\n");
+    //       continue;
+    //     }
+
+    //     if (writeCharacteristic->writeValue(ephemeral_key_message_buffer,
+    //                                         ephemeral_key_message_length)) {
+    //       ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
+    //     }
+    // }
+
     void TeslaBLECar::sendCommand(VCSEC_RKEAction_E action) {
       if (this->isAuthenticated == false) {
         ESP_LOGW(TAG, "Not authenticated yet");
@@ -207,12 +225,22 @@ namespace esphome
         ESP_LOGW(TAG, "Error sending write value to BLE gattc server, error=%d", err);
         return;
       }
-      ESP_LOGI(TAG, "Command sent");
+      ESP_LOGD(TAG, "Command sent");
     }
 
     void TeslaBLECar::wakeVehicle() {
       ESP_LOGI(TAG, "Waking vehicle");
       this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+    }
+
+    void TeslaBLECar::unlockVehicle() {
+      ESP_LOGI(TAG, "Unlocking vehicle");
+      this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_UNLOCK);
+    }
+
+    void TeslaBLECar::lockVehicle() {
+      ESP_LOGI(TAG, "Locking vehicle");
+      this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_LOCK);
     }
 
     void TeslaBLECar::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -250,6 +278,12 @@ namespace esphome
           break;
         }
         this->read_handle_ = readChar->handle;
+
+        auto reg_status = esp_ble_gattc_register_for_notify(this->parent()->get_gattc_if(), this->parent()->get_remote_bda(), readChar->handle);
+        if (reg_status) {
+          ESP_LOGW(TAG, "esp_ble_gattc_register_for_notify failed, status=%d", reg_status);
+          break;
+        }
 
         auto *writeChar = this->parent()->get_characteristic(this->service_uuid_, this->write_uuid_);
         if (writeChar == nullptr)
