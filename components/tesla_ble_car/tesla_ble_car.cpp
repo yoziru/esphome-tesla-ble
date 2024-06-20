@@ -86,7 +86,7 @@ namespace esphome
         }
 
         ESP_LOGI(TAG, "Private key loaded successfully");
-        // TeslaBLE::DumpBuffer("\n", private_key_buffer, required_private_key_size);
+        TeslaBLE::DumpBuffer("\n", private_key_buffer, required_private_key_size);
       }
 
       size_t required_tesla_key_size = 0;
@@ -338,7 +338,7 @@ namespace esphome
         //   this->read_battery_(param->notify.value, param->notify.value_len);
         // }
 
-        ESP_LOGV(TAG, "ESP_GATTC_NOTIFY_EVT, value_len=%d", param->notify.value_len);
+        ESP_LOGD(TAG, "ESP_GATTC_NOTIFY_EVT, value_len=%d", param->notify.value_len);
         VCSEC_FromVCSECMessage message_o = VCSEC_FromVCSECMessage_init_zero;
         int return_code = m_pClient->ParseFromVCSECMessage(param->notify.value, param->notify.value_len, &message_o);
         if (return_code != 0)
@@ -346,6 +346,25 @@ namespace esphome
           ESP_LOGE(TAG, "Failed to parse incoming message\n");
           return;
         }
+        // message_o.which_sub_message
+        // pb_size_t which_sub_message;
+        ESP_LOGD(TAG, "Which sub message: %u", message_o.which_sub_message);
+        ESP_LOGD(TAG, "Has active key: %d", message_o.sub_message.activeKey.has_activeKey);
+        TeslaBLE::DumpBuffer("\n", message_o.sub_message.activeKey.activeKey.publicKeySHA1, 4);
+        ESP_LOGD(TAG, "Charge port close: %d", message_o.sub_message.capabilities.chargePortClose);
+        ESP_LOGD(TAG, "Charge port open: %d", message_o.sub_message.capabilities.chargePortOpen);
+        VCSEC_CommandStatus commandStatus = message_o.sub_message.commandStatus;
+        // VCSEC_OperationStatus_E_OPERATIONSTATUS_OK = 0,
+        // VCSEC_OperationStatus_E_OPERATIONSTATUS_WAIT = 1,
+        // VCSEC_OperationStatus_E_OPERATIONSTATUS_ERROR = 2
+        ESP_LOGD(TAG, "commandStatus.operationStatus: %d", commandStatus.operationStatus);
+        ESP_LOGD(TAG, "commandStatus submessage: %u", commandStatus.which_sub_message);
+        ESP_LOGD(TAG, "commandStatus signed message counter: %lu", commandStatus.sub_message.signedMessageStatus.counter);
+        ESP_LOGD(TAG, "commandStatus whitelist operationStatus: %u", commandStatus.sub_message.whitelistOperationStatus.operationStatus);
+        ESP_LOGD(TAG, "commandStatus whitelist has_signerOfOperation: %d", commandStatus.sub_message.whitelistOperationStatus.has_signerOfOperation);
+        ESP_LOGD(TAG, "commandStatus whitelistOperationInformation: %d", commandStatus.sub_message.whitelistOperationStatus.whitelistOperationInformation);
+        // pb_callback_t vin_callback = message_o.sub_message.vehicleInfo.VIN;
+        // ESP_LOGD(TAG, "VIN: %s", vin);
         break;
       }
 
