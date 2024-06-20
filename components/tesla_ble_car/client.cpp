@@ -1,5 +1,8 @@
 #include "client.h"
 
+// https://github.com/platformio/platform-espressif32/issues/957
+#define MBEDTLS_CONFIG_FILE "mbedtls/esp_config.h"
+
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/ecdh.h>
 #include <mbedtls/entropy.h>
@@ -22,7 +25,7 @@ namespace TeslaBLE {
  * @param counter Last known counter sent by the carz
  * @return void
  */
-void Client::SetCounter(const u_int32_t *counter) {
+void Client::SetCounter(const uint32_t *counter) {
   this->counter_ = *counter + 1;
 }
 

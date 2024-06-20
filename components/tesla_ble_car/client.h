@@ -1,6 +1,6 @@
 #ifndef TESLA_BLE_CLIENT_H_INCLUDED
 #define TESLA_BLE_CLIENT_H_INCLUDED
-
+#define MBEDTLS_CONFIG_FILE "mbedtls/esp_config.h"
 #include <string>
 
 #include "mbedtls/ctr_drbg.h"
@@ -21,7 +21,7 @@ class Client {
   unsigned char key_id_[4]{};
   unsigned char public_key_[MBEDTLS_ECP_MAX_BYTES]{};
   size_t public_key_size_ = 0;
-  u_int32_t counter_ = 1;
+  uint32_t counter_ = 1;
 
   static void PrependLength(const unsigned char *input_buffer,
                             size_t input_buffer_length,
@@ -39,7 +39,7 @@ class Client {
  public:
   int CreatePrivateKey();
 
-  void SetCounter(const u_int32_t *counter);
+  void SetCounter(const uint32_t *counter);
 
   int LoadPrivateKey(const uint8_t *private_key_buffer, size_t key_size);
 
