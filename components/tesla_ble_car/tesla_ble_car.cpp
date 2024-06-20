@@ -46,7 +46,7 @@ void TeslaBLECar::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t 
       // }
 
       // ensure that the client will be disconnected even if no responses arrive
-      // this->set_response_timeout_();
+      this->set_response_timeout_();
 
       break;
     }
@@ -123,6 +123,7 @@ void TeslaBLECar::test() {
 
 void TeslaBLECar::response_pending_() {
   this->responses_pending_++;
+  this->set_response_timeout_();
 }
 
 void TeslaBLECar::response_received_() {
@@ -132,6 +133,13 @@ void TeslaBLECar::response_received_() {
     // mobile app).
     this->parent()->set_enabled(false);
   }
+}
+
+void TeslaBLECar::set_response_timeout_() {
+  this->set_timeout("response_timeout", 10 * 1000, [this]() {
+    this->responses_pending_ = 1;
+    this->response_received_();
+  });
 }
 
 }  // namespace tesla_ble_car
