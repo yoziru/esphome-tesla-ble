@@ -386,11 +386,12 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
          this->public_key_size_);
   permissions_action.key.PublicKeyRaw.size = this->public_key_size_;
 
-  permissions_action.permission[0] =
-      VCSEC_WhitelistKeyPermission_E_WHITELISTKEYPERMISSION_LOCAL_UNLOCK;
-  permissions_action.permission[1] =
-      VCSEC_WhitelistKeyPermission_E_WHITELISTKEYPERMISSION_LOCAL_DRIVE;
-  permissions_action.permission_count = 2;
+  // permissions_action.permission[0] =
+  //     VCSEC_WhitelistKeyPermission_E_WHITELISTKEYPERMISSION_LOCAL_UNLOCK;
+  // permissions_action.permission[1] =
+  //     VCSEC_WhitelistKeyPermission_E_WHITELISTKEYPERMISSION_LOCAL_DRIVE;
+  // permissions_action.permission_count = 2;
+  permissions_action.keyRole = VCSEC_Role_ROLE_OWNER;
 
   VCSEC_WhitelistOperation whitelist = VCSEC_WhitelistOperation_init_default;
   whitelist.which_sub_message =
@@ -398,8 +399,7 @@ int Client::BuildWhiteListMessage(unsigned char *output_buffer,
   whitelist.sub_message.addKeyToWhitelistAndAddPermissions = permissions_action;
 
   whitelist.has_metadataForKey = true;
-  whitelist.metadataForKey.keyFormFactor =
-      VCSEC_KeyFormFactor_KEY_FORM_FACTOR_ANDROID_DEVICE;
+  whitelist.metadataForKey.keyFormFactor = VCSEC_KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY;
 
   VCSEC_UnsignedMessage unsigned_message = VCSEC_UnsignedMessage_init_default;
   unsigned_message.which_sub_message =

@@ -162,28 +162,28 @@ namespace esphome
         ESP_LOGI(TAG, "Please tap your card on the reader now..");
       }
 
-      while (this->isAuthenticated == false) {
-        unsigned char ephemeral_key_message_buffer[200];
-        size_t ephemeral_key_message_length = 0;
-        int return_code = m_pClient->BuildEphemeralKeyMessage(
-            ephemeral_key_message_buffer, &ephemeral_key_message_length);
+      // while (this->isAuthenticated == false) {
+      //   unsigned char ephemeral_key_message_buffer[200];
+      //   size_t ephemeral_key_message_length = 0;
+      //   int return_code = m_pClient->BuildEphemeralKeyMessage(
+      //       ephemeral_key_message_buffer, &ephemeral_key_message_length);
 
-        if (return_code != 0) {
-          ESP_LOGE(TAG, "Failed to build whitelist message\n");
-          return;
-        }
-        ESP_LOGD(TAG, "Ephemeral key message length: %d", ephemeral_key_message_length);
+      //   if (return_code != 0) {
+      //     ESP_LOGE(TAG, "Failed to build whitelist message\n");
+      //     return;
+      //   }
+      //   ESP_LOGD(TAG, "Ephemeral key message length: %d", ephemeral_key_message_length);
 
 
-        auto write_status_wait =
-            esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, ephemeral_key_message_length, ephemeral_key_message_buffer, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-        if (write_status_wait) {
-          ESP_LOGW(TAG, "Error sending write value to BLE gattc server, status=%d", write_status_wait);
-          return;
-        }
-        ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
-        usleep(10000000);
-      }
+      //   auto write_status_wait =
+      //       esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, ephemeral_key_message_length, ephemeral_key_message_buffer, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      //   if (write_status_wait) {
+      //     ESP_LOGW(TAG, "Error sending write value to BLE gattc server, status=%d", write_status_wait);
+      //     return;
+      //   }
+      //   ESP_LOGI(TAG, "Waiting for keycard to be tapped...\n");
+      //   usleep(10000000);
+      // }
     }
 
     void TeslaBLECar::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,

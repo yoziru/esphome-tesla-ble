@@ -23,6 +23,10 @@ static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";
 static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
 static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 
+static const int MAX_BLE_MESSAGE_SIZE = 1024;
+static const int RX_TIMEOUT = 1 * 1000; // Timeout interval between receiving chunks of a mesasge (1s)
+static const int MAX_LATENCY = 4 * 1000; // Max allowed error when syncing vehicle clock (4s)
+
 class TeslaBLECar : public ble_client::BLEClientNode {
  public:
   TeslaBLECar();
