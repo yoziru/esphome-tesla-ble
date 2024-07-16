@@ -1,20 +1,30 @@
 .DEFAULT_GOAL := help
 BOARD := m5stack-nanoc6
-TARGET := tesla-ble-$(BOARD).yml
+PROJECT := tesla-ble
+TARGET := $(PROJECT)-$(BOARD).yml
+HOST_SUFFIX := ""
 
-compile: .esphome/build/tesla-ble/.pioenvs/tesla-ble/firmware.bin .esphome/build/tesla-ble/$(TARGET).touchfile  ## Read the configuration and compile the binary.
+compile: .esphome/build/$(PROJECT)/.pioenvs/tesla-ble/firmware.bin .esphome/build/$(PROJECT)/$(TARGET).touchfile  ## Read the configuration and compile the binary.
 
-.esphome/build/tesla-ble/$(TARGET).touchfile: .venv/touchfile $(TARGET) packages/*.yml boards/$(BOARD).yml  ## Validate the configuration and create a binary.
+.esphome/build/$(PROJECT)/$(TARGET).touchfile: .venv/touchfile $(TARGET) packages/*.yml boards/$(BOARD).yml  ## Validate the configuration and create a binary.
 	. .venv/bin/activate; esphome compile $(TARGET)
 	touch .esphome/build/$(TARGET).touchfile
 
-.esphome/build/tesla-ble/.pioenvs/tesla-ble/firmware.bin: .esphome/build/tesla-ble/$(TARGET).touchfile ## Create the binary.
+.esphome/build/$(PROJECT)/.pioenvs/tesla-ble/firmware.bin: .esphome/build/$(PROJECT)/$(TARGET).touchfile ## Create the binary.
 
-upload: .esphome/build/tesla-ble/.pioenvs/tesla-ble/firmware.bin ## Validate the configuration, create a binary, upload it, and start logs.
-	. .venv/bin/activate; esphome upload $(TARGET); esphome logs $(TARGET)
+upload: .esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin ## Validate the configuration, create a binary, upload it, and start logs.
+	if [ "$(HOST_SUFFIX)" = "" ]; then \
+		. .venv/bin/activate; esphome upload $(TARGET); esphome logs $(TARGET); \
+	else \
+		. .venv/bin/activate; esphome upload $(TARGET) --device $(PROJECT)$(HOST_SUFFIX); esphome logs $(TARGET) --device $(PROJECT)$(HOST_SUFFIX); \
+	fi
 
 logs:
-	. .venv/bin/activate; esphome logs $(TARGET)
+	if [ "$(HOST_SUFFIX)" = "" ]; then \
+		. .venv/bin/activate; esphome logs $(TARGET); \
+	else \
+		. .venv/bin/activate; esphome logs $(TARGET) --device $(PROJECT)$(HOST_SUFFIX); \
+	fi
 
 deps: .venv/touchfile ## Create the virtual environment and install the requirements.
 
@@ -36,4 +46,5 @@ help: ## Show help messages for make targets
 
 
 compile_docker: ## Compile the binary using docker
-	docker run --platform linux/amd64 --rm -v $(PWD):/config esphome/esphome compile /config/$(TARGET)
+	docker run --rm -v $(PWD):/config ghcr.io/esphome/esphome compile /config/$(TARGET)
+	touch .esphome/build/$(TARGET).touchfile
