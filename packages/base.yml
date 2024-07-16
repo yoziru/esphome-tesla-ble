@@ -12,7 +12,7 @@ esphome:
     name: yoziru.esphome-tesla-ble
     version: "2024.06.28"
   libraries:
-    - https://github.com/yoziru/tesla-ble.git#main
+    - https://github.com/yoziru/tesla-ble.git#v2.0.1
 
 packages:
   common: !include common.yml
