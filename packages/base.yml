@@ -1,6 +1,6 @@
 substitutions:
   friendly_name: ESPHome Tesla BLE
-  device_name: esphome-tesla-ble
+  device_name: tesla-ble
   device_description:  M5Stack Tesla BLE
 
 esphome:
@@ -10,9 +10,9 @@ esphome:
   comment: ${device_description}
   project:
     name: yoziru.esphome-tesla-ble
-    version: "2024.06.19"
+    version: "2024.06.28"
   libraries:
-    - nanopb/Nanopb@^0.4.8
+    - https://github.com/yoziru/tesla-ble.git#main
 
 packages:
   common: !include common.yml
@@ -50,7 +50,6 @@ wifi:
   password: !secret wifi_password
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: ${device_name}-ap
     password: !secret wifi_hotspot_password
   # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
   on_connect:

@@ -9,7 +9,7 @@ esp32:
   flash_size: 4MB
   framework:
     type: esp-idf
-    version: 5.2.1
+    version: 5.2.2
     platform_version: 6.7.0
     sdkconfig_options:
       CONFIG_OPENTHREAD_ENABLED: n

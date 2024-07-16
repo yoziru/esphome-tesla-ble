@@ -1,5 +1,5 @@
 external_components:
-  - components: [ tesla_ble_listener, tesla_ble_car ]
+  - components: [ tesla_ble_listener, tesla_ble_vehicle ]
     source: components
 
 esp32_ble_tracker:
@@ -12,31 +12,6 @@ esp32_ble_tracker:
     - then:
         - lambda: |-
              ESP_LOGD("ble_auto", "The scan has ended!");
-
-button:
-  - platform: template
-    id: ble_pair
-    name: Pair BLE key
-    icon: mdi:bluetooth-connect
-    on_press:
-      - lambda: id(tesla_ble_car_id)->startPair();
-
-  - platform: template
-    name: Wake up
-    icon: mdi:sleep-off
-    on_press:
-      - lambda: id(tesla_ble_car_id)->wakeVehicle();
-
-# Example configuration entry
-lock:
-  - platform: template
-    name: "Doors"
-    optimistic: true
-    # assumed_state: true
-    lock_action:
-      - lambda: id(tesla_ble_car_id)->lockVehicle();
-    unlock_action:
-      - lambda: id(tesla_ble_car_id)->unlockVehicle();
 
 # Enable this to scan for BLE devices
 # tesla_ble_listener:
@@ -51,9 +26,54 @@ ble_client:
       then:
         - logger.log: "Disconnected from Tesla BLE"
 
-tesla_ble_car:
+tesla_ble_vehicle:
   ble_client_id: ble_tesla_id
-  id: tesla_ble_car_id
+  id: tesla_ble_vehicle_id
+  vin: !secret tesla_vin
+
+button:
+  - platform: restart
+    name: Restart
+    icon: mdi:restart
+    entity_category: diagnostic
+
+  - platform: template
+    id: ble_pair
+    name: Pair BLE key
+    icon: mdi:bluetooth-connect
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->startPair();
+
+  - platform: template
+    name: Wake up
+    icon: mdi:sleep-off
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->wakeVehicle();
+
+  - platform: template
+    name: DEBUG init
+    disabled_by_default: true
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->init();
+    entity_category: diagnostic
+
+  - platform: template
+    name: Regenerate key
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->regenerateKey();
+    entity_category: diagnostic
+
+  - platform: template
+    name: Request VCSEC
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+    entity_category: diagnostic
+
+  - platform: template
+    name: Request INFOTAINMENT
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+    entity_category: diagnostic
 
 sensor:
   - platform: ble_client
@@ -62,3 +82,42 @@ sensor:
     name: "BLE Signal"
     icon: mdi:bluetooth
     update_interval: 60s
+
+switch:
+  - platform: template
+    name: "Charger switch"
+    optimistic: true
+    turn_on_action:
+      - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(true);
+    turn_off_action:
+      - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(false);
+
+number:
+  - platform: template
+    name: "Charging amps"
+    id: charging_amps
+    icon: mdi:ev-station
+    mode: slider
+    min_value: 0
+    max_value: 32
+    step: 1
+    optimistic: true
+    on_value:
+      then:
+        - lambda: |-
+            int var_x = static_cast<int>(x);
+            id(tesla_ble_vehicle_id)->setChargingAmps(var_x);
+  - platform: template
+    name: "Charging limit"
+    id: charging_limit
+    icon: mdi:ev-station
+    mode: slider
+    min_value: 50
+    max_value: 100
+    step: 1
+    optimistic: true
+    on_value:
+      then:
+        - lambda: |-
+            int var_x = static_cast<int>(x);
+            id(tesla_ble_vehicle_id)->setChargingLimit(var_x);
