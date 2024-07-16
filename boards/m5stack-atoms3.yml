@@ -36,6 +36,7 @@ light:
   - platform: status_led
     output: status_output
     name: "Status Led"
+    entity_category: diagnostic
     internal: True
 
   #G35=RGB WS2812C-2020
@@ -53,6 +54,7 @@ light:
 binary_sensor:
   - platform: gpio
     name: Button
+    entity_category: diagnostic
     pin:
       number: GPIO41
       inverted: true

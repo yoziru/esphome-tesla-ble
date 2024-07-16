@@ -20,6 +20,7 @@ esp32:
 light:
   - platform: status_led
     name: "Status LED"
+    entity_category: diagnostic
     pin: GPIO7
 
   #G20=RGB WS2812
@@ -31,6 +32,7 @@ light:
     rmt_channel: 1
     chipset: ws2812
     name: "RGB LED"
+    entity_category: diagnostic
     power_supply: rgbpwr
 
 power_supply:
@@ -44,6 +46,7 @@ power_supply:
 binary_sensor:
   - platform: gpio
     name: Button
+    entity_category: diagnostic
     pin:
       number: GPIO9
       inverted: true
