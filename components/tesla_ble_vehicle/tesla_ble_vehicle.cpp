@@ -371,6 +371,24 @@ namespace esphome
       this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_UNLOCK);
     }
 
+    void TeslaBLEVehicle::sendInfoStatus()
+    {
+      ESP_LOGD(TAG, "sendInfoStatus");
+      unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+      size_t message_length = 0;
+      int return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
+          VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
+          message_buffer,
+          &message_length);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to build VCSECInformationRequestMessage");
+        return;
+      }
+
+      writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+    }
+
     void TeslaBLEVehicle::setChargingSwitch(bool isOn)
     {
       if (tesla_ble_client_->session_infotainment_.isAuthenticated == false)
