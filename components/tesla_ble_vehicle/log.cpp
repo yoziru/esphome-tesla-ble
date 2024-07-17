@@ -147,15 +147,15 @@ void log_session_info_request(const char *tag, const UniversalMessage_SessionInf
 
 void log_session_info(const char *tag, const Signatures_SessionInfo *req)
 {
-  ESP_LOGD(tag, "SessionInfo:");
-  ESP_LOGD(tag, "  counter: %" PRIu32, req->counter);
-  ESP_LOGD(tag, "  publicKey:");
-  ESP_LOG_BUFFER_HEX(tag, req->publicKey.bytes, req->publicKey.size);
+    ESP_LOGD(tag, "SessionInfo:");
+    ESP_LOGD(tag, "  counter: %" PRIu32, req->counter);
+    ESP_LOGD(tag, "  publicKey:");
+    ESP_LOG_BUFFER_HEX(tag, req->publicKey.bytes, req->publicKey.size);
 
-  ESP_LOGD(tag, "  epoch: ");
-  ESP_LOG_BUFFER_HEX(tag, req->epoch, 16);
-  ESP_LOGD(tag, "  clock_time: %" PRIu32, req->clock_time);
-  ESP_LOGD(tag, "  status: %s",req->status == Signatures_Session_Info_Status_SESSION_INFO_STATUS_OK ? "OK" : "KEY_NOT_ON_WHITELIST");
+    ESP_LOGD(tag, "  epoch: ");
+    ESP_LOG_BUFFER_HEX(tag, req->epoch, 16);
+    ESP_LOGD(tag, "  clock_time: %" PRIu32, req->clock_time);
+    ESP_LOGD(tag, "  status: %s", req->status == Signatures_Session_Info_Status_SESSION_INFO_STATUS_OK ? "OK" : "KEY_NOT_ON_WHITELIST");
 }
 
 void log_aes_gcm_personalized_signature_data(const char *tag, const Signatures_AES_GCM_Personalized_Signature_Data *data)
@@ -219,7 +219,6 @@ void log_information_request(const char *tag, const VCSEC_InformationRequest *ms
     ESP_LOGD(tag, "  publicKeySHA1: %" PRIu32, msg->key.slot);
 }
 
-
 void log_routable_message(const char *tag, const UniversalMessage_RoutableMessage *msg)
 {
     ESP_LOGD(tag, "UniversalMessage_RoutableMessage:");
@@ -269,7 +268,6 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
         log_signature_data(tag, &msg->sub_sigData.signature_data);
     }
 
-
     // ESP_LOGD(tag, "  request_uuid: %s", msg->request_uuid);
     // ESP_LOG_BUFFER_HEX(tag, msg->request_uuid, 16);
     ESP_LOGD(tag, "  uuid: %s", msg->uuid);
@@ -299,6 +297,54 @@ const char *closure_state_to_string(VCSEC_ClosureState_E state)
         return "UNKNOWN_STATE";
     }
 }
+
+const char *vehicle_lock_state_to_string(VCSEC_VehicleLockState_E state)
+{
+    switch (state)
+    {
+    case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED:
+        return "UNLOCKED";
+    case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_LOCKED:
+        return "LOCKED";
+    case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED:
+        return "INTERNAL_LOCKED";
+    case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED:
+        return "SELECTIVE_UNLOCKED";
+    default:
+        return "UNKNOWN_STATE";
+    }
+}
+
+const char *vehicle_sleep_status_to_string(VCSEC_VehicleSleepStatus_E state)
+{
+    switch (state)
+    {
+    case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
+        return "UNKNOWN";
+    case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
+        return "AWAKE";
+    case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
+        return "ASLEEP";
+    default:
+        return "UNKNOWN_STATE";
+    }
+}
+
+const char *user_presence_to_string(VCSEC_UserPresence_E state)
+{
+    switch (state)
+    {
+    case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_UNKNOWN:
+        return "UNKNOWN";
+    case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_NOT_PRESENT:
+        return "NOT_PRESENT";
+    case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT:
+        return "PRESENT";
+    default:
+        return "UNKNOWN_STATE";
+    }
+}
+
 void log_vehicle_status(const char *tag, const VCSEC_VehicleStatus *msg)
 {
     ESP_LOGD(tag, "VCSEC_VehicleStatus:");
@@ -313,10 +359,8 @@ void log_vehicle_status(const char *tag, const VCSEC_VehicleStatus *msg)
         ESP_LOGD(tag, "    rearTrunk: %s", closure_state_to_string(msg->closureStatuses.rearTrunk));
         ESP_LOGD(tag, "    frontTrunk: %s", closure_state_to_string(msg->closureStatuses.frontTrunk));
         ESP_LOGD(tag, "    chargePort: %s", closure_state_to_string(msg->closureStatuses.chargePort));
-        ESP_LOGD(tag, "    tonneau: %s", closure_state_to_string(msg->closureStatuses.tonneau));
     }
-    ESP_LOGD(tag, "  vehicleLockState: %d", msg->vehicleLockState);
-    ESP_LOGD(tag, "  vehicleSleepStatus: %d", msg->vehicleSleepStatus);
+    ESP_LOGD(tag, "  vehicleLockState: %s", vehicle_lock_state_to_string(msg->vehicleLockState));
+    ESP_LOGD(tag, "  vehicleSleepStatus: %s", vehicle_sleep_status_to_string(msg->vehicleSleepStatus));
     ESP_LOGD(tag, "  userPresence: %d", msg->userPresence);
-    ESP_LOGD(tag, "  has_detailedClosureStatus: %s", msg->has_detailedClosureStatus ? "true" : "false");
 }

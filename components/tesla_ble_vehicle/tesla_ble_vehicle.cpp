@@ -797,7 +797,7 @@ namespace esphome
           }
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
           {
-            ESP_LOGI(TAG, "Received session info from vehicle security domain");
+            ESP_LOGI(TAG, "Received session info from VCSEC domain");
             tesla_ble_client_->session_vcsec_.setCounter(&session_info.counter);
             tesla_ble_client_->session_vcsec_.setExpiresAt(&session_info.clock_time);
             tesla_ble_client_->session_vcsec_.setEpoch(session_info.epoch);
@@ -863,7 +863,7 @@ namespace esphome
           {
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
           {
-            ESP_LOGI(TAG, "Received message from vehicle security domain");
+            ESP_LOGI(TAG, "Received message from VCSEC domain");
             VCSEC_FromVCSECMessage vcsec_message = VCSEC_FromVCSECMessage_init_default;
             int return_code = tesla_ble_client_->parseFromVCSECMessage(&message.payload.protobuf_message_as_bytes, &vcsec_message);
             if (return_code != 0)
@@ -878,6 +878,7 @@ namespace esphome
             case VCSEC_FromVCSECMessage_vehicleStatus_tag:
             {
               ESP_LOGI(TAG, "Received vehicle status");
+              ESP_LOGI(TAG, "  vehicleSleepStatus: %d", vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus);
               log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
               break;
             }
