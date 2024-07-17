@@ -276,3 +276,47 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
     ESP_LOG_BUFFER_HEX(tag, msg->uuid, 16);
     ESP_LOGD(tag, "  flags: %" PRIu32, msg->flags);
 }
+
+const char *closure_state_to_string(VCSEC_ClosureState_E state)
+{
+    switch (state)
+    {
+    case VCSEC_ClosureState_E_CLOSURESTATE_CLOSED:
+        return "CLOSED";
+    case VCSEC_ClosureState_E_CLOSURESTATE_OPEN:
+        return "OPEN";
+    case VCSEC_ClosureState_E_CLOSURESTATE_AJAR:
+        return "AJAR";
+    case VCSEC_ClosureState_E_CLOSURESTATE_UNKNOWN:
+        return "UNKNOWN";
+    case VCSEC_ClosureState_E_CLOSURESTATE_FAILED_UNLATCH:
+        return "FAILED_UNLATCH";
+    case VCSEC_ClosureState_E_CLOSURESTATE_OPENING:
+        return "OPENING";
+    case VCSEC_ClosureState_E_CLOSURESTATE_CLOSING:
+        return "CLOSING";
+    default:
+        return "UNKNOWN_STATE";
+    }
+}
+void log_vehicle_status(const char *tag, const VCSEC_VehicleStatus *msg)
+{
+    ESP_LOGD(tag, "VCSEC_VehicleStatus:");
+    ESP_LOGD(tag, "  has_closureStatuses: %s", msg->has_closureStatuses ? "true" : "false");
+    if (msg->has_closureStatuses)
+    {
+        ESP_LOGD(tag, "  closureStatuses:");
+        ESP_LOGD(tag, "    frontDriverDoor: %s", closure_state_to_string(msg->closureStatuses.frontDriverDoor));
+        ESP_LOGD(tag, "    frontPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.frontPassengerDoor));
+        ESP_LOGD(tag, "    rearDriverDoor: %s", closure_state_to_string(msg->closureStatuses.rearDriverDoor));
+        ESP_LOGD(tag, "    rearPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.rearPassengerDoor));
+        ESP_LOGD(tag, "    rearTrunk: %s", closure_state_to_string(msg->closureStatuses.rearTrunk));
+        ESP_LOGD(tag, "    frontTrunk: %s", closure_state_to_string(msg->closureStatuses.frontTrunk));
+        ESP_LOGD(tag, "    chargePort: %s", closure_state_to_string(msg->closureStatuses.chargePort));
+        ESP_LOGD(tag, "    tonneau: %s", closure_state_to_string(msg->closureStatuses.tonneau));
+    }
+    ESP_LOGD(tag, "  vehicleLockState: %d", msg->vehicleLockState);
+    ESP_LOGD(tag, "  vehicleSleepStatus: %d", msg->vehicleSleepStatus);
+    ESP_LOGD(tag, "  userPresence: %d", msg->userPresence);
+    ESP_LOGD(tag, "  has_detailedClosureStatus: %s", msg->has_detailedClosureStatus ? "true" : "false");
+}

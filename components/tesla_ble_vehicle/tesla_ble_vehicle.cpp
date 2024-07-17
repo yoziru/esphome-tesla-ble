@@ -878,6 +878,7 @@ namespace esphome
             case VCSEC_FromVCSECMessage_vehicleStatus_tag:
             {
               ESP_LOGI(TAG, "Received vehicle status");
+              log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
               break;
             }
             case VCSEC_FromVCSECMessage_commandStatus_tag:
