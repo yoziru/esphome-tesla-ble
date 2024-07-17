@@ -118,6 +118,31 @@ const char *domain_to_string(UniversalMessage_Domain domain)
     }
 }
 
+const char *generic_error_to_string(Errors_GenericError_E error)
+{
+    switch (error)
+    {
+    case Errors_GenericError_E_GENERICERROR_NONE:
+        return "NONE";
+    case Errors_GenericError_E_GENERICERROR_UNKNOWN:
+        return "UNKNOWN";
+    case Errors_GenericError_E_GENERICERROR_CLOSURES_OPEN:
+        return "CLOSURES_OPEN";
+    case Errors_GenericError_E_GENERICERROR_ALREADY_ON:
+        return "ALREADY_ON";
+    case Errors_GenericError_E_GENERICERROR_DISABLED_FOR_USER_COMMAND:
+        return "DISABLED_FOR_USER_COMMAND";
+    case Errors_GenericError_E_GENERICERROR_VEHICLE_NOT_IN_PARK:
+        return "VEHICLE_NOT_IN_PARK";
+    case Errors_GenericError_E_GENERICERROR_UNAUTHORIZED:
+        return "UNAUTHORIZED";
+    case Errors_GenericError_E_GENERICERROR_NOT_ALLOWED_OVER_TRANSPORT:
+        return "NOT_ALLOWED_OVER_TRANSPORT";
+    default:
+        return "UNKNOWN_ERROR";
+    }
+}
+
 void log_destination(const char *tag,
                      const char *direction,
                      const UniversalMessage_Destination *dest)
@@ -347,20 +372,20 @@ const char *user_presence_to_string(VCSEC_UserPresence_E state)
 
 void log_vehicle_status(const char *tag, const VCSEC_VehicleStatus *msg)
 {
-    ESP_LOGD(tag, "VCSEC_VehicleStatus:");
-    ESP_LOGD(tag, "  has_closureStatuses: %s", msg->has_closureStatuses ? "true" : "false");
+    ESP_LOGI(tag, "VCSEC_VehicleStatus:");
+    ESP_LOGI(tag, "  has_closureStatuses: %s", msg->has_closureStatuses ? "true" : "false");
     if (msg->has_closureStatuses)
     {
-        ESP_LOGD(tag, "  closureStatuses:");
-        ESP_LOGD(tag, "    frontDriverDoor: %s", closure_state_to_string(msg->closureStatuses.frontDriverDoor));
-        ESP_LOGD(tag, "    frontPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.frontPassengerDoor));
-        ESP_LOGD(tag, "    rearDriverDoor: %s", closure_state_to_string(msg->closureStatuses.rearDriverDoor));
-        ESP_LOGD(tag, "    rearPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.rearPassengerDoor));
-        ESP_LOGD(tag, "    rearTrunk: %s", closure_state_to_string(msg->closureStatuses.rearTrunk));
-        ESP_LOGD(tag, "    frontTrunk: %s", closure_state_to_string(msg->closureStatuses.frontTrunk));
-        ESP_LOGD(tag, "    chargePort: %s", closure_state_to_string(msg->closureStatuses.chargePort));
+        ESP_LOGI(tag, "  closureStatuses:");
+        ESP_LOGI(tag, "    frontDriverDoor: %s", closure_state_to_string(msg->closureStatuses.frontDriverDoor));
+        ESP_LOGI(tag, "    frontPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.frontPassengerDoor));
+        ESP_LOGI(tag, "    rearDriverDoor: %s", closure_state_to_string(msg->closureStatuses.rearDriverDoor));
+        ESP_LOGI(tag, "    rearPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.rearPassengerDoor));
+        ESP_LOGI(tag, "    rearTrunk: %s", closure_state_to_string(msg->closureStatuses.rearTrunk));
+        ESP_LOGI(tag, "    frontTrunk: %s", closure_state_to_string(msg->closureStatuses.frontTrunk));
+        ESP_LOGI(tag, "    chargePort: %s", closure_state_to_string(msg->closureStatuses.chargePort));
     }
-    ESP_LOGD(tag, "  vehicleLockState: %s", vehicle_lock_state_to_string(msg->vehicleLockState));
-    ESP_LOGD(tag, "  vehicleSleepStatus: %s", vehicle_sleep_status_to_string(msg->vehicleSleepStatus));
-    ESP_LOGD(tag, "  userPresence: %d", msg->userPresence);
+    ESP_LOGI(tag, "  vehicleLockState: %s", vehicle_lock_state_to_string(msg->vehicleLockState));
+    ESP_LOGI(tag, "  vehicleSleepStatus: %s", vehicle_sleep_status_to_string(msg->vehicleSleepStatus));
+    ESP_LOGI(tag, "  userPresence: %s", user_presence_to_string(msg->userPresence));
 }

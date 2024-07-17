@@ -878,7 +878,6 @@ namespace esphome
             case VCSEC_FromVCSECMessage_vehicleStatus_tag:
             {
               ESP_LOGI(TAG, "Received vehicle status");
-              ESP_LOGI(TAG, "  vehicleSleepStatus: %d", vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus);
               log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
               break;
             }
@@ -899,7 +898,8 @@ namespace esphome
             }
             case VCSEC_FromVCSECMessage_nominalError_tag:
             {
-              ESP_LOGI(TAG, "Received nominal error");
+              ESP_LOGE(TAG, "Received nominal error");
+              ESP_LOGE(TAG, "  error: %s", generic_error_to_string(vcsec_message.sub_message.nominalError.genericError));
               break;
             }
             default:
