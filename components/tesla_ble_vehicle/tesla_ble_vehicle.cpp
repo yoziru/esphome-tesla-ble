@@ -254,9 +254,10 @@ namespace esphome
       ESP_LOGI(TAG, "Not authenticated yet, building whitelist message");
       unsigned char whitelist_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t whitelist_message_length = 0;
-      // support for wake command added to CHARGING_MANAGER_ROLE in 2024.20.6.2 (not sure?)
+      // support for wake command added to ROLE_CHARGING_MANAGER in 2024.26.x (not sure?)
       // https://github.com/teslamotors/vehicle-command/issues/232#issuecomment-2181503570
-      int return_code = tesla_ble_client_->buildWhiteListMessage(Keys_Role_ROLE_CHARGING_MANAGER, VCSEC_KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY, whitelist_message_buffer, &whitelist_message_length);
+      // TODO: change back to ROLE_CHARGING_MANAGER when it's supported
+      int return_code = tesla_ble_client_->buildWhiteListMessage(Keys_Role_ROLE_OWNER, VCSEC_KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY, whitelist_message_buffer, &whitelist_message_length);
 
       if (return_code != 0)
       {
@@ -369,6 +370,24 @@ namespace esphome
     {
       ESP_LOGI(TAG, "Unlocking vehicle");
       this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_UNLOCK);
+    }
+
+    void TeslaBLEVehicle::sendInfoStatus()
+    {
+      ESP_LOGD(TAG, "sendInfoStatus");
+      unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+      size_t message_length = 0;
+      int return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
+          VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
+          message_buffer,
+          &message_length);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to build VCSECInformationRequestMessage");
+        return;
+      }
+
+      writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
     }
 
     void TeslaBLEVehicle::setChargingSwitch(bool isOn)
@@ -779,7 +798,7 @@ namespace esphome
           }
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
           {
-            ESP_LOGI(TAG, "Received session info from vehicle security domain");
+            ESP_LOGI(TAG, "Received session info from VCSEC domain");
             tesla_ble_client_->session_vcsec_.setCounter(&session_info.counter);
             tesla_ble_client_->session_vcsec_.setExpiresAt(&session_info.clock_time);
             tesla_ble_client_->session_vcsec_.setEpoch(session_info.epoch);
@@ -845,7 +864,7 @@ namespace esphome
           {
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
           {
-            ESP_LOGI(TAG, "Received message from vehicle security domain");
+            ESP_LOGI(TAG, "Received message from VCSEC domain");
             VCSEC_FromVCSECMessage vcsec_message = VCSEC_FromVCSECMessage_init_default;
             int return_code = tesla_ble_client_->parseFromVCSECMessage(&message.payload.protobuf_message_as_bytes, &vcsec_message);
             if (return_code != 0)
@@ -860,6 +879,7 @@ namespace esphome
             case VCSEC_FromVCSECMessage_vehicleStatus_tag:
             {
               ESP_LOGI(TAG, "Received vehicle status");
+              log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
               break;
             }
             case VCSEC_FromVCSECMessage_commandStatus_tag:
@@ -879,7 +899,8 @@ namespace esphome
             }
             case VCSEC_FromVCSECMessage_nominalError_tag:
             {
-              ESP_LOGI(TAG, "Received nominal error");
+              ESP_LOGE(TAG, "Received nominal error");
+              ESP_LOGE(TAG, "  error: %s", generic_error_to_string(vcsec_message.sub_message.nominalError.genericError));
               break;
             }
             default:

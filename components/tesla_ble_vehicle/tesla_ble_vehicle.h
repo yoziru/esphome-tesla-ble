@@ -56,6 +56,7 @@ namespace esphome
             void sendCommand(VCSEC_RKEAction_E action);
             void sendEphemeralKeyRequest(UniversalMessage_Domain domain);
             void sendKeySummary();
+            void sendInfoStatus();
             void setChargingAmps(int input_amps);
             void setChargingLimit(int input_percent);
             void setChargingSwitch(bool isOn);
