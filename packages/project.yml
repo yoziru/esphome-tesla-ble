@@ -75,6 +75,12 @@ button:
       - lambda: id(tesla_ble_vehicle_id)->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
     entity_category: diagnostic
 
+  - platform: template
+    name: Request VCSEC InfoStatus
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->sendInfoStatus();
+    entity_category: diagnostic
+
 sensor:
   - platform: ble_client
     type: rssi
