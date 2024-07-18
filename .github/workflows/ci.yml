@@ -18,8 +18,15 @@ jobs:
       - uses: actions/checkout@v4.1.7
       - name: Mock secrets.yaml from example
         run: cp secrets.yaml.example secrets.yaml
+      - name: Get ESPHome version
+        id: get_esphome_version
+        # read esphome version from requirements.txt
+        run: |
+          esphome_version=$(grep esphome requirements.txt | cut -d'=' -f3)
+          echo "esphome_version=$esphome_version" >> "$GITHUB_OUTPUT"
       - name: Build ESPHome firmware to verify configuration
         uses: esphome/build-action@v3.2.0
         with:
           yaml_file: ${{ matrix.file }}
           cache: true
+          version: ${{ steps.get_esphome_version.outputs.esphome_version }}
