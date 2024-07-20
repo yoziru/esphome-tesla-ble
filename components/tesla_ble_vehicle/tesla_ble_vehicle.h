@@ -61,6 +61,7 @@ namespace esphome
             void setChargingAmps(int input_amps);
             void setChargingLimit(int input_percent);
             void setChargingSwitch(bool isOn);
+            void vcsecPreflightCheck();
             void infotainmentPreflightCheck();
 
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
