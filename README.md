@@ -2,7 +2,7 @@
 
 This project lets you use an ESP32 device to manage charging a Tesla vehicle over BLE. Tested with M5Stack NanoC6 and Tesla firmware 2024.20.9.
 
-![Home Assistant screenshot](./docs/ha-device.png)
+<img src="./docs/ha-device.png" width="300">
 
 ## Features
 - [x] Pair BLE key with vehicle
@@ -10,9 +10,13 @@ This project lets you use an ESP32 device to manage charging a Tesla vehicle ove
 - [x] Set charging amps
 - [x] Set charging limit (percent)
 - [x] Turn on/off charging
+- [x] Sleep state sensor 
 
 ## Usage
-### Flashing ESP32 firmware
+
+### Build and flash ESP32 firmware
+
+> If you have a supported device, you can also flash the latest version of the image by using Chrome, connecting your ESP32 through USB and going to https://yoziru.github.io/esphome-tesla-ble/
 
 1. Copy and rename `secrets.yaml.example` to `secrets.yaml` and update it with your WiFi credentials (`wifi_ssid` and `wifi_password`) and vehicle details (`ble_mac_address` and `tesla_vin`)
 
@@ -35,3 +39,4 @@ make upload
 2. In Home Assistant, go to Settings > Devices & Services > ESPHome > Tesla BLE device and click "Pair BLE key"
 3. Tap your NFC card to your car's center console
 4. Hit confirm on the screen
+5. [optional] Rename your key to "ESPHome BLE" to identify it easier
