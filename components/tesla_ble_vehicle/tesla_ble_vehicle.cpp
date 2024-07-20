@@ -26,7 +26,6 @@ namespace esphome
     TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{})
     {
       ESP_LOGI(TAG, "Constructing Tesla BLE Car component");
-      this->isAuthenticated = false;
       this->init();
 
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
@@ -253,7 +252,7 @@ namespace esphome
       TeslaBLE::dumpBuffer("\n", private_key_buffer, private_key_length);
     }
 
-    void TeslaBLEVehicle::startPair()
+    int TeslaBLEVehicle::startPair()
     {
       ESP_LOGI(TAG, "Starting pairing");
       ESP_LOGI(TAG, "Not authenticated yet, building whitelist message");
@@ -263,19 +262,24 @@ namespace esphome
       // https://github.com/teslamotors/vehicle-command/issues/232#issuecomment-2181503570
       // TODO: change back to ROLE_CHARGING_MANAGER when it's supported
       int return_code = tesla_ble_client_->buildWhiteListMessage(Keys_Role_ROLE_OWNER, VCSEC_KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY, whitelist_message_buffer, &whitelist_message_length);
-
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build whitelist message");
-        return;
+        return return_code;
       }
       ESP_LOGV(TAG, "Whitelist message length: %d", whitelist_message_length);
-      writeBLE(whitelist_message_buffer, whitelist_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+
+      return_code = writeBLE(whitelist_message_buffer, whitelist_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send whitelist message");
+        return return_code;
+      }
       ESP_LOGI(TAG, "Please tap your card on the reader now..");
-      // this->isAuthenticated = true;
+      return 0;
     }
 
-    void TeslaBLEVehicle::sendEphemeralKeyRequest(UniversalMessage_Domain domain)
+    int TeslaBLEVehicle::sendEphemeralKeyRequest(UniversalMessage_Domain domain)
     {
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t message_length = 0;
@@ -287,13 +291,21 @@ namespace esphome
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build whitelist message");
-        return;
+        return return_code;
       }
 
-      writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send ephemeral key request");
+        return return_code;
+      }
+      // wait for response
+      // vTaskDelay(2000 / portTICK_PERIOD_MS);
+      return 0;
     }
 
-    void TeslaBLEVehicle::sendKeySummary()
+    int TeslaBLEVehicle::sendKeySummary()
     {
       ESP_LOGD(TAG, "sendKeySummary");
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
@@ -304,10 +316,16 @@ namespace esphome
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build KeySummary");
-        return;
+        return return_code;
       }
 
-      writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send KeySummary");
+        return return_code;
+      }
+      return 0;
     }
 
     int TeslaBLEVehicle::writeBLE(const unsigned char *message_buffer, size_t message_length,
@@ -336,141 +354,214 @@ namespace esphome
       return 0;
     }
 
-    void TeslaBLEVehicle::sendCommand(VCSEC_RKEAction_E action)
+    int TeslaBLEVehicle::sendCommand(VCSEC_RKEAction_E action)
     {
-      this->vcsecPreflightCheck();
+      int return_code = this->vcsecPreflightCheck();
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed VCSEC preflight check");
+        return return_code;
+      }
 
       unsigned char action_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t action_message_buffer_length = 0;
-      int return_code = tesla_ble_client_->buildVCSECActionMessage(action, action_message_buffer, &action_message_buffer_length);
-
+      return_code = tesla_ble_client_->buildVCSECActionMessage(action, action_message_buffer, &action_message_buffer_length);
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build action message");
-        return;
+        return return_code;
       }
 
-      writeBLE(action_message_buffer, action_message_buffer_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      return_code = writeBLE(action_message_buffer, action_message_buffer_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send action message");
+        return return_code;
+      }
+      return 0;
     }
 
-    void TeslaBLEVehicle::wakeVehicle()
+    int TeslaBLEVehicle::wakeVehicle()
     {
       ESP_LOGI(TAG, "Waking vehicle");
       if (this->asleepSensor->state == true)
       {
         ESP_LOGI(TAG, "Vehicle is already awake");
-        return;
+        return 0;
       }
-      this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+
+      int return_code = this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send wake command");
+        return return_code;
+      }
       // wait for vehicle to wake up
-      vTaskDelay(5000 / portTICK_PERIOD_MS);
+      // vTaskDelay(2000 / portTICK_PERIOD_MS);
+
       // get updated state after waking vehicle
-      this->sendInfoStatus();
+      ESP_LOGD(TAG, "Getting updated VCSEC state");
+      return_code = this->sendInfoStatus();
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send info status");
+        return return_code;
+      }
+      return 0;
     }
 
-    void TeslaBLEVehicle::lockVehicle()
+    int TeslaBLEVehicle::sendInfoStatus()
     {
-      ESP_LOGI(TAG, "Locking vehicle");
-      this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_LOCK);
-    }
-
-    void TeslaBLEVehicle::unlockVehicle()
-    {
-      ESP_LOGI(TAG, "Unlocking vehicle");
-      this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_UNLOCK);
-    }
-
-    void TeslaBLEVehicle::sendInfoStatus()
-    {
-      this->vcsecPreflightCheck();
+      int return_code = this->vcsecPreflightCheck();
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed VCSEC preflight check");
+        return return_code;
+      }
       ESP_LOGD(TAG, "sendInfoStatus");
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t message_length = 0;
-      int return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
+      return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
           VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
           message_buffer,
           &message_length);
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build VCSECInformationRequestMessage");
-        return;
+        return return_code;
       }
 
-      writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send VCSECInformationRequestMessage");
+        return return_code;
+      }
+      // wait for response
+      // vTaskDelay(2000 / portTICK_PERIOD_MS);
+      return 0;
     }
-    void TeslaBLEVehicle::vcsecPreflightCheck()
+
+    int TeslaBLEVehicle::vcsecPreflightCheck()
     {
+      ESP_LOGD(TAG, "Running VCSEC preflight checks..");
       // make sure we're connected
       if (this->node_state != espbt::ClientState::ESTABLISHED)
       {
         ESP_LOGW(TAG, "Not connected yet");
-        return;
+        return 1;
       }
       // make sure we're authenticated
-      ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-      this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-      // wait
-      vTaskDelay(5000 / portTICK_PERIOD_MS);
-      ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
-      return;
-    }
-
-    void TeslaBLEVehicle::infotainmentPreflightCheck()
-    {
-      this->vcsecPreflightCheck();
-
-      // get updated state before checking if car is asleep
-      this->sendInfoStatus();
-      // wait
-      vTaskDelay(5000 / portTICK_PERIOD_MS);
-      ESP_LOGD(TAG, "Getting updated VCSEC state");
-      // make sure car is awake
-      if (this->asleepSensor->state != true)
-      {
-        ESP_LOGW(TAG, "Car is asleep, waking up");
-        this->wakeVehicle();
-        // wait
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
-      }
-
-      // make sure we're authenticated
-      if (tesla_ble_client_->session_infotainment_.isAuthenticated != true)
+      if (tesla_ble_client_->session_vcsec_.isAuthenticated == false)
       {
         ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-        this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        // wait
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        int return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          return return_code;
+        }
+        ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
+        return 0;
+      }
+      // all good
+      ESP_LOGD(TAG, "VCSEC preflight check passed");
+      return 0;
+    }
+
+    int TeslaBLEVehicle::infotainmentPreflightCheck()
+    {
+      ESP_LOGD(TAG, "Running INFOTAINMENT preflight checks..");
+      int return_code = this->vcsecPreflightCheck();
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed VCSEC preflight check");
+        return return_code;
+      }
+
+      ESP_LOGD(TAG, "Checking if car is awake..");
+      // first handle case where state is Unknown (NAN) (e.g. on boot)
+      if (this->asleepSensor->has_state() == false)
+      {
+        ESP_LOGI(TAG, "Car state is unknown, sending info status");
+        return_code = this->sendInfoStatus();
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send info status");
+          return return_code;
+        }
+      }
+
+      if (this->asleepSensor->state == false)
+      {
+        ESP_LOGD(TAG, "Car is awake");
+      }
+      else
+      {
+        ESP_LOGW(TAG, "Car is asleep, waking up");
+        return_code = this->wakeVehicle();
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to wake vehicle");
+          return return_code;
+        }
+      }
+
+      // make sure we're authenticated
+      if (tesla_ble_client_->session_infotainment_.isAuthenticated == false)
+      {
+        ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
+        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          return return_code;
+        }
 
         ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
       }
 
       // all good
       ESP_LOGD(TAG, "Infotainment preflight check passed");
+      return 0;
     }
 
-    void TeslaBLEVehicle::setChargingSwitch(bool isOn)
+    int TeslaBLEVehicle::setChargingSwitch(bool isOn)
     {
-      // wait until preflight check is done
-      // using vtaskdelay
-      this->infotainmentPreflightCheck();
+      int return_code = this->infotainmentPreflightCheck();
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed infotainment preflight check");
+        return return_code;
+      }
 
       ESP_LOGI(TAG, "Setting charging switch to %s", isOn ? "ON" : "OFF");
       unsigned char charge_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t charge_message_length = 0;
-      int return_code = tesla_ble_client_->buildChargingSwitchMessage(isOn, charge_message_buffer, &charge_message_length);
-
+      return_code = tesla_ble_client_->buildChargingSwitchMessage(isOn, charge_message_buffer, &charge_message_length);
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build charge message");
-        return;
+        return return_code;
       }
 
-      writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      return_code = writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send charge message");
+        return return_code;
+      }
+      return 0;
     }
 
-    void TeslaBLEVehicle::setChargingAmps(int input_amps)
+    int TeslaBLEVehicle::setChargingAmps(int input_amps)
     {
-      this->infotainmentPreflightCheck();
+      int return_code = this->infotainmentPreflightCheck();
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed infotainment preflight check");
+        return return_code;
+      }
 
       // convert to uint32_t
       uint32_t amps = input_amps;
@@ -478,20 +569,30 @@ namespace esphome
       ESP_LOGI(TAG, "Setting charge amps to %ld", amps);
       unsigned char charge_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t charge_message_length;
-      int return_code = tesla_ble_client_->buildChargingAmpsMessage(amps, charge_message_buffer, &charge_message_length);
-
+      return_code = tesla_ble_client_->buildChargingAmpsMessage(amps, charge_message_buffer, &charge_message_length);
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build charge amps message");
-        return;
+        return return_code;
       }
 
-      writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      return_code = writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send charge amps message");
+        return return_code;
+      }
+      return 0;
     }
 
-    void TeslaBLEVehicle::setChargingLimit(int input_percent)
+    int TeslaBLEVehicle::setChargingLimit(int input_percent)
     {
-      this->infotainmentPreflightCheck();
+      int return_code = this->infotainmentPreflightCheck();
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed infotainment preflight check");
+        return return_code;
+      }
 
       // convert to uint32_t
       uint32_t percent = input_percent;
@@ -499,15 +600,20 @@ namespace esphome
       ESP_LOGI(TAG, "Setting charge limit to %ld", percent);
       unsigned char charge_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t charge_message_length;
-      int return_code = tesla_ble_client_->buildChargingSetLimitMessage(percent, charge_message_buffer, &charge_message_length);
-
+      return_code = tesla_ble_client_->buildChargingSetLimitMessage(percent, charge_message_buffer, &charge_message_length);
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build charge limit message");
-        return;
+        return return_code;
       }
 
-      writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      return_code = writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to send charge limit message");
+        return return_code;
+      }
+      return 0;
     }
 
     void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -554,7 +660,7 @@ namespace esphome
         this->handle_ = 0;
         this->read_handle_ = 0;
         this->write_handle_ = 0;
-        this->isAuthenticated = false;
+
         tesla_ble_client_->session_vcsec_.setIsAuthenticated(false);
         tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
         // asleep sensor off
@@ -639,18 +745,18 @@ namespace esphome
         size_t private_key_length = 0;
         tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
                                          &private_key_length);
-        ESP_LOGI(TAG, "Private key");
-        ESP_LOG_BUFFER_HEX(TAG, private_key_buffer, private_key_length);
-        // private key in PEM format (char)
-        ESP_LOGI(TAG, "Private key (char): %s", private_key_buffer);
+        ESP_LOGD(TAG, "Loaded private key");
+        // ESP_LOG_BUFFER_HEX(TAG, private_key_buffer, private_key_length);
+        // // private key in PEM format (char)
+        // ESP_LOGI(TAG, "Private key (char): %s", private_key_buffer);
 
         unsigned char public_key_buffer[65];
         size_t public_key_length;
         tesla_ble_client_->getPublicKey(public_key_buffer, &public_key_length);
-        ESP_LOGI(TAG, "Public key");
-        ESP_LOG_BUFFER_HEX(TAG, public_key_buffer, public_key_length);
-        // public key in PEM format (char)
-        ESP_LOGI(TAG, "Public key (char): %s", public_key_buffer);
+        ESP_LOGD(TAG, "Loaded public key");
+        // ESP_LOG_BUFFER_HEX(TAG, public_key_buffer, public_key_length);
+        // // public key in PEM format (char)
+        // ESP_LOGI(TAG, "Public key (char): %s", public_key_buffer);
 
         this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
         ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
@@ -692,12 +798,6 @@ namespace esphome
         ESP_LOGD(TAG, "BLE RX:");
         // ESP_LOGI(TAG, "ESP_GATTC_NOTIFY_EVT, receive notify value:");
         ESP_LOG_BUFFER_HEX(TAG, param->notify.value, param->notify.value_len);
-
-        // if (this->isAuthenticated == false)
-        // {
-        //   ESP_LOGW(TAG, "Not authenticated yet, sending ephemeral key");
-        //   // this->isAuthenticated = true;
-        // }
 
         UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
         ESP_LOGD(TAG, "Receiving message in chunks");
@@ -761,8 +861,33 @@ namespace esphome
         // log error if present in message
         if (message.has_signedMessageStatus)
         {
-          ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
+          ESP_LOGD(TAG, "Received signed message status from domain %s", domain_to_string(domain));
           log_message_status(TAG, &message.signedMessageStatus);
+          if (message.signedMessageStatus.operation_status == UniversalMessage_OperationStatus_E_OPERATIONSTATUS_ERROR)
+          {
+            ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
+            // reset authentication for domain
+            if (domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY)
+            {
+              tesla_ble_client_->session_vcsec_.setIsAuthenticated(false);
+            }
+            else if (domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT)
+            {
+              tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
+            }
+            return;
+          }
+          else if (message.signedMessageStatus.operation_status ==
+                   UniversalMessage_OperationStatus_E_OPERATIONSTATUS_WAIT)
+          {
+            ESP_LOGI(TAG, "Received wait message from domain %s", domain_to_string(domain));
+            // vTaskDelay(2000 / portTICK_PERIOD_MS);
+            return;
+          }
+          else
+          {
+            ESP_LOGI(TAG, "Received success message from domain %s", domain_to_string(domain));
+          }
           return;
         }
 
