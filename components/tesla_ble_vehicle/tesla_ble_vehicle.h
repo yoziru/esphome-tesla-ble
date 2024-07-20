@@ -7,6 +7,7 @@
 #include <iterator>
 #include "esphome/components/ble_client/ble_client.h"
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
+#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
@@ -64,6 +65,13 @@ namespace esphome
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
 
+            void set_binary_sensor_asleep(binary_sensor::BinarySensor *s) { asleepSensor = s; }
+            void updateAsleepState(bool asleep) {
+                if (asleepSensor != nullptr) {
+                    asleepSensor->publish_state(asleep);
+                }
+            }
+
         protected:
             TeslaBLE::Client *tesla_ble_client_;
             uint32_t storage_handle_;
@@ -75,6 +83,7 @@ namespace esphome
             espbt::ESPBTUUID read_uuid_;
             espbt::ESPBTUUID write_uuid_;
             bool isAuthenticated;
+            binary_sensor::BinarySensor *asleepSensor;
 
             std::vector<unsigned char> read_buffer;
             size_t current_size = 0;
