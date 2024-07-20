@@ -393,9 +393,22 @@ namespace esphome
 
       writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
     }
-
-    void TeslaBLEVehicle::setChargingSwitch(bool isOn)
+    void TeslaBLEVehicle::infotainmentPreflightCheck()
     {
+      // make sure we're connected
+      if (this->node_state != espbt::ClientState::ESTABLISHED)
+      {
+        ESP_LOGW(TAG, "Not connected yet");
+        return;
+      }
+      // make sure car is awake
+      if (this->asleepSensor->state)
+      {
+        ESP_LOGW(TAG, "Car is asleep, waking up");
+        this->wakeVehicle();
+        return;
+      }
+      // make sure we're authenticated
       if (tesla_ble_client_->session_infotainment_.isAuthenticated == false)
       {
         ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
@@ -403,6 +416,13 @@ namespace esphome
         ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
         return;
       }
+      // all good
+      ESP_LOGD(TAG, "Infotainment preflight check passed");
+    }
+
+    void TeslaBLEVehicle::setChargingSwitch(bool isOn)
+    {
+      this->infotainmentPreflightCheck();
 
       ESP_LOGI(TAG, "Setting charging switch to %s", isOn ? "ON" : "OFF");
       unsigned char charge_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
@@ -420,13 +440,7 @@ namespace esphome
 
     void TeslaBLEVehicle::setChargingAmps(int input_amps)
     {
-      if (tesla_ble_client_->session_infotainment_.isAuthenticated == false)
-      {
-        ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-        this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
-        return;
-      }
+      this->infotainmentPreflightCheck();
 
       // convert to uint32_t
       uint32_t amps = input_amps;
@@ -447,13 +461,7 @@ namespace esphome
 
     void TeslaBLEVehicle::setChargingLimit(int input_percent)
     {
-      if (tesla_ble_client_->session_infotainment_.isAuthenticated == false)
-      {
-        ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-        this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
-        return;
-      }
+      this->infotainmentPreflightCheck();
 
       // convert to uint32_t
       uint32_t percent = input_percent;
