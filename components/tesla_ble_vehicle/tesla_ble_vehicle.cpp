@@ -27,7 +27,6 @@ namespace esphome
     {
       ESP_LOGI(TAG, "Constructing Tesla BLE Car component");
       this->isAuthenticated = false;
-      this->asleepSensor->publish_initial_state(true);
       this->init();
 
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
@@ -37,7 +36,6 @@ namespace esphome
     void TeslaBLEVehicle::setup()
     {
       ESP_LOGI(TAG, "Starting Tesla BLE Car component");
-
       ESP_LOGI(TAG, "Tesla BLE Car component started");
     }
     void TeslaBLEVehicle::set_vin(const char *vin)
@@ -47,6 +45,11 @@ namespace esphome
 
     void TeslaBLEVehicle::loop()
     {
+      // make sure we're connected
+      if (this->node_state != espbt::ClientState::ESTABLISHED)
+      {
+        return;
+      }
     }
 
     void TeslaBLEVehicle::init()
@@ -516,6 +519,9 @@ namespace esphome
         this->isAuthenticated = false;
         tesla_ble_client_->session_vcsec_.setIsAuthenticated(false);
         tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
+        // asleep sensor off
+        this->updateAsleepState(NAN);
+        // charging switch off
         ESP_LOGW(TAG, "Disconnected!");
         break;
       }
@@ -881,7 +887,25 @@ namespace esphome
             {
               ESP_LOGI(TAG, "Received vehicle status");
               log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
-              this->asleepSensor->publish_state(!(vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus == VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE));
+              switch (vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus)
+              {
+              case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
+                ESP_LOGI(TAG, "Vehicle is awake");
+                this->updateAsleepState(false);
+                break;
+              case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
+                ESP_LOGI(TAG, "Vehicle is asleep");
+                this->updateAsleepState(true);
+                tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
+                break;
+              case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
+              default:
+                // set sleep state to unknown
+                ESP_LOGI(TAG, "Vehicle is in an unknown state");
+                this->updateAsleepState(NAN);
+                tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
+                break;
+              }
               break;
             }
             case VCSEC_FromVCSECMessage_commandStatus_tag:

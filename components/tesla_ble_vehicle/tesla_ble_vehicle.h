@@ -66,6 +66,11 @@ namespace esphome
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
 
             void set_binary_sensor_asleep(binary_sensor::BinarySensor *s) { asleepSensor = s; }
+            void updateAsleepState(bool asleep) {
+                if (asleepSensor != nullptr) {
+                    asleepSensor->publish_state(asleep);
+                }
+            }
 
         protected:
             TeslaBLE::Client *tesla_ble_client_;
@@ -78,7 +83,6 @@ namespace esphome
             espbt::ESPBTUUID read_uuid_;
             espbt::ESPBTUUID write_uuid_;
             bool isAuthenticated;
-            bool isAsleep;
             binary_sensor::BinarySensor *asleepSensor;
 
             std::vector<unsigned char> read_buffer;
