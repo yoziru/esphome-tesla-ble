@@ -384,7 +384,7 @@ namespace esphome
     int TeslaBLEVehicle::wakeVehicle()
     {
       ESP_LOGI(TAG, "Waking vehicle");
-      if (this->asleepSensor->state == true)
+      if (this->asleepSensor->state == false)
       {
         ESP_LOGI(TAG, "Vehicle is already awake");
         return 0;
