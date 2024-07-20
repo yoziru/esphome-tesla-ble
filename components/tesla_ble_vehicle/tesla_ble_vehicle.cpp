@@ -542,6 +542,13 @@ namespace esphome
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build charge message");
+        // TODO: should be handled in preflight check but not always working so send key request as workaround here
+        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          return return_code;
+        }
         return return_code;
       }
 
@@ -573,6 +580,13 @@ namespace esphome
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build charge amps message");
+        // TODO: should be handled in preflight check but not always working so send key request as workaround here
+        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          return return_code;
+        }
         return return_code;
       }
 
@@ -604,6 +618,13 @@ namespace esphome
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build charge limit message");
+        // TODO: should be handled in preflight check but not always working so send key request as workaround here
+        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          return return_code;
+        }
         return return_code;
       }
 
