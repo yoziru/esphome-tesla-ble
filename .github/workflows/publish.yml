@@ -9,5 +9,5 @@ jobs:
   publish:
     uses: ./.github/workflows/publish-common.yml
     with:
-      files: tesla-ble-esp32-generic.yml,tesla-ble-m5stack-atoms3.yml,tesla-ble-m5stack-nanoc6.yml
+      files: tesla-ble-m5stack-atoms3.yml,tesla-ble-m5stack-nanoc6.yml
       name: ESPHome Tesla BLE
