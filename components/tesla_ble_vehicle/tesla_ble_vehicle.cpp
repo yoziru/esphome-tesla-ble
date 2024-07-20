@@ -36,6 +36,7 @@ namespace esphome
     void TeslaBLEVehicle::setup()
     {
       ESP_LOGI(TAG, "Starting Tesla BLE Car component");
+      this->sendInfoStatus();
       ESP_LOGI(TAG, "Tesla BLE Car component started");
     }
     void TeslaBLEVehicle::set_vin(const char *vin)
@@ -337,13 +338,7 @@ namespace esphome
 
     void TeslaBLEVehicle::sendCommand(VCSEC_RKEAction_E action)
     {
-      if (tesla_ble_client_->session_vcsec_.isAuthenticated == false)
-      {
-        ESP_LOGW(TAG, "Not authenticated yet");
-        this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-        ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
-        return;
-      }
+      this->vcsecPreflightCheck();
 
       unsigned char action_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t action_message_buffer_length = 0;
@@ -361,7 +356,16 @@ namespace esphome
     void TeslaBLEVehicle::wakeVehicle()
     {
       ESP_LOGI(TAG, "Waking vehicle");
+      if (this->asleepSensor->state == true)
+      {
+        ESP_LOGI(TAG, "Vehicle is already awake");
+        return;
+      }
       this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+      // wait for vehicle to wake up
+      vTaskDelay(5000 / portTICK_PERIOD_MS);
+      // get updated state after waking vehicle
+      this->sendInfoStatus();
     }
 
     void TeslaBLEVehicle::lockVehicle()
@@ -378,6 +382,7 @@ namespace esphome
 
     void TeslaBLEVehicle::sendInfoStatus()
     {
+      this->vcsecPreflightCheck();
       ESP_LOGD(TAG, "sendInfoStatus");
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t message_length = 0;
@@ -393,7 +398,7 @@ namespace esphome
 
       writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
     }
-    void TeslaBLEVehicle::infotainmentPreflightCheck()
+    void TeslaBLEVehicle::vcsecPreflightCheck()
     {
       // make sure we're connected
       if (this->node_state != espbt::ClientState::ESTABLISHED)
@@ -401,27 +406,52 @@ namespace esphome
         ESP_LOGW(TAG, "Not connected yet");
         return;
       }
+      // make sure we're authenticated
+      ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
+      this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+      // wait
+      vTaskDelay(5000 / portTICK_PERIOD_MS);
+      ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
+      return;
+    }
+
+    void TeslaBLEVehicle::infotainmentPreflightCheck()
+    {
+      this->vcsecPreflightCheck();
+
+      // get updated state before checking if car is asleep
+      this->sendInfoStatus();
+      // wait
+      vTaskDelay(5000 / portTICK_PERIOD_MS);
+      ESP_LOGD(TAG, "Getting updated VCSEC state");
       // make sure car is awake
-      if (this->asleepSensor->state)
+      if (this->asleepSensor->state != true)
       {
         ESP_LOGW(TAG, "Car is asleep, waking up");
         this->wakeVehicle();
-        return;
+        // wait
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
       }
+
       // make sure we're authenticated
-      if (tesla_ble_client_->session_infotainment_.isAuthenticated == false)
+      if (tesla_ble_client_->session_infotainment_.isAuthenticated != true)
       {
         ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
         this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        // wait
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+
         ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
-        return;
       }
+
       // all good
       ESP_LOGD(TAG, "Infotainment preflight check passed");
     }
 
     void TeslaBLEVehicle::setChargingSwitch(bool isOn)
     {
+      // wait until preflight check is done
+      // using vtaskdelay
       this->infotainmentPreflightCheck();
 
       ESP_LOGI(TAG, "Setting charging switch to %s", isOn ? "ON" : "OFF");
