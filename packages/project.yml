@@ -30,6 +30,8 @@ tesla_ble_vehicle:
   ble_client_id: ble_tesla_id
   id: tesla_ble_vehicle_id
   vin: !secret tesla_vin
+  asleep:
+    name: "Asleep"
 
 button:
   - platform: restart

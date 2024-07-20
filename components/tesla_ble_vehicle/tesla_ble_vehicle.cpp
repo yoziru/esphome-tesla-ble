@@ -27,6 +27,7 @@ namespace esphome
     {
       ESP_LOGI(TAG, "Constructing Tesla BLE Car component");
       this->isAuthenticated = false;
+      this->asleepSensor->publish_initial_state(true);
       this->init();
 
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
@@ -880,6 +881,7 @@ namespace esphome
             {
               ESP_LOGI(TAG, "Received vehicle status");
               log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
+              this->asleepSensor->publish_state(!(vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus == VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE));
               break;
             }
             case VCSEC_FromVCSECMessage_commandStatus_tag:
