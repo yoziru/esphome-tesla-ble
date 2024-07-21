@@ -25,7 +25,7 @@ namespace esphome
     }
     TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{})
     {
-      ESP_LOGI(TAG, "Constructing Tesla BLE Car component");
+      ESP_LOGI(TAG, "Constructing Tesla BLE Vehicle component");
       this->init();
 
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
@@ -34,9 +34,8 @@ namespace esphome
     }
     void TeslaBLEVehicle::setup()
     {
-      ESP_LOGI(TAG, "Starting Tesla BLE Car component");
-      this->sendInfoStatus();
-      ESP_LOGI(TAG, "Tesla BLE Car component started");
+      ESP_LOGI(TAG, "Starting Tesla BLE Vehicle component");
+      ESP_LOGI(TAG, "Tesla BLE Vehicle component started");
     }
     void TeslaBLEVehicle::set_vin(const char *vin)
     {
@@ -45,16 +44,38 @@ namespace esphome
 
     void TeslaBLEVehicle::loop()
     {
-      // make sure we're connected
-      if (this->node_state != espbt::ClientState::ESTABLISHED)
+    }
+
+    void TeslaBLEVehicle::update()
+    {
+      ESP_LOGD(TAG, "Updating Tesla BLE Vehicle component..");
+      if (this->node_state == espbt::ClientState::ESTABLISHED)
       {
+        ESP_LOGD(TAG, "Polling for vehicle status..");
+        int return_code = this->sendInfoStatus();
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send info status");
+          return;
+        }
+        ESP_LOGD(TAG, "Sent info status");
         return;
+      }
+      else
+      {
+        ESP_LOGD(TAG, "Vehicle is not connected");
+        // set sleep status to unknown if it's not yet
+        if (this->asleepSensor->has_state())
+        {
+
+          this->updateAsleepState(NAN);
+        }
       }
     }
 
     void TeslaBLEVehicle::init()
     {
-      ESP_LOGI(TAG, "Initializing Tesla BLE Car component");
+      ESP_LOGI(TAG, "Initializing Tesla BLE Vehicle component");
       esp_err_t err = nvs_flash_init();
       if (err != ESP_OK)
       {
@@ -302,29 +323,6 @@ namespace esphome
       }
       // wait for response
       // vTaskDelay(2000 / portTICK_PERIOD_MS);
-      return 0;
-    }
-
-    int TeslaBLEVehicle::sendKeySummary()
-    {
-      ESP_LOGD(TAG, "sendKeySummary");
-      unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
-      size_t message_length = 0;
-      int return_code = tesla_ble_client_->buildKeySummary(
-          message_buffer,
-          &message_length);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to build KeySummary");
-        return return_code;
-      }
-
-      return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to send KeySummary");
-        return return_code;
-      }
       return 0;
     }
 
@@ -645,7 +643,6 @@ namespace esphome
       {
       case ESP_GATTC_CONNECT_EVT:
       {
-        // this->handle_ = param->connect.conn_id;
         break;
       }
 
@@ -661,7 +658,7 @@ namespace esphome
           {
             connection_id[i] = esp_random();
           }
-          ESP_LOGI(TAG, "Connection ID");
+          ESP_LOGD(TAG, "Connection ID");
           ESP_LOG_BUFFER_HEX(TAG, connection_id, 16);
           tesla_ble_client_->setConnectionID(connection_id);
         }
@@ -672,7 +669,7 @@ namespace esphome
       {
         esp_bd_addr_t bda;
         memcpy(bda, param->srvc_chg.remote_bda, sizeof(esp_bd_addr_t));
-        ESP_LOGI(TAG, "ESP_GATTC_SRVC_CHG_EVT, bd_addr:");
+        ESP_LOGD(TAG, "ESP_GATTC_SRVC_CHG_EVT, bd_addr:");
         ESP_LOG_BUFFER_HEX(TAG, bda, sizeof(esp_bd_addr_t));
         break;
       }
@@ -686,7 +683,8 @@ namespace esphome
         tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
         // asleep sensor off
         this->updateAsleepState(NAN);
-        // charging switch off
+        // TODO: charging switch off
+
         ESP_LOGW(TAG, "Disconnected!");
         break;
       }
@@ -759,30 +757,50 @@ namespace esphome
         }
         this->node_state = espbt::ClientState::ESTABLISHED;
 
-        // do things here
-        this->sendKeySummary();
-
         unsigned char private_key_buffer[228];
         size_t private_key_length = 0;
-        tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
+        int return_code = tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
                                          &private_key_length);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to get private key");
+          break;
+        }
         ESP_LOGD(TAG, "Loaded private key");
-        // ESP_LOG_BUFFER_HEX(TAG, private_key_buffer, private_key_length);
-        // // private key in PEM format (char)
-        // ESP_LOGI(TAG, "Private key (char): %s", private_key_buffer);
 
         unsigned char public_key_buffer[65];
         size_t public_key_length;
-        tesla_ble_client_->getPublicKey(public_key_buffer, &public_key_length);
+        return_code = tesla_ble_client_->getPublicKey(public_key_buffer, &public_key_length);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to get public key");
+          break;
+        }
         ESP_LOGD(TAG, "Loaded public key");
-        // ESP_LOG_BUFFER_HEX(TAG, public_key_buffer, public_key_length);
-        // // public key in PEM format (char)
-        // ESP_LOGI(TAG, "Public key (char): %s", public_key_buffer);
 
-        this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          break;
+        }
         ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
-        this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        
+        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          break;
+        }
         ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
+
+        return_code = this->sendInfoStatus();
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send info status");
+          break;
+        }
+        ESP_LOGI(TAG, "Sent initial info status request");
 
         break;
       }
@@ -813,7 +831,7 @@ namespace esphome
         if (param->notify.conn_id != this->parent()->get_conn_id())
         {
           ESP_LOGW(TAG, "Received notify from unknown connection");
-          return;
+          break;
         }
         ESP_LOGD(TAG, "%d: - RAM left %ld", __LINE__, esp_get_free_heap_size());
         ESP_LOGD(TAG, "BLE RX:");
@@ -838,7 +856,7 @@ namespace esphome
         if (return_code != 0)
         {
           ESP_LOGE(TAG, "Failed to parse incoming message (maybe chunk?)");
-          return;
+          break;
         }
         ESP_LOGD(TAG, "Parsed UniversalMessage");
         // clear read buffer
@@ -849,14 +867,14 @@ namespace esphome
         if (not message.has_from_destination)
         {
           ESP_LOGW(TAG, "Dropping message with missing source (probably broadcast message)");
-          return;
+          break;
         }
         UniversalMessage_Domain domain = message.from_destination.sub_destination.domain;
 
         if (not message.has_from_destination)
         {
           ESP_LOGW(TAG, "Dropping message with missing destination");
-          return;
+          break;
         }
 
         switch (message.to_destination.which_sub_destination)
@@ -875,7 +893,7 @@ namespace esphome
         default:
         {
           ESP_LOGW(TAG, "Dropping message with unrecognized destination type");
-          return;
+          break;
         }
         }
 

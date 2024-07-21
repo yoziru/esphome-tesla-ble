@@ -35,12 +35,13 @@ namespace esphome
         static const int MAX_LATENCY = 4 * 1000; // Max allowed error when syncing vehicle clock (4s)
         static const int BLOCK_LENGTH = 20;      // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
 
-        class TeslaBLEVehicle : public ble_client::BLEClientNode, public Component
+        class TeslaBLEVehicle : public PollingComponent, public ble_client::BLEClientNode
         {
         public:
             TeslaBLEVehicle();
             void setup() override;
             void loop() override;
+            void update() override;
             void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                      esp_ble_gattc_cb_param_t *param) override;
             void dump_config() override;
@@ -54,7 +55,6 @@ namespace esphome
 
             int sendCommand(VCSEC_RKEAction_E action);
             int sendEphemeralKeyRequest(UniversalMessage_Domain domain);
-            int sendKeySummary(void);
             int sendInfoStatus(void);
             int setChargingAmps(int input_amps);
             int setChargingLimit(int input_percent);
@@ -66,8 +66,10 @@ namespace esphome
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
 
             void set_binary_sensor_asleep(binary_sensor::BinarySensor *s) { asleepSensor = s; }
-            void updateAsleepState(bool asleep) {
-                if (asleepSensor != nullptr) {
+            void updateAsleepState(bool asleep)
+            {
+                if (asleepSensor != nullptr)
+                {
                     asleepSensor->publish_state(asleep);
                 }
             }
