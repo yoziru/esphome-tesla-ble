@@ -26,6 +26,21 @@ const char *operation_status_to_string(UniversalMessage_OperationStatus_E status
     }
 }
 
+const char *vcsec_operation_status_to_string(VCSEC_OperationStatus_E status)
+{
+    switch (status)
+    {
+    case VCSEC_OperationStatus_E_OPERATIONSTATUS_OK:
+        return "OK";
+    case VCSEC_OperationStatus_E_OPERATIONSTATUS_WAIT:
+        return "WAIT";
+    case VCSEC_OperationStatus_E_OPERATIONSTATUS_ERROR:
+        return "ERROR";
+    default:
+        return "UNKNOWN_STATUS";
+    }
+}
+
 const char *information_request_type_to_string(VCSEC_InformationRequestType request_type)
 {
     switch (request_type)
@@ -105,6 +120,110 @@ void log_message_status(const char *tag, const UniversalMessage_MessageStatus *s
     ESP_LOGE(tag, "  MessageStatus:");
     ESP_LOGE(tag, "    operation_status: %s", operation_status_to_string(status->operation_status));
     ESP_LOGE(tag, "    signed_message_fault: %s", message_fault_to_string(status->signed_message_fault));
+}
+
+const char *vssec_signed_message_information_to_string(VCSEC_SignedMessage_information_E information)
+{
+    switch (information)
+    {
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_NONE:
+        return "NONE";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_UNKNOWN:
+        return "UNKNOWN";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_NOT_ON_WHITELIST:
+        return "NOT_ON_WHITELIST";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_IV_SMALLER_THAN_EXPECTED:
+        return "IV_SMALLER_THAN_EXPECTED";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_INVALID_TOKEN:
+        return "INVALID_TOKEN";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_TOKEN_AND_COUNTER_INVALID:
+        return "TOKEN_AND_COUNTER_INVALID";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_AES_DECRYPT_AUTH:
+        return "AES_DECRYPT_AUTH";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_ECDSA_INPUT:
+        return "ECDSA_INPUT";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_ECDSA_SIGNATURE:
+        return "ECDSA_SIGNATURE";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_LOCAL_ENTITY_START:
+        return "LOCAL_ENTITY_START";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_LOCAL_ENTITY_RESULT:
+        return "LOCAL_ENTITY_RESULT";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_COULD_NOT_RETRIEVE_KEY:
+        return "COULD_NOT_RETRIEVE_KEY";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_COULD_NOT_RETRIEVE_TOKEN:
+        return "COULD_NOT_RETRIEVE_TOKEN";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_SIGNATURE_TOO_SHORT:
+        return "SIGNATURE_TOO_SHORT";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_TOKEN_IS_INCORRECT_LENGTH:
+        return "TOKEN_IS_INCORRECT_LENGTH";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_INCORRECT_EPOCH:
+        return "INCORRECT_EPOCH";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_IV_INCORRECT_LENGTH:
+        return "IV_INCORRECT_LENGTH";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_TIME_EXPIRED:
+        return "TIME_EXPIRED";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_NOT_PROVISIONED_WITH_IDENTITY:
+        return "NOT_PROVISIONED_WITH_IDENTITY";
+    case VCSEC_SignedMessage_information_E_SIGNEDMESSAGE_INFORMATION_FAULT_COULD_NOT_HASH_METADATA:
+        return "COULD_NOT_HASH_METADATA";
+    default:
+        return "UNKNOWN_INFORMATION";
+    }
+}
+
+const char *vssec_whitelist_operation_information_to_string(VCSEC_WhitelistOperation_information_E request_type)
+{
+    switch (request_type)
+    {
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_NONE:
+        return "NONE";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_UNDOCUMENTED_ERROR:
+        return "UNDOCUMENTED_ERROR";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_REMOVE_ONESELF:
+        return "NO_PERMISSION_TO_REMOVE_ONESELF";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_KEYFOB_SLOTS_FULL:
+        return "KEYFOB_SLOTS_FULL";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_WHITELIST_FULL:
+        return "WHITELIST_FULL";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_ADD:
+        return "NO_PERMISSION_TO_ADD";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_INVALID_PUBLIC_KEY:
+        return "INVALID_PUBLIC_KEY";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_REMOVE:
+        return "NO_PERMISSION_TO_REMOVE";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_CHANGE_PERMISSIONS:
+        return "NO_PERMISSION_TO_CHANGE_PERMISSIONS";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ELEVATE_OTHER_ABOVE_ONESELF:
+        return "ATTEMPTING_TO_ELEVATE_OTHER_ABOVE_ONESELF";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_DEMOTE_SUPERIOR_TO_ONESELF:
+        return "ATTEMPTING_TO_DEMOTE_SUPERIOR_TO_ONESELF";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_REMOVE_OWN_PERMISSIONS:
+        return "ATTEMPTING_TO_REMOVE_OWN_PERMISSIONS";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_PUBLIC_KEY_NOT_ON_WHITELIST:
+        return "PUBLIC_KEY_NOT_ON_WHITELIST";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_THAT_IS_ALREADY_ON_THE_WHITELIST:
+        return "ATTEMPTING_TO_ADD_KEY_THAT_IS_ALREADY_ON_THE_WHITELIST";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_NOT_ALLOWED_TO_ADD_UNLESS_ON_READER:
+        return "NOT_ALLOWED_TO_ADD_UNLESS_ON_READER";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_FM_MODIFYING_OUTSIDE_OF_F_MODE:
+        return "FM_MODIFYING_OUTSIDE_OF_F_MODE";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_FM_ATTEMPTING_TO_ADD_PERMANENT_KEY:
+        return "FM_ATTEMPTING_TO_ADD_PERMANENT_KEY";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_FM_ATTEMPTING_TO_REMOVE_PERMANENT_KEY:
+        return "FM_ATTEMPTING_TO_REMOVE_PERMANENT_KEY";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_KEYCHAIN_WHILE_FS_FULL:
+        return "KEYCHAIN_WHILE_FS_FULL";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_WITHOUT_ROLE:
+        return "ATTEMPTING_TO_ADD_KEY_WITHOUT_ROLE";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_WITH_SERVICE_ROLE:
+        return "ATTEMPTING_TO_ADD_KEY_WITH_SERVICE_ROLE";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH:
+        return "NON_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH";
+    case VCSEC_WhitelistOperation_information_E_WHITELISTOPERATION_INFORMATION_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH_OUTSIDE_SERVICE_MODE:
+        return "SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH_OUTSIDE_SERVICE_MODE";
+    default:
+        return "UNKNOWN_REQUEST_TYPE";
+    }
 }
 
 // Function to convert UniversalMessage_Domain enum to string
@@ -376,4 +495,42 @@ void log_vehicle_status(const char *tag, const VCSEC_VehicleStatus *msg)
     ESP_LOGI(tag, "  vehicleLockState: %s", vehicle_lock_state_to_string(msg->vehicleLockState));
     ESP_LOGI(tag, "  vehicleSleepStatus: %s", vehicle_sleep_status_to_string(msg->vehicleSleepStatus));
     ESP_LOGI(tag, "  userPresence: %s", user_presence_to_string(msg->userPresence));
+}
+
+void log_vssec_signed_message_status(const char *tag, const VCSEC_SignedMessage_status *status)
+{
+    ESP_LOGI(tag, "  SignedMessage status:");
+    ESP_LOGI(tag, "    counter: %" PRIu32, status->counter);
+    ESP_LOGI(tag, "    signed_message_information: %s", vssec_signed_message_information_to_string(status->signedMessageInformation));
+}
+
+void log_vssec_whitelist_operation_status(const char *tag, const VCSEC_WhitelistOperation_status *status)
+{
+    ESP_LOGI(tag, "  WhitelistOperation status:");
+    // has_signerOfOperation;
+    if (status->has_signerOfOperation)
+    {
+        ESP_LOGI(tag, "    signerOfOperation:");
+        ESP_LOGI(tag, "      public_key: %s", format_hex(status->signerOfOperation.publicKeySHA1.bytes, status->signerOfOperation.publicKeySHA1.size).c_str());
+    }
+    ESP_LOGI(tag, "    operation_status: %s", vcsec_operation_status_to_string(status->operationStatus));
+    ESP_LOGI(tag, "    information: %s", vssec_whitelist_operation_information_to_string(status->whitelistOperationInformation));
+}
+
+void log_vcsec_command_status(const char *tag, const VCSEC_CommandStatus *msg)
+{
+    ESP_LOGI(tag, "VCSEC_CommandStatus:");
+    ESP_LOGI(tag, "  commandStatus: %s", vcsec_operation_status_to_string(msg->operationStatus));
+
+    ESP_LOGI(tag, "  which_sub_message: %d", msg->which_sub_message);
+    switch (msg->which_sub_message)
+    {
+    case VCSEC_CommandStatus_signedMessageStatus_tag:
+        log_vssec_signed_message_status(tag, &msg->sub_message.signedMessageStatus);
+        break;
+    case VCSEC_CommandStatus_whitelistOperationStatus_tag:
+        log_vssec_whitelist_operation_status(tag, &msg->sub_message.whitelistOperationStatus);
+    default:
+        ESP_LOGI(tag, "  unknown sub_message");
+    }
 }

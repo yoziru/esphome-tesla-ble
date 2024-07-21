@@ -1104,6 +1104,7 @@ namespace esphome
             case VCSEC_FromVCSECMessage_commandStatus_tag:
             {
               ESP_LOGI(TAG, "Received command status");
+              log_vcsec_command_status(TAG, &vcsec_message.sub_message.commandStatus);
               break;
             }
             case VCSEC_FromVCSECMessage_whitelistInfo_tag:
