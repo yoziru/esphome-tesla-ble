@@ -9,7 +9,7 @@ CODEOWNERS = ["@yoziru"]
 DEPENDENCIES = ["ble_client"]
 
 tesla_ble_vehicle_ns = cg.esphome_ns.namespace("tesla_ble_vehicle")
-TeslaBLEVehicle = tesla_ble_vehicle_ns.class_("TeslaBLEVehicle", ble_client.BLEClientNode)
+TeslaBLEVehicle = tesla_ble_vehicle_ns.class_("TeslaBLEVehicle", cg.PollingComponent, ble_client.BLEClientNode)
 
 AUTO_LOAD = ['binary_sensor']
 CONF_VIN = "vin"
@@ -24,16 +24,17 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_ASLEEP): binary_sensor.binary_sensor_schema(icon="mdi:sleep").extend(),
         }
     )
-    .extend(cv.polling_component_schema("5s"))
+    .extend(cv.polling_component_schema("1min"))
     .extend(ble_client.BLE_CLIENT_SCHEMA)
-    .extend(cv.COMPONENT_SCHEMA)
 )
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
-    await ble_client.register_ble_node(var, config)
-    cg.add(var.set_vin(config[CONF_VIN]))
+    await cg.register_component(var, config)
 
+    await ble_client.register_ble_node(var, config)
+
+    cg.add(var.set_vin(config[CONF_VIN]))
 
     if CONF_ASLEEP in config:
         conf = config[CONF_ASLEEP]
