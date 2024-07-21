@@ -8,6 +8,8 @@ const char *domain_to_string(UniversalMessage_Domain domain);
 const char *information_request_type_to_string(VCSEC_InformationRequestType request_type);
 const char *message_fault_to_string(UniversalMessage_MessageFault_E fault);
 const char *operation_status_to_string(UniversalMessage_OperationStatus_E status);
+const char *vcsec_operation_status_to_string(VCSEC_OperationStatus_E status);
+const char *vssec_signed_message_information_to_string(VCSEC_SignedMessage_information_E information);
 const char *closure_state_to_string(VCSEC_ClosureState_E state);
 const char *vehicle_lock_state_to_string(VCSEC_VehicleLockState_E state);
 const char *vehicle_sleep_status_to_string(VCSEC_VehicleSleepStatus_E state);
@@ -22,3 +24,6 @@ void log_session_info_request(const char *tag, const UniversalMessage_SessionInf
 void log_session_info(const char *tag, const Signatures_SessionInfo *req);
 void log_signature_data(const char *tag, const Signatures_SignatureData *sig);
 void log_vehicle_status(const char *tag, const VCSEC_VehicleStatus *msg);
+void log_vssec_signed_message_status(const char *tag, const VCSEC_SignedMessage_status *status);
+void log_vssec_whitelist_operation_status(const char *tag, const VCSEC_WhitelistOperation_status *status);
+void log_vcsec_command_status(const char *tag, const VCSEC_CommandStatus *msg);

@@ -1,19 +1,19 @@
 #pragma once
-#include <vector>
+#include <algorithm>
 #include <cstring>
+#include <iterator>
+#include <vector>
 
 #include <esp_gattc_api.h>
-#include <algorithm>
-#include <iterator>
-#include "esphome/components/ble_client/ble_client.h"
-#include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
-#include "esphome/components/binary_sensor/binary_sensor.h"
-#include "esphome/components/sensor/sensor.h"
-#include "esphome/core/component.h"
-#include "esphome/core/log.h"
+#include <esphome/components/binary_sensor/binary_sensor.h>
+#include <esphome/components/ble_client/ble_client.h>
+#include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
+#include <esphome/components/sensor/sensor.h>
+#include <esphome/core/component.h>
+#include <esphome/core/log.h>
 
-#include <vcsec.pb.h>
 #include <universal_message.pb.h>
+#include <vcsec.pb.h>
 
 namespace TeslaBLE
 {
