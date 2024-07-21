@@ -48,19 +48,19 @@ namespace esphome
             void set_vin(const char *vin);
 
             void regenerateKey();
-            void startPair(void);
+            int startPair(void);
 
-            void wakeVehicle(void);
-            void lockVehicle(void);
-            void unlockVehicle(void);
+            int wakeVehicle(void);
 
-            void sendCommand(VCSEC_RKEAction_E action);
-            void sendEphemeralKeyRequest(UniversalMessage_Domain domain);
-            void sendKeySummary();
-            void sendInfoStatus();
-            void setChargingAmps(int input_amps);
-            void setChargingLimit(int input_percent);
-            void setChargingSwitch(bool isOn);
+            int sendCommand(VCSEC_RKEAction_E action);
+            int sendEphemeralKeyRequest(UniversalMessage_Domain domain);
+            int sendKeySummary(void);
+            int sendInfoStatus(void);
+            int setChargingAmps(int input_amps);
+            int setChargingLimit(int input_percent);
+            int setChargingSwitch(bool isOn);
+            int vcsecPreflightCheck(void);
+            int infotainmentPreflightCheck(void);
 
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
@@ -82,7 +82,6 @@ namespace esphome
             espbt::ESPBTUUID service_uuid_;
             espbt::ESPBTUUID read_uuid_;
             espbt::ESPBTUUID write_uuid_;
-            bool isAuthenticated;
             binary_sensor::BinarySensor *asleepSensor;
 
             std::vector<unsigned char> read_buffer;
