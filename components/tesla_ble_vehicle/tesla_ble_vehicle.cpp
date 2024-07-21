@@ -1,15 +1,15 @@
-#include <client.h>
-#include <esp_log.h>
+#include <esp_random.h>
+#include <esphome/core/helpers.h>
+#include <esphome/core/log.h>
 #include <nvs_flash.h>
 #include <pb_decode.h>
-#include <tb_utils.h>
 
+#include <client.h>
 #include <keys.pb.h>
+#include <tb_utils.h>
 #include <universal_message.pb.h>
 #include <vcsec.pb.h>
 
-#include "esp_random.h"
-#include "esphome/core/log.h"
 #include "log.h"
 #include "tesla_ble_vehicle.h"
 
@@ -329,8 +329,7 @@ namespace esphome
     int TeslaBLEVehicle::writeBLE(const unsigned char *message_buffer, size_t message_length,
                                   esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req)
     {
-      ESP_LOGD(TAG, "BLE TX:");
-      ESP_LOG_BUFFER_HEX(TAG, message_buffer, message_length);
+      ESP_LOGD(TAG, "BLE TX: %s", format_hex(message_buffer, message_length).c_str());
       // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
       for (size_t i = 0; i < message_length; i += BLOCK_LENGTH)
       {
@@ -658,8 +657,7 @@ namespace esphome
           {
             connection_id[i] = esp_random();
           }
-          ESP_LOGD(TAG, "Connection ID");
-          ESP_LOG_BUFFER_HEX(TAG, connection_id, 16);
+          ESP_LOGD(TAG, "Connection ID: %s", format_hex(connection_id, 16).c_str());
           tesla_ble_client_->setConnectionID(connection_id);
         }
         break;
@@ -669,8 +667,7 @@ namespace esphome
       {
         esp_bd_addr_t bda;
         memcpy(bda, param->srvc_chg.remote_bda, sizeof(esp_bd_addr_t));
-        ESP_LOGD(TAG, "ESP_GATTC_SRVC_CHG_EVT, bd_addr:");
-        ESP_LOG_BUFFER_HEX(TAG, bda, sizeof(esp_bd_addr_t));
+        ESP_LOGD(TAG, "ESP_GATTC_SRVC_CHG_EVT, bd_addr: %s", format_hex(bda, sizeof(esp_bd_addr_t)).c_str());
         break;
       }
       case ESP_GATTC_DISCONNECT_EVT:
@@ -834,9 +831,7 @@ namespace esphome
           break;
         }
         ESP_LOGD(TAG, "%d: - RAM left %ld", __LINE__, esp_get_free_heap_size());
-        ESP_LOGD(TAG, "BLE RX:");
-        // ESP_LOGI(TAG, "ESP_GATTC_NOTIFY_EVT, receive notify value:");
-        ESP_LOG_BUFFER_HEX(TAG, param->notify.value, param->notify.value_len);
+        ESP_LOGD(TAG, "BLE RX: %s", format_hex(param->notify.value, param->notify.value_len).c_str());
 
         UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
         ESP_LOGD(TAG, "Receiving message in chunks");
@@ -933,7 +928,6 @@ namespace esphome
         if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
         {
           ESP_LOGI(TAG, "Received session info response from domain %s", domain_to_string(domain));
-          // log_routable_message(TAG, &message);
 
           // parse session info
           Signatures_SessionInfo session_info = Signatures_SessionInfo_init_default;
@@ -947,10 +941,7 @@ namespace esphome
           log_session_info(TAG, &session_info);
           ESP_LOGD(TAG, "Received new counter from the car: %" PRIu32, session_info.counter);
           ESP_LOGD(TAG, "Received new expires at from the car: %" PRIu32, session_info.clock_time);
-          ESP_LOGD(TAG, "Received new epoch from the car");
-          ESP_LOG_BUFFER_HEX(TAG, session_info.epoch, sizeof session_info.epoch);
-
-          // signer.timeZero = generatedAt.Add(-time.Duration(info.ClockTime) * time.Second)
+          ESP_LOGD(TAG, "Received new epoch from the car: %s", format_hex(session_info.epoch, sizeof session_info.epoch).c_str());
 
           // generatedAt = now
           uint32_t generated_at = std::time(nullptr);
@@ -1143,8 +1134,7 @@ namespace esphome
               }
               ESP_LOGD(TAG, "Parsed VCSEC InformationRequest message");
               // log received public key
-              ESP_LOGD(TAG, "InformationRequest public key");
-              ESP_LOG_BUFFER_HEX(TAG, info_message.key.publicKey.bytes, info_message.key.publicKey.size);
+              ESP_LOGD(TAG, "InformationRequest public key: %s", format_hex(info_message.key.publicKey.bytes, info_message.key.publicKey.size).c_str());
               return;
             }
             break;

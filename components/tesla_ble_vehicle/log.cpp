@@ -1,9 +1,14 @@
-#include "esp_log.h"
 #include <inttypes.h>
-#include <signatures.pb.h>
 #include <string.h>
+
+#include <esphome/core/helpers.h>
+#include <esphome/core/log.h>
+
+#include <signatures.pb.h>
 #include <universal_message.pb.h>
 #include <vcsec.pb.h>
+
+using namespace esphome;
 
 // Helper function to convert UniversalMessage_OperationStatus_E enum to string
 const char *operation_status_to_string(UniversalMessage_OperationStatus_E status)
@@ -155,8 +160,7 @@ void log_destination(const char *tag,
         ESP_LOGD(tag, "  domain: %s", domain_to_string(dest->sub_destination.domain));
         break;
     case UniversalMessage_Destination_routing_address_tag:
-        ESP_LOGD(tag, "  routing_address: %s", dest->sub_destination.routing_address);
-        ESP_LOG_BUFFER_HEX(tag, dest->sub_destination.routing_address, 16);
+        ESP_LOGD(tag, "  routing_address: %s", format_hex(dest->sub_destination.routing_address, 16).c_str());
         break;
     default:
         ESP_LOGD(tag, "  unknown sub_destination");
@@ -174,11 +178,8 @@ void log_session_info(const char *tag, const Signatures_SessionInfo *req)
 {
     ESP_LOGD(tag, "SessionInfo:");
     ESP_LOGD(tag, "  counter: %" PRIu32, req->counter);
-    ESP_LOGD(tag, "  publicKey:");
-    ESP_LOG_BUFFER_HEX(tag, req->publicKey.bytes, req->publicKey.size);
-
-    ESP_LOGD(tag, "  epoch: ");
-    ESP_LOG_BUFFER_HEX(tag, req->epoch, 16);
+    ESP_LOGD(tag, "  publicKey: %s", format_hex(req->publicKey.bytes, req->publicKey.size).c_str());
+    ESP_LOGD(tag, "  epoch: %s", format_hex(req->epoch, 16).c_str());
     ESP_LOGD(tag, "  clock_time: %" PRIu32, req->clock_time);
     ESP_LOGD(tag, "  status: %s", req->status == Signatures_Session_Info_Status_SESSION_INFO_STATUS_OK ? "OK" : "KEY_NOT_ON_WHITELIST");
 }
@@ -186,14 +187,11 @@ void log_session_info(const char *tag, const Signatures_SessionInfo *req)
 void log_aes_gcm_personalized_signature_data(const char *tag, const Signatures_AES_GCM_Personalized_Signature_Data *data)
 {
     ESP_LOGD(tag, "    AES_GCM_Personalized_Signature_Data:");
-    ESP_LOGD(tag, "      epoch: ");
-    ESP_LOG_BUFFER_HEX(tag, data->epoch, 16);
-    ESP_LOGD(tag, "      nonce: ");
-    ESP_LOG_BUFFER_HEX(tag, data->nonce, 12);
+    ESP_LOGD(tag, "      epoch: %s", format_hex(data->epoch, 16).c_str());
+    ESP_LOGD(tag, "      nonce: %s", format_hex(data->nonce, 12).c_str());
     ESP_LOGD(tag, "      counter: %" PRIu32, data->counter);
     ESP_LOGD(tag, "      expires_at: %" PRIu32, data->expires_at);
-    ESP_LOGD(tag, "      tag: ");
-    ESP_LOG_BUFFER_HEX(tag, data->tag, 16);
+    ESP_LOGD(tag, "      tag: %s", format_hex(data->tag, 16).c_str());
 }
 
 void log_signature_data(const char *tag, const Signatures_SignatureData *sig)
@@ -203,8 +201,7 @@ void log_signature_data(const char *tag, const Signatures_SignatureData *sig)
     if (sig->has_signer_identity)
     {
         ESP_LOGD(tag, "    signer_identity: ");
-        ESP_LOGD(tag, "      public_key: ");
-        ESP_LOG_BUFFER_HEX(tag, sig->signer_identity.identity_type.public_key.bytes, sig->signer_identity.identity_type.public_key.size);
+        ESP_LOGD(tag, "      public_key: %s", format_hex(sig->signer_identity.identity_type.public_key.bytes, sig->signer_identity.identity_type.public_key.size).c_str());
     }
     ESP_LOGD(tag, "    which_sig_type: %d", sig->which_sig_type);
     switch (sig->which_sig_type)
@@ -213,17 +210,14 @@ void log_signature_data(const char *tag, const Signatures_SignatureData *sig)
         log_aes_gcm_personalized_signature_data(tag, &sig->sig_type.AES_GCM_Personalized_data);
         break;
     case Signatures_SignatureData_session_info_tag_tag:
-        ESP_LOGD(tag, "    session_info_tag: ");
-        ESP_LOG_BUFFER_HEX(tag, sig->sig_type.session_info_tag.tag.bytes, sig->sig_type.session_info_tag.tag.size);
+        ESP_LOGD(tag, "    session_info_tag: %s", format_hex(sig->sig_type.session_info_tag.tag.bytes, sig->sig_type.session_info_tag.tag.size).c_str());
         break;
     case Signatures_SignatureData_HMAC_Personalized_data_tag:
         ESP_LOGD(tag, "    HMAC_Personalized_data: ");
-        ESP_LOGD(tag, "      epoch: ");
-        ESP_LOG_BUFFER_HEX(tag, sig->sig_type.HMAC_Personalized_data.epoch, 16);
+        ESP_LOGD(tag, "      epoch: %s", format_hex(sig->sig_type.HMAC_Personalized_data.epoch, 16).c_str());
         ESP_LOGD(tag, "      counter: %" PRIu32, sig->sig_type.HMAC_Personalized_data.counter);
         ESP_LOGD(tag, "      expires_at: %" PRIu32, sig->sig_type.HMAC_Personalized_data.expires_at);
-        ESP_LOGD(tag, "      tag: ");
-        ESP_LOG_BUFFER_HEX(tag, sig->sig_type.HMAC_Personalized_data.tag, 16);
+        ESP_LOGD(tag, "      tag: %s", format_hex(sig->sig_type.HMAC_Personalized_data.tag, 16).c_str());
         break;
     default:
         ESP_LOGD(tag, "    unknown sig_type");
@@ -236,11 +230,8 @@ void log_information_request(const char *tag, const VCSEC_InformationRequest *ms
     ESP_LOGD(tag, "  which_request: %d", msg->which_key);
 
     ESP_LOGD(tag, "  informationRequestType: %s", information_request_type_to_string(msg->informationRequestType));
-    ESP_LOGD(tag, "  publicKeySHA1");
-    ESP_LOG_BUFFER_HEX(tag, msg->key.keyId.publicKeySHA1.bytes, msg->key.keyId.publicKeySHA1.size);
-
-    ESP_LOGD(tag, "  publicKey");
-    ESP_LOG_BUFFER_HEX(tag, msg->key.publicKey.bytes, msg->key.publicKey.size);
+    ESP_LOGD(tag, "  publicKeySHA1: %s", format_hex(msg->key.keyId.publicKeySHA1.bytes, msg->key.keyId.publicKeySHA1.size).c_str());
+    ESP_LOGD(tag, "  publicKey: %s", format_hex(msg->key.publicKey.bytes, msg->key.publicKey.size).c_str());
     ESP_LOGD(tag, "  publicKeySHA1: %" PRIu32, msg->key.slot);
 }
 
@@ -265,8 +256,7 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
     case UniversalMessage_RoutableMessage_protobuf_message_as_bytes_tag:
         ESP_LOGD(tag, "  payload: protobuf_message_as_bytes (callback)");
         // log byte array as string
-        ESP_LOGD(tag, "    payload: %s", msg->payload.protobuf_message_as_bytes.bytes);
-        ESP_LOG_BUFFER_HEX(tag, msg->payload.protobuf_message_as_bytes.bytes, msg->payload.protobuf_message_as_bytes.size);
+        ESP_LOGD(tag, "    payload: %s", format_hex(msg->payload.protobuf_message_as_bytes.bytes, msg->payload.protobuf_message_as_bytes.size).c_str());
         break;
     case UniversalMessage_RoutableMessage_session_info_request_tag:
         ESP_LOGD(tag, "  payload: session_info_request");
@@ -275,7 +265,7 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
     case UniversalMessage_RoutableMessage_session_info_tag:
         ESP_LOGD(tag, "  payload: session_info (callback)");
         // log byte array as string
-        ESP_LOG_BUFFER_HEX(tag, msg->payload.protobuf_message_as_bytes.bytes, msg->payload.protobuf_message_as_bytes.size);
+        ESP_LOGD(tag, "    payload: %s", format_hex(msg->payload.session_info.bytes, msg->payload.session_info.size).c_str());
         break;
     default:
         ESP_LOGD(tag, "  payload: unknown");
@@ -293,10 +283,8 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
         log_signature_data(tag, &msg->sub_sigData.signature_data);
     }
 
-    // ESP_LOGD(tag, "  request_uuid: %s", msg->request_uuid);
-    // ESP_LOG_BUFFER_HEX(tag, msg->request_uuid, 16);
-    ESP_LOGD(tag, "  uuid: %s", msg->uuid);
-    ESP_LOG_BUFFER_HEX(tag, msg->uuid, 16);
+    // ESP_LOGD(tag, "  request_uuid: %s", format_hex(msg->request_uuid, 16).c_str());
+    ESP_LOGD(tag, "  uuid: %s", format_hex(msg->uuid, 16).c_str());
     ESP_LOGD(tag, "  flags: %" PRIu32, msg->flags);
 }
 
