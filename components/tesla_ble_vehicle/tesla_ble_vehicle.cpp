@@ -4,6 +4,7 @@
 #include <nvs_flash.h>
 #include <pb_decode.h>
 
+#include <car_server.pb.h>
 #include <client.h>
 #include <keys.pb.h>
 #include <tb_utils.h>
@@ -65,7 +66,7 @@ namespace esphome
       {
         ESP_LOGD(TAG, "Vehicle is not connected");
         // set sleep status to unknown if it's not yet
-        if (this->asleepSensor->has_state())
+        if (this->asleepSensor->has_state() == true)
         {
 
           this->updateAsleepState(NAN);
@@ -715,7 +716,7 @@ namespace esphome
         }
         this->write_handle_ = writeChar->handle;
 
-        ESP_LOGI(TAG, "Read char success ");
+        ESP_LOGI(TAG, "Successfully set read and write char handle");
         break;
       }
 
@@ -757,7 +758,7 @@ namespace esphome
         unsigned char private_key_buffer[228];
         size_t private_key_length = 0;
         int return_code = tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
-                                         &private_key_length);
+                                                           &private_key_length);
         if (return_code != 0)
         {
           ESP_LOGE(TAG, "Failed to get private key");
@@ -782,7 +783,7 @@ namespace esphome
           break;
         }
         ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
-        
+
         return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
         if (return_code != 0)
         {
@@ -820,7 +821,7 @@ namespace esphome
           ESP_LOGE(TAG, "write char failed, error status = %x", param->write.status);
           break;
         }
-        ESP_LOGI(TAG, "Write char success");
+        ESP_LOGD(TAG, "Write char success");
         break;
 
       case ESP_GATTC_NOTIFY_EVT:
@@ -834,12 +835,12 @@ namespace esphome
         ESP_LOGD(TAG, "BLE RX: %s", format_hex(param->notify.value, param->notify.value_len).c_str());
 
         UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
-        ESP_LOGD(TAG, "Receiving message in chunks");
+        ESP_LOGV(TAG, "Receiving message in chunks");
         // append to buffer
         // Ensure the buffer has enough space
         if (this->current_size + param->notify.value_len > this->read_buffer.size())
         {
-          ESP_LOGD(TAG, "Resizing read buffer");
+          ESP_LOGV(TAG, "Resizing read buffer");
           this->read_buffer.resize(this->current_size + param->notify.value_len);
         }
 
@@ -850,10 +851,10 @@ namespace esphome
         int return_code = tesla_ble_client_->parseUniversalMessageBLE(this->read_buffer.data(), this->current_size, &message);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to parse incoming message (maybe chunk?)");
+          ESP_LOGW(TAG, "Failed to parse incoming message (maybe chunk?)");
           break;
         }
-        ESP_LOGD(TAG, "Parsed UniversalMessage");
+        ESP_LOGV(TAG, "Parsed UniversalMessage");
         // clear read buffer
         this->current_size = 0;
         this->read_buffer.clear();         // This will set the size to 0 and free unused memory
@@ -861,34 +862,41 @@ namespace esphome
 
         if (not message.has_from_destination)
         {
-          ESP_LOGW(TAG, "Dropping message with missing source (probably broadcast message)");
-          break;
+          ESP_LOGW(TAG, "[x] Dropping message with missing source");
+          return;
         }
         UniversalMessage_Domain domain = message.from_destination.sub_destination.domain;
 
-        if (not message.has_from_destination)
+        if (message.request_uuid.size != 0 && message.request_uuid.size != 16)
         {
-          ESP_LOGW(TAG, "Dropping message with missing destination");
-          break;
+          ESP_LOGW(TAG, "[x] Dropping message with invalid request UUID length");
+          return;
+        }
+        const char *request_uuid_hex = format_hex(message.request_uuid.bytes, message.request_uuid.size).c_str();
+
+        if (not message.has_to_destination)
+        {
+          ESP_LOGW(TAG, "[%s] Dropping message with missing destination", request_uuid_hex);
+          return;
         }
 
         switch (message.to_destination.which_sub_destination)
         {
         case UniversalMessage_Destination_domain_tag:
         {
-          ESP_LOGI(TAG, "Continuing message to %s", domain_to_string(message.to_destination.sub_destination.domain));
-          break;
+          ESP_LOGD(TAG, "[%s] Dropping message to %s", request_uuid_hex, domain_to_string(domain));
+          return;
         }
         case UniversalMessage_Destination_routing_address_tag:
         {
           // Continue
-          ESP_LOGI(TAG, "Continuing message with routing address");
+          ESP_LOGD(TAG, "Continuing message with routing address");
           break;
         }
         default:
         {
-          ESP_LOGW(TAG, "Dropping message with unrecognized destination type");
-          break;
+          ESP_LOGW(TAG, "[%s] Dropping message with unrecognized destination type, %d", request_uuid_hex, message.to_destination.which_sub_destination);
+          return;
         }
         }
 
@@ -1058,8 +1066,6 @@ namespace esphome
         {
         case UniversalMessage_Destination_domain_tag:
         {
-          ESP_LOGI(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
-
           switch (message.from_destination.sub_destination.domain)
           {
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
@@ -1145,33 +1151,21 @@ namespace esphome
 
           case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
           {
-            CarServer_Action carserver_action = CarServer_Action_init_default;
-            int return_code = tesla_ble_client_->parsePayloadCarServerAction(&message.payload.protobuf_message_as_bytes, &carserver_action);
+            CarServer_Response carserver_response = CarServer_Response_init_default;
+            int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, &carserver_response);
             if (return_code != 0)
             {
               ESP_LOGE(TAG, "Failed to parse incoming message");
               return;
             }
-            ESP_LOGI(TAG, "Parsed CarServerAction");
-
-            switch (carserver_action.action_msg.vehicleAction.which_vehicle_action_msg)
-            {
-            case CarServer_ActionStatus_result_tag:
-            {
-              ESP_LOGI(TAG, "Received action result");
-              break;
-            }
-            default:
-            {
-              ESP_LOGI(TAG, "Received message from unknown payload %d", message.which_payload);
-              break;
-            }
-            }
+            ESP_LOGI(TAG, "Parsed CarServer.Response");
+            log_carserver_response(TAG, &carserver_response);
             break;
           }
           default:
           {
-            ESP_LOGI(TAG, "Received message from unknown domain %d", message.from_destination.sub_destination.domain);
+            ESP_LOGI(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
+            ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
             break;
           }
           break;
@@ -1186,7 +1180,7 @@ namespace esphome
         }
         default:
         {
-          ESP_LOGI(TAG, "Received message from unknown domain %d", message.from_destination.sub_destination.domain);
+          ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
           break;
         }
         break;

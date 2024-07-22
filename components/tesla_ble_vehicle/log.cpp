@@ -4,6 +4,7 @@
 #include <esphome/core/helpers.h>
 #include <esphome/core/log.h>
 
+#include <car_server.pb.h>
 #include <signatures.pb.h>
 #include <universal_message.pb.h>
 #include <vcsec.pb.h>
@@ -532,5 +533,71 @@ void log_vcsec_command_status(const char *tag, const VCSEC_CommandStatus *msg)
         log_vssec_whitelist_operation_status(tag, &msg->sub_message.whitelistOperationStatus);
     default:
         ESP_LOGI(tag, "  unknown sub_message");
+    }
+}
+
+void carserver_result_reason_to_string(const char *tag, const CarServer_ResultReason *reason)
+{
+    ESP_LOGI(tag, "  ResultReason:");
+    ESP_LOGI(tag, "    which_reason: %d", reason->which_reason);
+    switch (reason->which_reason)
+    {
+    case CarServer_ResultReason_plain_text_tag:
+        ESP_LOGI(tag, "    plain_text: %s", reason->reason.plain_text);
+        break;
+    default:
+        ESP_LOGI(tag, "    unknown reason");
+    }
+}
+
+const char *carserver_operation_status_to_string(CarServer_OperationStatus_E status)
+{
+    switch (status)
+    {
+    case CarServer_OperationStatus_E_OPERATIONSTATUS_OK:
+        return "OK";
+    case CarServer_OperationStatus_E_OPERATIONSTATUS_ERROR:
+        return "ERROR";
+    default:
+        return "UNKNOWN_STATUS";
+    }
+}
+
+void log_carserver_response(const char *tag, const CarServer_Response *msg)
+{
+    ESP_LOGI(tag, "CarServerResponse:");
+    if (msg->has_actionStatus)
+    {
+        ESP_LOGI(tag, "  ActionStatus:");
+        ESP_LOGI(tag, "    result: %s", carserver_operation_status_to_string(msg->actionStatus.result));
+        if (msg->actionStatus.has_result_reason)
+        {
+            switch (msg->actionStatus.result_reason.which_reason)
+            {
+            case CarServer_ResultReason_plain_text_tag:
+                ESP_LOGI(tag, "    reason: %s", msg->actionStatus.result_reason.reason.plain_text);
+                break;
+            default:
+                ESP_LOGI(tag, "    unknown reason");
+            }
+        }
+    }
+
+    switch (msg->which_response_msg)
+    {
+    case CarServer_Response_getSessionInfoResponse_tag:
+        ESP_LOGI(tag, "  getSessionInfoResponse:");
+        log_session_info(tag, &msg->response_msg.getSessionInfoResponse);
+        break;
+    case CarServer_Response_getNearbyChargingSites_tag:
+        ESP_LOGI(tag, "  getNearbyChargingSites:");
+        break;
+    case CarServer_Response_ping_tag:
+        ESP_LOGI(tag, "  ping:");
+        ESP_LOGI(tag, "    ping: %ld", msg->response_msg.ping.ping_id);
+        break;
+    default:
+        // do nothing
+        break;
     }
 }
