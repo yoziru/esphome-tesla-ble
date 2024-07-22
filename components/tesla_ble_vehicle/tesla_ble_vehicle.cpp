@@ -1189,7 +1189,7 @@ namespace esphome
       }
 
       default:
-        ESP_LOGI(TAG, "Unhandled GATTC event %d", event);
+        ESP_LOGD(TAG, "Unhandled GATTC event %d", event);
         break;
       }
     }
