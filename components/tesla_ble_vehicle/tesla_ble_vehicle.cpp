@@ -4,6 +4,7 @@
 #include <nvs_flash.h>
 #include <pb_decode.h>
 
+#include <car_server.pb.h>
 #include <client.h>
 #include <keys.pb.h>
 #include <tb_utils.h>
@@ -757,7 +758,7 @@ namespace esphome
         unsigned char private_key_buffer[228];
         size_t private_key_length = 0;
         int return_code = tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
-                                         &private_key_length);
+                                                           &private_key_length);
         if (return_code != 0)
         {
           ESP_LOGE(TAG, "Failed to get private key");
@@ -782,7 +783,7 @@ namespace esphome
           break;
         }
         ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
-        
+
         return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
         if (return_code != 0)
         {
@@ -1145,28 +1146,15 @@ namespace esphome
 
           case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
           {
-            CarServer_Action carserver_action = CarServer_Action_init_default;
-            int return_code = tesla_ble_client_->parsePayloadCarServerAction(&message.payload.protobuf_message_as_bytes, &carserver_action);
+            CarServer_Response carserver_response = CarServer_Response_init_default;
+            int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, &carserver_response);
             if (return_code != 0)
             {
               ESP_LOGE(TAG, "Failed to parse incoming message");
               return;
             }
-            ESP_LOGI(TAG, "Parsed CarServerAction");
-
-            switch (carserver_action.action_msg.vehicleAction.which_vehicle_action_msg)
-            {
-            case CarServer_ActionStatus_result_tag:
-            {
-              ESP_LOGI(TAG, "Received action result");
-              break;
-            }
-            default:
-            {
-              ESP_LOGI(TAG, "Received message from unknown payload %d", message.which_payload);
-              break;
-            }
-            }
+            ESP_LOGI(TAG, "Parsed CarServer.Response");
+            log_carserver_response(TAG, &carserver_response);
             break;
           }
           default:
