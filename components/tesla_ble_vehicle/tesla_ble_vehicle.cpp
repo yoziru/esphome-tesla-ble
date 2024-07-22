@@ -851,7 +851,7 @@ namespace esphome
         int return_code = tesla_ble_client_->parseUniversalMessageBLE(this->read_buffer.data(), this->current_size, &message);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to parse incoming message (maybe chunk?)");
+          ESP_LOGW(TAG, "Failed to parse incoming message (maybe chunk?)");
           break;
         }
         ESP_LOGD(TAG, "Parsed UniversalMessage");
@@ -862,23 +862,30 @@ namespace esphome
 
         if (not message.has_from_destination)
         {
-          ESP_LOGW(TAG, "Dropping message with missing source (probably broadcast message)");
-          break;
+          ESP_LOGW(TAG, "[x] Dropping message with missing source");
+          return;
         }
         UniversalMessage_Domain domain = message.from_destination.sub_destination.domain;
 
-        if (not message.has_from_destination)
+        if (message.request_uuid.size != 0 && message.request_uuid.size != 16)
         {
-          ESP_LOGW(TAG, "Dropping message with missing destination");
-          break;
+          ESP_LOGW(TAG, "[x] Dropping message with invalid request UUID length");
+          return;
+        }
+        const char *request_uuid_hex = format_hex(message.request_uuid.bytes, message.request_uuid.size).c_str();
+
+        if (not message.has_to_destination)
+        {
+          ESP_LOGW(TAG, "[%s] Dropping message with missing destination", request_uuid_hex);
+          return;
         }
 
         switch (message.to_destination.which_sub_destination)
         {
         case UniversalMessage_Destination_domain_tag:
         {
-          ESP_LOGI(TAG, "Continuing message to %s", domain_to_string(message.to_destination.sub_destination.domain));
-          break;
+          ESP_LOGI(TAG, "[%s] Dropping message to %s", request_uuid_hex, domain_to_string(domain));
+          return;
         }
         case UniversalMessage_Destination_routing_address_tag:
         {
@@ -888,8 +895,8 @@ namespace esphome
         }
         default:
         {
-          ESP_LOGW(TAG, "Dropping message with unrecognized destination type");
-          break;
+          ESP_LOGW(TAG, "[%s] Dropping message with unrecognized destination type, %d", request_uuid_hex, message.to_destination.which_sub_destination);
+          return;
         }
         }
 
