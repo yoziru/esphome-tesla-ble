@@ -26,6 +26,7 @@ logger:
     esp32_ble_client: INFO
     esp32_ble_tracker: INFO
     esp32_ble: INFO
+    status_led: INFO
     light: INFO
     api: INFO
 
