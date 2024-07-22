@@ -23,8 +23,9 @@ logger:
   logs:
     wifi: INFO
     uptime: INFO
+    esp32_ble_client: INFO
     esp32_ble_tracker: INFO
-    esp32_ble: DEBUG
+    esp32_ble: INFO
     light: INFO
     api: INFO
 
