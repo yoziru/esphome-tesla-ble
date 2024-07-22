@@ -716,7 +716,7 @@ namespace esphome
         }
         this->write_handle_ = writeChar->handle;
 
-        ESP_LOGI(TAG, "Read char success ");
+        ESP_LOGI(TAG, "Successfully set read and write char handle");
         break;
       }
 
@@ -821,7 +821,7 @@ namespace esphome
           ESP_LOGE(TAG, "write char failed, error status = %x", param->write.status);
           break;
         }
-        ESP_LOGI(TAG, "Write char success");
+        ESP_LOGD(TAG, "Write char success");
         break;
 
       case ESP_GATTC_NOTIFY_EVT:
@@ -835,12 +835,12 @@ namespace esphome
         ESP_LOGD(TAG, "BLE RX: %s", format_hex(param->notify.value, param->notify.value_len).c_str());
 
         UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
-        ESP_LOGD(TAG, "Receiving message in chunks");
+        ESP_LOGV(TAG, "Receiving message in chunks");
         // append to buffer
         // Ensure the buffer has enough space
         if (this->current_size + param->notify.value_len > this->read_buffer.size())
         {
-          ESP_LOGD(TAG, "Resizing read buffer");
+          ESP_LOGV(TAG, "Resizing read buffer");
           this->read_buffer.resize(this->current_size + param->notify.value_len);
         }
 
@@ -854,7 +854,7 @@ namespace esphome
           ESP_LOGW(TAG, "Failed to parse incoming message (maybe chunk?)");
           break;
         }
-        ESP_LOGD(TAG, "Parsed UniversalMessage");
+        ESP_LOGV(TAG, "Parsed UniversalMessage");
         // clear read buffer
         this->current_size = 0;
         this->read_buffer.clear();         // This will set the size to 0 and free unused memory
@@ -884,13 +884,13 @@ namespace esphome
         {
         case UniversalMessage_Destination_domain_tag:
         {
-          ESP_LOGI(TAG, "[%s] Dropping message to %s", request_uuid_hex, domain_to_string(domain));
+          ESP_LOGD(TAG, "[%s] Dropping message to %s", request_uuid_hex, domain_to_string(domain));
           return;
         }
         case UniversalMessage_Destination_routing_address_tag:
         {
           // Continue
-          ESP_LOGI(TAG, "Continuing message with routing address");
+          ESP_LOGD(TAG, "Continuing message with routing address");
           break;
         }
         default:
@@ -1066,8 +1066,6 @@ namespace esphome
         {
         case UniversalMessage_Destination_domain_tag:
         {
-          ESP_LOGI(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
-
           switch (message.from_destination.sub_destination.domain)
           {
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
@@ -1166,7 +1164,8 @@ namespace esphome
           }
           default:
           {
-            ESP_LOGI(TAG, "Received message from unknown domain %d", message.from_destination.sub_destination.domain);
+            ESP_LOGI(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
+            ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
             break;
           }
           break;
@@ -1181,7 +1180,7 @@ namespace esphome
         }
         default:
         {
-          ESP_LOGI(TAG, "Received message from unknown domain %d", message.from_destination.sub_destination.domain);
+          ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
           break;
         }
         break;
