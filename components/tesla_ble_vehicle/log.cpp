@@ -531,6 +531,7 @@ void log_vcsec_command_status(const char *tag, const VCSEC_CommandStatus *msg)
         break;
     case VCSEC_CommandStatus_whitelistOperationStatus_tag:
         log_vssec_whitelist_operation_status(tag, &msg->sub_message.whitelistOperationStatus);
+        break;
     default:
         ESP_LOGI(tag, "  unknown sub_message");
     }
