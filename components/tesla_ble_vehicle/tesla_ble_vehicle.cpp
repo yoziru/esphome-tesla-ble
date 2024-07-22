@@ -65,7 +65,7 @@ namespace esphome
       {
         ESP_LOGD(TAG, "Vehicle is not connected");
         // set sleep status to unknown if it's not yet
-        if (this->asleepSensor->has_state())
+        if (this->asleepSensor->has_state() == true)
         {
 
           this->updateAsleepState(NAN);
