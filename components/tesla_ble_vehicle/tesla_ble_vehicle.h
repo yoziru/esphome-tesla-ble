@@ -50,9 +50,9 @@ namespace esphome
 
             void regenerateKey();
             int startPair(void);
+            int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
 
             int wakeVehicle(void);
-
             int sendCommand(VCSEC_RKEAction_E action);
             int sendEphemeralKeyRequest(UniversalMessage_Domain domain);
             int sendInfoStatus(void);

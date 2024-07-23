@@ -3,9 +3,11 @@
 #include <esphome/core/log.h>
 #include <nvs_flash.h>
 #include <pb_decode.h>
+#include <cstring>
 
 #include <car_server.pb.h>
 #include <client.h>
+#include <peer.h>
 #include <keys.pb.h>
 #include <tb_utils.h>
 #include <universal_message.pb.h>
@@ -20,6 +22,11 @@ namespace esphome
   {
 
     static const char *const TAG = "tesla_ble_vehicle";
+    static const char *nvs_key_id_infotainment = "tk_infotainment";
+    static const char *nvs_key_id_vcsec = "tk_vcsec";
+    static const char *nvs_counter_id_infotainment = "c_infotainment";
+    static const char *nvs_counter_id_vcsec = "c_vcsec";
+
     void TeslaBLEVehicle::dump_config()
     {
       ESP_LOGI(TAG, "Dumping Config");
@@ -150,12 +157,12 @@ namespace esphome
       }
 
       size_t required_tesla_key_vcsec_size = 0;
-      err = nvs_get_blob(this->storage_handle_, "tk_vcsec", NULL, &required_tesla_key_vcsec_size);
+      err = nvs_get_blob(this->storage_handle_, nvs_key_id_vcsec, NULL, &required_tesla_key_vcsec_size);
       if (required_tesla_key_vcsec_size > 0)
       {
         unsigned char tesla_key_vcsec_buffer[required_tesla_key_vcsec_size];
 
-        err = nvs_get_blob(this->storage_handle_, "tk_vcsec", tesla_key_vcsec_buffer,
+        err = nvs_get_blob(this->storage_handle_, nvs_key_id_vcsec, tesla_key_vcsec_buffer,
                            &required_tesla_key_vcsec_size);
         if (err != ESP_OK)
         {
@@ -177,12 +184,12 @@ namespace esphome
       }
 
       size_t required_tesla_key_infotainment_size = 0;
-      err = nvs_get_blob(this->storage_handle_, "tk_infotainment", NULL, &required_tesla_key_infotainment_size);
+      err = nvs_get_blob(this->storage_handle_, nvs_key_id_infotainment, NULL, &required_tesla_key_infotainment_size);
       if (required_tesla_key_infotainment_size > 0)
       {
         unsigned char tesla_key_infotainment_buffer[required_tesla_key_infotainment_size];
 
-        err = nvs_get_blob(this->storage_handle_, "tk_infotainment", tesla_key_infotainment_buffer,
+        err = nvs_get_blob(this->storage_handle_, nvs_key_id_infotainment, tesla_key_infotainment_buffer,
                            &required_tesla_key_infotainment_size);
         if (err != ESP_OK)
         {
@@ -204,7 +211,7 @@ namespace esphome
       }
 
       uint32_t counter_vcsec = 0;
-      err = nvs_get_u32(this->storage_handle_, "c_vcsec", &counter_vcsec);
+      err = nvs_get_u32(this->storage_handle_, nvs_counter_id_vcsec, &counter_vcsec);
       if (err != ESP_OK)
       {
         ESP_LOGE(TAG, "Failed read VCSEC counter from storage: %s", esp_err_to_name(err));
@@ -217,7 +224,7 @@ namespace esphome
       }
 
       uint32_t counter_infotainment = 0;
-      err = nvs_get_u32(this->storage_handle_, "c_infotainment", &counter_infotainment);
+      err = nvs_get_u32(this->storage_handle_, nvs_counter_id_infotainment, &counter_infotainment);
       if (err != ESP_OK)
       {
         ESP_LOGE(TAG, "Failed read INFOTAINMENT counter from storage: %s", esp_err_to_name(err));
@@ -635,6 +642,76 @@ namespace esphome
       return 0;
     }
 
+    int TeslaBLEVehicle::handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain)
+    {
+      UniversalMessage_RoutableMessage_session_info_t sessionInfo = message.payload.session_info;
+
+      ESP_LOGI(TAG, "Received session info response from domain %s", domain_to_string(domain));
+      TeslaBLE::Peer &session = domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT ? tesla_ble_client_->session_infotainment_ : tesla_ble_client_->session_vcsec_;
+
+      // parse session info
+      Signatures_SessionInfo session_info = Signatures_SessionInfo_init_default;
+      int return_code = tesla_ble_client_->parsePayloadSessionInfo(&message.payload.session_info, &session_info);
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed to parse session info response");
+        return return_code;
+      }
+      log_session_info(TAG, &session_info);
+
+      uint32_t generated_at = millis() / 1000;
+      uint32_t time_zero = generated_at - session_info.clock_time;
+
+      ESP_LOGD(TAG, "Updating session info..");
+      session.setCounter(&session_info.counter);
+      session.setExpiresAt(&session_info.clock_time);
+      session.setEpoch(session_info.epoch);
+      session.setTimeZero(&time_zero);
+
+      ESP_LOGD(TAG, "Loading %s public key from car..", domain_to_string(domain));
+      // convert pb Failed to parse incoming message
+      return_code = tesla_ble_client_->loadTeslaKey(true, session_info.publicKey.bytes, session_info.publicKey.size);
+
+      if (return_code != 0)
+      {
+        ESP_LOGE(TAG, "Failed load tesla %s key", domain_to_string(domain));
+        return return_code;
+      }
+
+      ESP_LOGD(TAG, "Storing updated session info in NVS..");
+      esp_err_t err = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
+      if (err != ESP_OK)
+      {
+        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+        return 1;
+      }
+      // define nvs_key name based on domain
+      const char *nvs_key_id = domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT ? nvs_key_id_infotainment : nvs_key_id_vcsec;
+      err = nvs_set_blob(this->storage_handle_, nvs_key_id,
+                         &session_info.publicKey.bytes,
+                         session_info.publicKey.size);
+
+      if (err != ESP_OK)
+      {
+        ESP_LOGE(TAG, "Failed to save tesla %s key: %s", domain_to_string(domain), esp_err_to_name(err));
+        return 1;
+      }
+      err = nvs_commit(this->storage_handle_);
+      if (err != ESP_OK)
+      {
+        ESP_LOGE(TAG, "Failed to commit %s key to storage: %s", domain_to_string(domain), esp_err_to_name(err));
+        return 1;
+      }
+      const char *nvs_counter_id = domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT ? nvs_counter_id_infotainment : nvs_counter_id_vcsec;
+      err = nvs_set_u32(this->storage_handle_, nvs_counter_id, session_info.counter);
+      if (err != ESP_OK)
+      {
+        ESP_LOGE(TAG, "Failed to save %s counter: %s", domain_to_string(domain), esp_err_to_name(err));
+        return 1;
+      }
+      return 0;
+    }
+
     void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                               esp_ble_gattc_cb_param_t *param)
     {
@@ -872,7 +949,8 @@ namespace esphome
           ESP_LOGW(TAG, "[x] Dropping message with invalid request UUID length");
           return;
         }
-        const char *request_uuid_hex = format_hex(message.request_uuid.bytes, message.request_uuid.size).c_str();
+        std::string request_uuid_hex_string = format_hex(message.request_uuid.bytes, message.request_uuid.size);
+        const char *request_uuid_hex = request_uuid_hex_string.c_str();
 
         if (not message.has_to_destination)
         {
@@ -898,6 +976,12 @@ namespace esphome
           ESP_LOGW(TAG, "[%s] Dropping message with unrecognized destination type, %d", request_uuid_hex, message.to_destination.which_sub_destination);
           return;
         }
+        }
+
+        if (sizeof(message.to_destination.sub_destination.routing_address) != 16)
+        {
+          ESP_LOGW(TAG, "[%s] Dropping message with invalid address length", request_uuid_hex);
+          return;
         }
 
         // log error if present in message
@@ -935,129 +1019,13 @@ namespace esphome
 
         if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
         {
-          ESP_LOGI(TAG, "Received session info response from domain %s", domain_to_string(domain));
-
-          // parse session info
-          Signatures_SessionInfo session_info = Signatures_SessionInfo_init_default;
-          int return_code = tesla_ble_client_->parsePayloadSessionInfo(&message.payload.session_info, &session_info);
+          return_code = this->handleSessionInfoUpdate(message, domain);
           if (return_code != 0)
           {
-            ESP_LOGE(TAG, "Failed to parse session info response");
+            ESP_LOGE(TAG, "Failed to handle session info update");
             return;
           }
-          ESP_LOGD(TAG, "Parsed session info response");
-          log_session_info(TAG, &session_info);
-          ESP_LOGD(TAG, "Received new counter from the car: %" PRIu32, session_info.counter);
-          ESP_LOGD(TAG, "Received new expires at from the car: %" PRIu32, session_info.clock_time);
-          ESP_LOGD(TAG, "Received new epoch from the car: %s", format_hex(session_info.epoch, sizeof session_info.epoch).c_str());
-
-          // generatedAt = now
-          uint32_t generated_at = std::time(nullptr);
-          uint32_t time_zero = generated_at - session_info.clock_time;
-
-          switch (domain)
-          {
-          case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
-          {
-            ESP_LOGI(TAG, "Received session info from infotainment domain");
-            tesla_ble_client_->session_infotainment_.setCounter(&session_info.counter);
-            tesla_ble_client_->session_infotainment_.setExpiresAt(&session_info.clock_time);
-            tesla_ble_client_->session_infotainment_.setEpoch(session_info.epoch);
-            tesla_ble_client_->session_infotainment_.setTimeZero(&time_zero);
-
-            ESP_LOGD(TAG, "Loading infotainment public key from car");
-            // convert pb Failed to parse incoming message
-            int result_code_infotainment =
-                tesla_ble_client_->loadTeslaKey(true, session_info.publicKey.bytes, session_info.publicKey.size);
-
-            if (result_code_infotainment != 0)
-            {
-              ESP_LOGE(TAG, "Failed load tesla infotainment key");
-              return;
-            }
-
-            esp_err_t err = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
-            }
-            err = nvs_set_blob(this->storage_handle_, "tk_infotainment",
-                               &session_info.publicKey.bytes,
-                               session_info.publicKey.size);
-
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed to save tesla infotainment key: %s", esp_err_to_name(err));
-              return;
-            }
-            err = nvs_commit(this->storage_handle_);
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(err));
-            }
-
-            err = nvs_set_u32(this->storage_handle_, "counter", session_info.counter);
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed to save infotainment counter: %s", esp_err_to_name(err));
-            }
-
-            break;
-          }
-          case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
-          {
-            ESP_LOGI(TAG, "Received session info from VCSEC domain");
-            tesla_ble_client_->session_vcsec_.setCounter(&session_info.counter);
-            tesla_ble_client_->session_vcsec_.setExpiresAt(&session_info.clock_time);
-            tesla_ble_client_->session_vcsec_.setEpoch(session_info.epoch);
-            tesla_ble_client_->session_vcsec_.setTimeZero(&time_zero);
-
-            ESP_LOGD(TAG, "Loading VCSEC public key from car");
-            // convert pb Failed to parse incoming message
-            int result_code_vcsec =
-                tesla_ble_client_->loadTeslaKey(false, session_info.publicKey.bytes, session_info.publicKey.size);
-
-            if (result_code_vcsec != 0)
-            {
-              ESP_LOGE(TAG, "Failed load tesla VCSEC key");
-              return;
-            }
-
-            esp_err_t err = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
-            }
-            err = nvs_set_blob(this->storage_handle_, "tk_vcsec",
-                               &session_info.publicKey.bytes,
-                               session_info.publicKey.size);
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed to save tesla VCSEC key: %s", esp_err_to_name(err));
-              return;
-            }
-            err = nvs_commit(this->storage_handle_);
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(err));
-            }
-
-            err = nvs_set_u32(this->storage_handle_, "counter", session_info.counter);
-            if (err != ESP_OK)
-            {
-              ESP_LOGE(TAG, "Failed to save infotainment counter: %s", esp_err_to_name(err));
-            }
-            break;
-          }
-          default:
-            ESP_LOGW(TAG, "Received session info from unknown domain");
-            break;
-          }
-          break;
-        }
-        else if (message.has_from_destination == false)
-        {
-          ESP_LOGE(TAG, "Received message without from_destination");
+          ESP_LOGI(TAG, "[%s] Updated session info for %s", request_uuid_hex, domain_to_string(domain));
           return;
         }
 
