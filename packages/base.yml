@@ -19,17 +19,7 @@ packages:
   project: !include project.yml
 
 logger:
-  level: DEBUG
-  logs:
-    wifi: INFO
-    uptime: INFO
-    esp32_ble_client: INFO
-    esp32_ble_tracker: INFO
-    esp32_ble: INFO
-    status_led: INFO
-    light: INFO
-    api: INFO
-
+  level: INFO
 
 api:
   encryption:
