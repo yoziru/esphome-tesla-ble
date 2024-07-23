@@ -3,6 +3,7 @@
 #include <esphome/core/log.h>
 #include <nvs_flash.h>
 #include <pb_decode.h>
+#include <cstring>
 
 #include <car_server.pb.h>
 #include <client.h>
@@ -948,7 +949,8 @@ namespace esphome
           ESP_LOGW(TAG, "[x] Dropping message with invalid request UUID length");
           return;
         }
-        const char *request_uuid_hex = format_hex(message.request_uuid.bytes, message.request_uuid.size).c_str();
+        std::string request_uuid_hex_string = format_hex(message.request_uuid.bytes, message.request_uuid.size);
+        const char *request_uuid_hex = request_uuid_hex_string.c_str();
 
         if (not message.has_to_destination)
         {
