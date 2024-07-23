@@ -55,6 +55,3 @@ binary_sensor:
         pullup: true
     filters:
       - delayed_off: 10ms
-    on_press:
-      then:
-        - logger.log: Button Pressed

@@ -821,7 +821,7 @@ namespace esphome
           ESP_LOGE(TAG, "write char failed, error status = %x", param->write.status);
           break;
         }
-        ESP_LOGD(TAG, "Write char success");
+        ESP_LOGV(TAG, "Write char success");
         break;
 
       case ESP_GATTC_NOTIFY_EVT:
@@ -831,7 +831,7 @@ namespace esphome
           ESP_LOGW(TAG, "Received notify from unknown connection");
           break;
         }
-        ESP_LOGD(TAG, "%d: - RAM left %ld", __LINE__, esp_get_free_heap_size());
+        ESP_LOGV(TAG, "%d: - RAM left %ld", __LINE__, esp_get_free_heap_size());
         ESP_LOGD(TAG, "BLE RX: %s", format_hex(param->notify.value, param->notify.value_len).c_str());
 
         UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
@@ -1189,7 +1189,7 @@ namespace esphome
       }
 
       default:
-        ESP_LOGI(TAG, "Unhandled GATTC event %d", event);
+        ESP_LOGD(TAG, "Unhandled GATTC event %d", event);
         break;
       }
     }
