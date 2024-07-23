@@ -37,7 +37,6 @@ light:
     output: status_output
     name: "Status Led"
     entity_category: diagnostic
-    internal: True
 
   #G35=RGB WS2812C-2020
   - platform: esp32_rmt_led_strip
@@ -49,6 +48,7 @@ light:
     chipset: ws2812
     id: led
     name: "Led"
+    entity_category: diagnostic
 
 #G41=Button
 binary_sensor:
@@ -63,6 +63,4 @@ binary_sensor:
         pullup: true
     filters:
       - delayed_off: 10ms
-    on_press:
-      then:
-        - logger.log: Button Pressed
+
