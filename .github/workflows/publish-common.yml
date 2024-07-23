@@ -86,7 +86,7 @@ jobs:
       - name: Create single manifest.json
         run: |
           version=$(cat output/project_version)
-          jq --arg version "$version" '{"name": "${{ inputs.name }}", "version": $version, "home_assistant_domain": "esphome", "new_install_skip_erase": false, "builds":.}' output/*/manifest.json > output/${{ inputs.manifest_filename }}
+          jq -s --arg version "$version" '{"name": "${{ inputs.name }}", "version": $version, "home_assistant_domain": "esphome", "new_install_skip_erase": false, "builds":.}' output/*/manifest.json > output/${{ inputs.manifest_filename }}
 
       - run: cp -R static/* output
 
