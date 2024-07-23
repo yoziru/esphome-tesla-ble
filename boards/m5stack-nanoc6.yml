@@ -55,3 +55,16 @@ binary_sensor:
         pullup: true
     filters:
       - delayed_off: 10ms
+
+# custom logger for debugging
+logger:
+  level: DEBUG
+  logs:
+    wifi: INFO
+    uptime: INFO
+    esp32_ble_client: INFO
+    esp32_ble_tracker: INFO
+    esp32_ble: INFO
+    status_led: INFO
+    light: INFO
+    api: INFO
