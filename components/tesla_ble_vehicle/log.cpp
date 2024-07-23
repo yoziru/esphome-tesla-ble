@@ -480,22 +480,22 @@ const char *user_presence_to_string(VCSEC_UserPresence_E state)
 
 void log_vehicle_status(const char *tag, const VCSEC_VehicleStatus *msg)
 {
-    ESP_LOGI(tag, "VCSEC_VehicleStatus:");
-    ESP_LOGI(tag, "  has_closureStatuses: %s", msg->has_closureStatuses ? "true" : "false");
+    ESP_LOGD(tag, "VCSEC_VehicleStatus:");
+    ESP_LOGD(tag, "  has_closureStatuses: %s", msg->has_closureStatuses ? "true" : "false");
     if (msg->has_closureStatuses)
     {
-        ESP_LOGI(tag, "  closureStatuses:");
-        ESP_LOGI(tag, "    frontDriverDoor: %s", closure_state_to_string(msg->closureStatuses.frontDriverDoor));
-        ESP_LOGI(tag, "    frontPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.frontPassengerDoor));
-        ESP_LOGI(tag, "    rearDriverDoor: %s", closure_state_to_string(msg->closureStatuses.rearDriverDoor));
-        ESP_LOGI(tag, "    rearPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.rearPassengerDoor));
-        ESP_LOGI(tag, "    rearTrunk: %s", closure_state_to_string(msg->closureStatuses.rearTrunk));
-        ESP_LOGI(tag, "    frontTrunk: %s", closure_state_to_string(msg->closureStatuses.frontTrunk));
-        ESP_LOGI(tag, "    chargePort: %s", closure_state_to_string(msg->closureStatuses.chargePort));
+        ESP_LOGD(tag, "  closureStatuses:");
+        ESP_LOGD(tag, "    frontDriverDoor: %s", closure_state_to_string(msg->closureStatuses.frontDriverDoor));
+        ESP_LOGD(tag, "    frontPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.frontPassengerDoor));
+        ESP_LOGD(tag, "    rearDriverDoor: %s", closure_state_to_string(msg->closureStatuses.rearDriverDoor));
+        ESP_LOGD(tag, "    rearPassengerDoor: %s", closure_state_to_string(msg->closureStatuses.rearPassengerDoor));
+        ESP_LOGD(tag, "    rearTrunk: %s", closure_state_to_string(msg->closureStatuses.rearTrunk));
+        ESP_LOGD(tag, "    frontTrunk: %s", closure_state_to_string(msg->closureStatuses.frontTrunk));
+        ESP_LOGD(tag, "    chargePort: %s", closure_state_to_string(msg->closureStatuses.chargePort));
     }
-    ESP_LOGI(tag, "  vehicleLockState: %s", vehicle_lock_state_to_string(msg->vehicleLockState));
-    ESP_LOGI(tag, "  vehicleSleepStatus: %s", vehicle_sleep_status_to_string(msg->vehicleSleepStatus));
-    ESP_LOGI(tag, "  userPresence: %s", user_presence_to_string(msg->userPresence));
+    ESP_LOGD(tag, "  vehicleLockState: %s", vehicle_lock_state_to_string(msg->vehicleLockState));
+    ESP_LOGD(tag, "  vehicleSleepStatus: %s", vehicle_sleep_status_to_string(msg->vehicleSleepStatus));
+    ESP_LOGD(tag, "  userPresence: %s", user_presence_to_string(msg->userPresence));
 }
 
 void log_vssec_signed_message_status(const char *tag, const VCSEC_SignedMessage_status *status)
@@ -511,8 +511,8 @@ void log_vssec_whitelist_operation_status(const char *tag, const VCSEC_Whitelist
     // has_signerOfOperation;
     if (status->has_signerOfOperation)
     {
-        ESP_LOGI(tag, "    signerOfOperation:");
-        ESP_LOGI(tag, "      public_key: %s", format_hex(status->signerOfOperation.publicKeySHA1.bytes, status->signerOfOperation.publicKeySHA1.size).c_str());
+        ESP_LOGD(tag, "    signerOfOperation:");
+        ESP_LOGD(tag, "      public_key: %s", format_hex(status->signerOfOperation.publicKeySHA1.bytes, status->signerOfOperation.publicKeySHA1.size).c_str());
     }
     ESP_LOGI(tag, "    operation_status: %s", vcsec_operation_status_to_string(status->operationStatus));
     ESP_LOGI(tag, "    information: %s", vssec_whitelist_operation_information_to_string(status->whitelistOperationInformation));
@@ -533,7 +533,7 @@ void log_vcsec_command_status(const char *tag, const VCSEC_CommandStatus *msg)
         log_vssec_whitelist_operation_status(tag, &msg->sub_message.whitelistOperationStatus);
         break;
     default:
-        ESP_LOGI(tag, "  unknown sub_message");
+        ESP_LOGD(tag, "  unknown sub_message");
     }
 }
 
@@ -547,7 +547,7 @@ void carserver_result_reason_to_string(const char *tag, const CarServer_ResultRe
         ESP_LOGI(tag, "    plain_text: %s", reason->reason.plain_text);
         break;
     default:
-        ESP_LOGI(tag, "    unknown reason");
+        ESP_LOGD(tag, "    unknown reason");
     }
 }
 
@@ -579,7 +579,7 @@ void log_carserver_response(const char *tag, const CarServer_Response *msg)
                 ESP_LOGI(tag, "    reason: %s", msg->actionStatus.result_reason.reason.plain_text);
                 break;
             default:
-                ESP_LOGI(tag, "    unknown reason");
+                ESP_LOGD(tag, "    unknown reason");
             }
         }
     }
@@ -594,8 +594,8 @@ void log_carserver_response(const char *tag, const CarServer_Response *msg)
         ESP_LOGI(tag, "  getNearbyChargingSites:");
         break;
     case CarServer_Response_ping_tag:
-        ESP_LOGI(tag, "  ping:");
-        ESP_LOGI(tag, "    ping: %ld", msg->response_msg.ping.ping_id);
+        ESP_LOGD(tag, "  ping:");
+        ESP_LOGD(tag, "    ping: %ld", msg->response_msg.ping.ping_id);
         break;
     default:
         // do nothing

@@ -29,11 +29,11 @@ namespace esphome
 
     void TeslaBLEVehicle::dump_config()
     {
-      ESP_LOGI(TAG, "Dumping Config");
+      ESP_LOGD(TAG, "Dumping Config");
     }
     TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{})
     {
-      ESP_LOGI(TAG, "Constructing Tesla BLE Vehicle component");
+      ESP_LOGD(TAG, "Constructing Tesla BLE Vehicle component");
       this->init();
 
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
@@ -42,8 +42,6 @@ namespace esphome
     }
     void TeslaBLEVehicle::setup()
     {
-      ESP_LOGI(TAG, "Starting Tesla BLE Vehicle component");
-      ESP_LOGI(TAG, "Tesla BLE Vehicle component started");
     }
     void TeslaBLEVehicle::set_vin(const char *vin)
     {
@@ -112,7 +110,7 @@ namespace esphome
         int result_code = tesla_ble_client_->createPrivateKey();
         if (result_code != 0)
         {
-          ESP_LOGI(TAG, "Failed create private key");
+          ESP_LOGE(TAG, "Failed create private key");
           esp_restart();
         }
 
@@ -646,7 +644,7 @@ namespace esphome
     {
       UniversalMessage_RoutableMessage_session_info_t sessionInfo = message.payload.session_info;
 
-      ESP_LOGI(TAG, "Received session info response from domain %s", domain_to_string(domain));
+      ESP_LOGD(TAG, "Received session info response from domain %s", domain_to_string(domain));
       TeslaBLE::Peer &session = domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT ? tesla_ble_client_->session_infotainment_ : tesla_ble_client_->session_vcsec_;
 
       // parse session info
@@ -793,7 +791,7 @@ namespace esphome
         }
         this->write_handle_ = writeChar->handle;
 
-        ESP_LOGI(TAG, "Successfully set read and write char handle");
+        ESP_LOGD(TAG, "Successfully set read and write char handle");
         break;
       }
 
@@ -806,7 +804,7 @@ namespace esphome
           ESP_LOGW(TAG, "Error reading char at handle %d, status=%d", param->read.handle, param->read.status);
           break;
         }
-        ESP_LOGI(TAG, "ESP_GATTS_READ_EVT ");
+        ESP_LOGD(TAG, "ESP_GATTS_READ_EVT ");
         break;
       }
 
@@ -819,7 +817,7 @@ namespace esphome
           ESP_LOGW(TAG, "Error reading char at handle %d, status=%d", param->read.handle, param->read.status);
           break;
         }
-        ESP_LOGI(TAG, "ESP_GATTC_READ_CHAR_EVT ");
+        ESP_LOGD(TAG, "ESP_GATTC_READ_CHAR_EVT ");
         break;
       }
 
@@ -1034,11 +1032,11 @@ namespace esphome
         {
         case UniversalMessage_Destination_domain_tag:
         {
+          ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
           switch (message.from_destination.sub_destination.domain)
           {
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
           {
-            ESP_LOGI(TAG, "Received message from VCSEC domain");
             VCSEC_FromVCSECMessage vcsec_message = VCSEC_FromVCSECMessage_init_default;
             int return_code = tesla_ble_client_->parseFromVCSECMessage(&message.payload.protobuf_message_as_bytes, &vcsec_message);
             if (return_code != 0)
@@ -1052,23 +1050,19 @@ namespace esphome
             {
             case VCSEC_FromVCSECMessage_vehicleStatus_tag:
             {
-              ESP_LOGI(TAG, "Received vehicle status");
+              ESP_LOGD(TAG, "Received vehicle status");
               log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
               switch (vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus)
               {
               case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
-                ESP_LOGI(TAG, "Vehicle is awake");
                 this->updateAsleepState(false);
                 break;
               case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
-                ESP_LOGI(TAG, "Vehicle is asleep");
                 this->updateAsleepState(true);
                 tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
                 break;
               case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
               default:
-                // set sleep state to unknown
-                ESP_LOGI(TAG, "Vehicle is in an unknown state");
                 this->updateAsleepState(NAN);
                 tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
                 break;
@@ -1077,18 +1071,18 @@ namespace esphome
             }
             case VCSEC_FromVCSECMessage_commandStatus_tag:
             {
-              ESP_LOGI(TAG, "Received command status");
+              ESP_LOGD(TAG, "Received command status");
               log_vcsec_command_status(TAG, &vcsec_message.sub_message.commandStatus);
               break;
             }
             case VCSEC_FromVCSECMessage_whitelistInfo_tag:
             {
-              ESP_LOGI(TAG, "Received whitelist info");
+              ESP_LOGD(TAG, "Received whitelist info");
               break;
             }
             case VCSEC_FromVCSECMessage_whitelistEntryInfo_tag:
             {
-              ESP_LOGI(TAG, "Received whitelist entry info");
+              ESP_LOGD(TAG, "Received whitelist entry info");
               break;
             }
             case VCSEC_FromVCSECMessage_nominalError_tag:
@@ -1126,14 +1120,14 @@ namespace esphome
               ESP_LOGE(TAG, "Failed to parse incoming message");
               return;
             }
-            ESP_LOGI(TAG, "Parsed CarServer.Response");
+            ESP_LOGD(TAG, "Parsed CarServer.Response");
             log_carserver_response(TAG, &carserver_response);
             break;
           }
           default:
           {
-            ESP_LOGI(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
-            ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
+            ESP_LOGD(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
+            ESP_LOGD(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
             break;
           }
           break;
@@ -1143,12 +1137,12 @@ namespace esphome
 
         case UniversalMessage_Destination_routing_address_tag:
         {
-          ESP_LOGI(TAG, "Received message from routing address");
+          ESP_LOGD(TAG, "Received message from routing address");
           break;
         }
         default:
         {
-          ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
+          ESP_LOGD(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
           break;
         }
         break;

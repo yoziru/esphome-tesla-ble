@@ -8,10 +8,6 @@ esp32_ble_tracker:
     # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
     continuous: false
     # interval: 1s
-  on_scan_end:
-    - then:
-        - lambda: |-
-             ESP_LOGD("ble_auto", "The scan has ended!");
 
 # Enable this to scan for BLE devices
 # tesla_ble_listener:
@@ -19,12 +15,6 @@ esp32_ble_tracker:
 ble_client:
   - mac_address: !secret ble_mac_address
     id: ble_tesla_id
-    on_connect:
-      then:
-        - logger.log: "Connected to Tesla BLE"
-    on_disconnect:
-      then:
-        - logger.log: "Disconnected from Tesla BLE"
 
 tesla_ble_vehicle:
   ble_client_id: ble_tesla_id
@@ -52,13 +42,6 @@ button:
     icon: mdi:sleep-off
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->wakeVehicle();
-
-  - platform: template
-    name: DEBUG init
-    disabled_by_default: true
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->init();
-    entity_category: diagnostic
 
   - platform: template
     name: Regenerate key
