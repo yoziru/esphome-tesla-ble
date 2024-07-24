@@ -4,6 +4,7 @@
 #include <nvs_flash.h>
 #include <pb_decode.h>
 #include <cstring>
+#include <ctime>
 
 #include <car_server.pb.h>
 #include <client.h>
@@ -657,7 +658,7 @@ namespace esphome
       }
       log_session_info(TAG, &session_info);
 
-      uint32_t generated_at = millis() / 1000;
+      uint32_t generated_at = std::time(nullptr);
       uint32_t time_zero = generated_at - session_info.clock_time;
 
       ESP_LOGD(TAG, "Updating session info..");
