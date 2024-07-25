@@ -152,7 +152,6 @@ namespace esphome
         }
 
         ESP_LOGI(TAG, "Private key loaded successfully");
-        TeslaBLE::dumpBuffer("\n", private_key_buffer, required_private_key_size);
       }
 
       size_t required_tesla_key_vcsec_size = 0;
@@ -277,7 +276,6 @@ namespace esphome
       }
 
       ESP_LOGI(TAG, "Private key successfully created");
-      TeslaBLE::dumpBuffer("\n", private_key_buffer, private_key_length);
     }
 
     int TeslaBLEVehicle::startPair()

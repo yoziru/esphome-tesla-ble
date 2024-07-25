@@ -50,6 +50,7 @@ button:
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->regenerateKey();
     entity_category: diagnostic
+    disabled_by_default: true
 
   - platform: template
     name: Request VCSEC
