@@ -908,7 +908,7 @@ namespace esphome
           break;
         }
         ESP_LOGV(TAG, "%d: - RAM left %ld", __LINE__, esp_get_free_heap_size());
-        ESP_LOGD(TAG, "BLE RX: %s", format_hex(param->notify.value, param->notify.value_len).c_str());
+        ESP_LOGV(TAG, "BLE RX chunk: %s", format_hex(param->notify.value, param->notify.value_len).c_str());
 
         UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
         ESP_LOGV(TAG, "Receiving message in chunks");
@@ -923,6 +923,35 @@ namespace esphome
         // Append the new data
         std::memcpy(this->read_buffer.data() + this->current_size, param->notify.value, param->notify.value_len);
         this->current_size += param->notify.value_len;
+
+        if (this->current_size >= 2)
+        {
+          int message_length = (this->read_buffer[0] << 8) | this->read_buffer[1];
+          ESP_LOGV(TAG, "Message length: %d", message_length);
+          if (message_length > tesla_ble_client_->MAX_BLE_MESSAGE_SIZE)
+          {
+            ESP_LOGW(TAG, "Message length (%d) exceeds max BLE message size", message_length);
+            this->current_size = 0;
+            this->read_buffer.clear();         // This will set the size to 0 and free unused memory
+            this->read_buffer.shrink_to_fit(); // This will reduce the capacity to fit the size
+            return;
+          }
+
+          // if len(c.inputBuffer) >= 2+msgLength {
+          if (this->current_size >= 2 + message_length)
+          {
+            ESP_LOGD(TAG, "BLE RX: %s", format_hex(this->read_buffer.data(), this->current_size).c_str());
+          }
+          else
+          {
+            ESP_LOGD(TAG, "Buffered chunk, waiting for more data..");
+            return;
+          }
+        }
+        else {
+          ESP_LOGD(TAG, "Not enough data to determine message length");
+          return;
+        }
 
         int return_code = tesla_ble_client_->parseUniversalMessageBLE(this->read_buffer.data(), this->current_size, &message);
         if (return_code != 0)
