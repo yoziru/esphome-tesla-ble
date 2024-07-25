@@ -16,8 +16,6 @@ This project lets you use an ESP32 device to manage charging a Tesla vehicle ove
 
 ### Build and flash ESP32 firmware
 
-> If you have a supported device, you can also flash the latest version of the image by using Chrome, connecting your ESP32 through USB and going to https://yoziru.github.io/esphome-tesla-ble/
-
 1. Copy and rename `secrets.yaml.example` to `secrets.yaml` and update it with your WiFi credentials (`wifi_ssid` and `wifi_password`) and vehicle details (`ble_mac_address` and `tesla_vin`)
 
 > To find the `ble_mac_address` of your vehicle, you can uncomment the `tesla_ble_listener` component in `packages/project.yml` and watch the logs.
