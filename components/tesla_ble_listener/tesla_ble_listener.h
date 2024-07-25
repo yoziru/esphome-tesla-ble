@@ -1,19 +1,23 @@
 #pragma once
 
-#ifdef USE_ESP32
-
 #include "esphome/core/component.h"
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 
-namespace esphome {
-namespace tesla_ble_listener {
+namespace esphome
+{
+  namespace tesla_ble_listener
+  {
 
-class TeslaBLEListener : public esp32_ble_tracker::ESPBTDeviceListener {
- public:
-  bool parse_device(const esp32_ble_tracker::ESPBTDevice &device) override;
-};
+    std::string get_vin_advertisement_name(const char *vin);
 
-}  // namespace tesla_ble_listener
-}  // namespace esphome
+    class TeslaBLEListener : public esp32_ble_tracker::ESPBTDeviceListener
+    {
+    public:
+      std::string vin_ad_name_;
 
-#endif
+      bool parse_device(const esp32_ble_tracker::ESPBTDevice &device) override;
+      void set_vin(const char *vin) { vin_ad_name_ = get_vin_advertisement_name(vin); }
+    };
+
+  } // namespace tesla_ble_listener
+} // namespace esphome

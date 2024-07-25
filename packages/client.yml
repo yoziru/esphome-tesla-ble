@@ -1,18 +1,8 @@
 external_components:
-  - components: [ tesla_ble_listener, tesla_ble_vehicle ]
+  - components: [ tesla_ble_vehicle ]
     # uncomment for local dev
     # source: components
     source: github://yoziru/esphome-tesla-ble/components@main
-
-esp32_ble_tracker:
-  scan_parameters:
-    window: 300ms
-    # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
-    continuous: false
-    # interval: 1s
-
-# Enable this to scan for BLE devices
-# tesla_ble_listener:
 
 ble_client:
   - mac_address: !secret ble_mac_address
