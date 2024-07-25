@@ -14,12 +14,12 @@ compile: .esphome/build/$(PROJECT)/.pioenvs/tesla-ble/firmware.bin .esphome/buil
 
 upload: .esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin ## Validate the configuration, create a binary, upload it, and start logs.
 	if [ "$(HOST_SUFFIX)" = "" ]; then \
-		. .venv/bin/activate; esphome upload $(TARGET); esphome logs $(TARGET); \
+		. .venv/bin/activate; esphome run $(TARGET); \
 	else \
-		. .venv/bin/activate; esphome upload $(TARGET) --device $(PROJECT)$(HOST_SUFFIX); esphome logs $(TARGET) --device $(PROJECT)$(HOST_SUFFIX); \
+		. .venv/bin/activate; esphome run $(TARGET) --device $(PROJECT)$(HOST_SUFFIX); \
 	fi
 
-logs:
+logs: .venv/touchfile
 	if [ "$(HOST_SUFFIX)" = "" ]; then \
 		. .venv/bin/activate; esphome logs $(TARGET); \
 	else \
