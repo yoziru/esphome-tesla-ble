@@ -40,25 +40,46 @@ This project lets you use an ESP32 device to manage charging a Tesla vehicle ove
 
 
 ### Building and flashing ESP32 firmware
-
+1. Connect your ESP32 device to your computer via USB
 1. Copy and rename `secrets.yaml.example` to `secrets.yaml` and update it with your WiFi credentials (`wifi_ssid` and `wifi_password`) and vehicle details (`ble_mac_address` and `tesla_vin`)
-
-
-2. Build the image with [ESPHome](https://esphome.io/guides/getting_started_command_line.html)
+1. Build the image with [ESPHome](https://esphome.io/guides/getting_started_command_line.html)
 
     ```sh
-    make compile
+    make compile BOARD=m5stack-nanoc6
     ```
 
-3. Upload/flash the firmware to the board.
+1. Upload/flash the firmware to the board.
 
     ```sh
     make upload
     ```
 
+1. After flashing, you can use the log command to monitor the logs from the device. The host suffix is the last part of the device name in the ESPHome dashboard (e.g. `5b2ac7`).
+    ```sh
+    make logs HOST_SUFFIX=-5b2ac7
+    ```
+
+1. For updating your device, you can OTA update over local WiFi using the same host suffix:
+    ```sh
+    make upload HOST_SUFFIX=-5b2ac7
+    ```
+
+> Note: the make commands are just a wrapper around the `esphome` command. You can also use the `esphome` commands directly if you prefer (e.g. `esphome compile tesla-ble-m5stack-nanoc6.yml`)
+
+### Adding the device to Home Assistant
+
+1. In Home Assistant, go to Settings > Devices & Services. If your device is  discovered automatically, you can add it by clicking the "Configure" button by the discovered device. If not, click the "+ Add integration" button and select "ESPHome" as the integration and enter the IP address of your device.
+2. Enter the API encryption key from the `secrets.yaml` file when prompted.
+3. That's it! You should now see the device in Home Assistant and be able to control it.
+
+
 ### Pairing the BLE key with your vehicle
+1. Make sure your ESP32 device is close to the car (check the "BLE Signal" sensor) and the BLE MAC address and VIN in `secrets.yaml` is correct.
 1. Get into your vehicle
-1. In Home Assistant, go to Settings > Devices & Services > ESPHome > Tesla BLE device and click "Pair BLE key"
+1. In Home Assistant, go to Settings > Devices & Services > ESPHome, choose your Tesla BLE device and click "Pair BLE key"
 1. Tap your NFC card to your car's center console
+1. A prompt will appear on the screen of your car asking if you want to pair the key
+    > Note: if the popup does not appear, you may need to press "Pair BLE key" and tap your card again
 1. Hit confirm on the screen
-1. [optional] Rename your key to "ESPHome BLE" to identify it easier
+1. To verify the key was added, tap Controls > Locks, and you should see a new key named "Unknown device" in the list
+1. [optional] Rename your key to "ESPHome BLE" to make it easier to identify
