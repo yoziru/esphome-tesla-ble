@@ -19,7 +19,7 @@ upload: .esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin ## Validate t
 		. .venv/bin/activate; esphome run $(TARGET) --device $(PROJECT)$(HOST_SUFFIX); \
 	fi
 
-logs:
+logs: .venv/touchfile
 	if [ "$(HOST_SUFFIX)" = "" ]; then \
 		. .venv/bin/activate; esphome logs $(TARGET); \
 	else \
