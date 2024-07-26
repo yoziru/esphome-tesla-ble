@@ -1,7 +1,7 @@
 substitutions:
-  friendly_name: "ESP32 Tesla BLE"
-  devicename: "esp32-tesla-ble"
-  device_description: "ESP32"
+  friendly_name: "LolinC3 Tesla BLE"
+  devicename: "lolinc3-tesla-ble"
+  device_description: "Lolin C3 Mini"
 
 esp32:
   board: lolin_c3_mini
