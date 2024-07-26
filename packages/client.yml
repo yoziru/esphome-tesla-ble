@@ -45,13 +45,13 @@ button:
   - platform: template
     name: Request VCSEC
     on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+      - lambda: id(tesla_ble_vehicle_id)->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
     entity_category: diagnostic
 
   - platform: template
     name: Request INFOTAINMENT
     on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+      - lambda: id(tesla_ble_vehicle_id)->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
     entity_category: diagnostic
 
   - platform: template
