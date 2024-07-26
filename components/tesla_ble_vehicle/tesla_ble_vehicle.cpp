@@ -997,6 +997,18 @@ namespace esphome
           return;
         }
 
+        if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
+        {
+          return_code = this->handleSessionInfoUpdate(message, domain);
+          if (return_code != 0)
+          {
+            ESP_LOGE(TAG, "Failed to handle session info update");
+            return;
+          }
+          ESP_LOGI(TAG, "[%s] Updated session info for %s", request_uuid_hex, domain_to_string(domain));
+          return;
+        }
+
         // log error if present in message
         if (message.has_signedMessageStatus)
         {
@@ -1029,24 +1041,12 @@ namespace esphome
           return;
         }
 
-        if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
-        {
-          return_code = this->handleSessionInfoUpdate(message, domain);
-          if (return_code != 0)
-          {
-            ESP_LOGE(TAG, "Failed to handle session info update");
-            return;
-          }
-          ESP_LOGI(TAG, "[%s] Updated session info for %s", request_uuid_hex, domain_to_string(domain));
-          return;
-        }
-
         log_routable_message(TAG, &message);
         switch (message.from_destination.which_sub_destination)
         {
         case UniversalMessage_Destination_domain_tag:
         {
-          ESP_LOGI(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
+          ESP_LOGI(TAG, "Received message from domain %s", domain_to_string(message.from_destination.sub_destination.domain));
           switch (message.from_destination.sub_destination.domain)
           {
           case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
