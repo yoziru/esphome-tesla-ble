@@ -309,7 +309,7 @@ namespace esphome
     {
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t message_length = 0;
-      int return_code = tesla_ble_client_->buildEphemeralKeyMessage(
+      int return_code = tesla_ble_client_->buildSessionInfoRequestMessage(
           domain,
           message_buffer,
           &message_length);
