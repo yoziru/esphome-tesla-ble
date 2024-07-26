@@ -305,11 +305,11 @@ namespace esphome
       return 0;
     }
 
-    int TeslaBLEVehicle::sendEphemeralKeyRequest(UniversalMessage_Domain domain)
+    int TeslaBLEVehicle::sendSessionInfoRequest(UniversalMessage_Domain domain)
     {
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t message_length = 0;
-      int return_code = tesla_ble_client_->buildEphemeralKeyMessage(
+      int return_code = tesla_ble_client_->buildSessionInfoRequestMessage(
           domain,
           message_buffer,
           &message_length);
@@ -323,11 +323,9 @@ namespace esphome
       return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
       if (return_code != 0)
       {
-        ESP_LOGE(TAG, "Failed to send ephemeral key request");
+        ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
         return return_code;
       }
-      // wait for response
-      // vTaskDelay(2000 / portTICK_PERIOD_MS);
       return 0;
     }
 
@@ -398,8 +396,6 @@ namespace esphome
         ESP_LOGE(TAG, "Failed to send wake command");
         return return_code;
       }
-      // wait for vehicle to wake up
-      // vTaskDelay(2000 / portTICK_PERIOD_MS);
 
       // get updated state after waking vehicle
       ESP_LOGD(TAG, "Getting updated VCSEC state");
@@ -439,8 +435,6 @@ namespace esphome
         ESP_LOGE(TAG, "Failed to send VCSECInformationRequestMessage");
         return return_code;
       }
-      // wait for response
-      // vTaskDelay(2000 / portTICK_PERIOD_MS);
       return 0;
     }
 
@@ -457,13 +451,13 @@ namespace esphome
       if (tesla_ble_client_->session_vcsec_.isAuthenticated == false)
       {
         ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-        int return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+        int return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
           return return_code;
         }
-        ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
+        ESP_LOGI(TAG, "SessionInfoRequest sent to VEHICLE_SECURITY");
         return 0;
       }
       // all good
@@ -513,14 +507,14 @@ namespace esphome
       if (tesla_ble_client_->session_infotainment_.isAuthenticated == false)
       {
         ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
           return return_code;
         }
 
-        ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
+        ESP_LOGI(TAG, "SessionInfoRequest sent to INFOTAINMENT");
       }
 
       // all good
@@ -545,10 +539,10 @@ namespace esphome
       {
         ESP_LOGE(TAG, "Failed to build charge message");
         // TODO: should be handled in preflight check but not always working so send key request as workaround here
-        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
           return return_code;
         }
         return return_code;
@@ -583,10 +577,10 @@ namespace esphome
       {
         ESP_LOGE(TAG, "Failed to build charge amps message");
         // TODO: should be handled in preflight check but not always working so send key request as workaround here
-        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
           return return_code;
         }
         return return_code;
@@ -621,10 +615,10 @@ namespace esphome
       {
         ESP_LOGE(TAG, "Failed to build charge limit message");
         // TODO: should be handled in preflight check but not always working so send key request as workaround here
-        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
           return return_code;
         }
         return return_code;
@@ -850,21 +844,13 @@ namespace esphome
         }
         ESP_LOGD(TAG, "Loaded public key");
 
-        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+        return_code = this->vcsecPreflightCheck();
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to send ephemeral key request");
+          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
           break;
         }
-        ESP_LOGI(TAG, "Ephemeral key sent to VEHICLE_SECURITY");
-
-        return_code = this->sendEphemeralKeyRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code != 0)
-        {
-          ESP_LOGE(TAG, "Failed to send ephemeral key request");
-          break;
-        }
-        ESP_LOGI(TAG, "Ephemeral key sent to INFOTAINMENT");
+        ESP_LOGI(TAG, "SessionInfoRequest sent to VEHICLE_SECURITY");
 
         return_code = this->sendInfoStatus();
         if (return_code != 0)
@@ -946,7 +932,8 @@ namespace esphome
             return;
           }
         }
-        else {
+        else
+        {
           ESP_LOGD(TAG, "Not enough data to determine message length");
           return;
         }
@@ -1033,7 +1020,6 @@ namespace esphome
                    UniversalMessage_OperationStatus_E_OPERATIONSTATUS_WAIT)
           {
             ESP_LOGI(TAG, "Received wait message from domain %s", domain_to_string(domain));
-            // vTaskDelay(2000 / portTICK_PERIOD_MS);
             return;
           }
           else

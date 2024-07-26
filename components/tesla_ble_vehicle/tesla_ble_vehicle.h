@@ -54,7 +54,7 @@ namespace esphome
 
             int wakeVehicle(void);
             int sendCommand(VCSEC_RKEAction_E action);
-            int sendEphemeralKeyRequest(UniversalMessage_Domain domain);
+            int sendSessionInfoRequest(UniversalMessage_Domain domain);
             int sendInfoStatus(void);
             int setChargingAmps(int input_amps);
             int setChargingLimit(int input_percent);
