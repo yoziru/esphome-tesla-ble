@@ -8,6 +8,7 @@
 
 #include <car_server.pb.h>
 #include <client.h>
+#include <errors.h>
 #include <peer.h>
 #include <keys.pb.h>
 #include <tb_utils.h>
@@ -368,6 +369,10 @@ namespace esphome
       return_code = tesla_ble_client_->buildVCSECActionMessage(action, action_message_buffer, &action_message_buffer_length);
       if (return_code != 0)
       {
+        if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
+        {
+          tesla_ble_client_->session_vcsec_.setIsAuthenticated(false);
+        }
         ESP_LOGE(TAG, "Failed to build action message");
         return return_code;
       }
@@ -537,13 +542,10 @@ namespace esphome
       return_code = tesla_ble_client_->buildChargingSwitchMessage(isOn, charge_message_buffer, &charge_message_length);
       if (return_code != 0)
       {
-        ESP_LOGE(TAG, "Failed to build charge message");
-        // TODO: should be handled in preflight check but not always working so send key request as workaround here
-        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code != 0)
+        ESP_LOGE(TAG, "Failed to build setChargingSwitch message");
+        if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
         {
-          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
-          return return_code;
+          tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
         }
         return return_code;
       }
@@ -575,13 +577,10 @@ namespace esphome
       return_code = tesla_ble_client_->buildChargingAmpsMessage(amps, charge_message_buffer, &charge_message_length);
       if (return_code != 0)
       {
-        ESP_LOGE(TAG, "Failed to build charge amps message");
-        // TODO: should be handled in preflight check but not always working so send key request as workaround here
-        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code != 0)
+        ESP_LOGE(TAG, "Failed to build setChargingAmps message");
+        if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
         {
-          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
-          return return_code;
+          tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
         }
         return return_code;
       }
@@ -613,13 +612,10 @@ namespace esphome
       return_code = tesla_ble_client_->buildChargingSetLimitMessage(percent, charge_message_buffer, &charge_message_length);
       if (return_code != 0)
       {
-        ESP_LOGE(TAG, "Failed to build charge limit message");
-        // TODO: should be handled in preflight check but not always working so send key request as workaround here
-        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code != 0)
+        ESP_LOGE(TAG, "Failed to build setChargingLimit message");
+        if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
         {
-          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
-          return return_code;
+          tesla_ble_client_->session_infotainment_.setIsAuthenticated(false);
         }
         return return_code;
       }
