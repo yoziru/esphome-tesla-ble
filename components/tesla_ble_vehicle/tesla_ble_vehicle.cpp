@@ -506,6 +506,8 @@ namespace esphome
           ESP_LOGE(TAG, "Failed to wake vehicle");
           return return_code;
         }
+        // fail so that we can retry after waking up
+        return 1;
       }
 
       // make sure we're authenticated
