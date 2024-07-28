@@ -94,7 +94,7 @@ namespace esphome
       }
 
       // encode session info to protobuf
-      size_t session_info_encode_buffer_size = 200;
+      size_t session_info_encode_buffer_size = 1024;
       pb_byte_t session_info_encode_buffer[session_info_encode_buffer_size];
       int return_code = TeslaBLE::pb_encode_fields(session_info_encode_buffer, &session_info_encode_buffer_size, Signatures_SessionInfo_fields, &session_info);
       if (return_code != 0)
