@@ -1,8 +1,10 @@
 #pragma once
+
 #include <algorithm>
 #include <cstring>
 #include <iterator>
 #include <vector>
+#include <mutex>
 
 #include <esp_gattc_api.h>
 #include <esphome/components/binary_sensor/binary_sensor.h>
@@ -51,6 +53,9 @@ namespace esphome
             void regenerateKey();
             int startPair(void);
             int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
+            int nvs_save_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
+            int nvs_load_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
+
 
             int wakeVehicle(void);
             int sendCommand(VCSEC_RKEAction_E action);
@@ -80,6 +85,7 @@ namespace esphome
             uint16_t handle_;
             uint16_t read_handle_{0};
             uint16_t write_handle_{0};
+            std::mutex write_mutex_;
 
             espbt::ESPBTUUID service_uuid_;
             espbt::ESPBTUUID read_uuid_;
