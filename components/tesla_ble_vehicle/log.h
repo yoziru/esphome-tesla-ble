@@ -1,3 +1,5 @@
+#pragma once
+
 #include <car_server.pb.h>
 #include <signatures.pb.h>
 #include <universal_message.pb.h>
