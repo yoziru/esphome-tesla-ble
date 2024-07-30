@@ -1,8 +1,6 @@
 external_components:
   - components: [ tesla_ble_vehicle ]
-    # uncomment for local dev
-    # source: components
-    source: github://yoziru/esphome-tesla-ble/components@main
+    source: components
 
 ble_client:
   - mac_address: !secret ble_mac_address
@@ -13,8 +11,12 @@ tesla_ble_vehicle:
   id: tesla_ble_vehicle_id
   vin: !secret tesla_vin
   update_interval: 1min # default
-  asleep:
+  is_asleep:
     name: "Asleep"
+  is_user_present:
+    name: "User presence"
+  is_unlocked:
+    name: "Doors"
 
 button:
   - platform: restart
@@ -25,7 +27,7 @@ button:
   - platform: template
     id: ble_pair
     name: Pair BLE key
-    icon: mdi:bluetooth-connect
+    icon: mdi:key-wireless
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->startPair();
 
@@ -37,25 +39,15 @@ button:
 
   - platform: template
     name: Regenerate key
+    icon: mdi:key-change
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->regenerateKey();
     entity_category: diagnostic
     disabled_by_default: true
 
   - platform: template
-    name: Request VCSEC
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-    entity_category: diagnostic
-
-  - platform: template
-    name: Request INFOTAINMENT
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-    entity_category: diagnostic
-
-  - platform: template
-    name: Request VCSEC InfoStatus
+    name: Force data update
+    icon: mdi:database-sync
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->sendInfoStatus();
     entity_category: diagnostic
@@ -72,10 +64,16 @@ switch:
   - platform: template
     name: "Charger switch"
     optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(true);
     turn_off_action:
       - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(false);
+
+  - platform: ble_client
+    ble_client_id: ble_tesla_id
+    name: "BLE Connection"
+    entity_category: diagnostic
 
 number:
   - platform: template
@@ -87,6 +85,7 @@ number:
     max_value: 32
     step: 1
     optimistic: true
+    restore_value: true
     on_value:
       then:
         - lambda: |-
@@ -101,6 +100,7 @@ number:
     max_value: 100
     step: 1
     optimistic: true
+    restore_value: true
     on_value:
       then:
         - lambda: |-

@@ -17,6 +17,8 @@
 #include <universal_message.pb.h>
 #include <vcsec.pb.h>
 
+#include "custom_binary_sensor.h"
+
 namespace TeslaBLE
 {
     class Client;
@@ -47,15 +49,16 @@ namespace esphome
             void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                      esp_ble_gattc_cb_param_t *param) override;
             void dump_config() override;
-            void init();
             void set_vin(const char *vin);
 
             void regenerateKey();
             int startPair(void);
-            int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
-            int nvs_save_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
-            int nvs_load_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
+            int nvs_save_session_info(const Signatures_SessionInfo &session_info, const UniversalMessage_Domain domain);
+            int nvs_load_session_info(Signatures_SessionInfo *session_info, const UniversalMessage_Domain domain);
+            int nvs_initialize_private_key();
 
+            int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
+            int handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus);
 
             int wakeVehicle(void);
             int sendCommand(VCSEC_RKEAction_E action);
@@ -70,13 +73,32 @@ namespace esphome
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
 
-            void set_binary_sensor_asleep(binary_sensor::BinarySensor *s) { asleepSensor = s; }
-            void updateAsleepState(bool asleep)
+            // sensors
+            // Sleep state (vehicleSleepStatus)
+            void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void updateIsAsleep(bool asleep)
             {
-                if (asleepSensor != nullptr)
-                {
-                    asleepSensor->publish_state(asleep);
-                }
+                isAsleepSensor->publish_state(asleep);
+            }
+            // Door lock (vehicleLockState)
+            void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void updateisUnlocked(bool locked)
+            {
+                isUnlockedSensor->publish_state(locked);
+            }
+            // User presence (userPresence)
+            void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void updateIsUserPresent(bool present)
+            {
+                isUserPresentSensor->publish_state(present);
+            }
+
+            // set sensors to unknown (e.g. when vehicle is disconnected)
+            void setSensors(bool has_state)
+            {
+                isAsleepSensor->set_has_state(has_state);
+                isUnlockedSensor->set_has_state(has_state);
+                isUserPresentSensor->set_has_state(has_state);
             }
 
         protected:
@@ -90,10 +112,20 @@ namespace esphome
             espbt::ESPBTUUID service_uuid_;
             espbt::ESPBTUUID read_uuid_;
             espbt::ESPBTUUID write_uuid_;
-            binary_sensor::BinarySensor *asleepSensor;
+
+            // sensors
+            binary_sensor::CustomBinarySensor *isAsleepSensor;
+            binary_sensor::CustomBinarySensor *isUnlockedSensor;
+            binary_sensor::CustomBinarySensor *isUserPresentSensor;
 
             std::vector<unsigned char> read_buffer;
             size_t current_size = 0;
+
+            void initializeFlash();
+            void openNVSHandle();
+            void initializePrivateKey();
+            void loadSessionInfo();
+            void loadDomainSessionInfo(UniversalMessage_Domain domain);
         };
 
     } // namespace tesla_ble_vehicle
