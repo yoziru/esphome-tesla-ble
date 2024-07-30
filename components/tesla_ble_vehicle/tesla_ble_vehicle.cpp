@@ -125,79 +125,86 @@ namespace esphome
       }
     }
 
-    int TeslaBLEVehicle::nvs_save_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain)
+    int TeslaBLEVehicle::nvs_save_session_info(const Signatures_SessionInfo &session_info, const UniversalMessage_Domain domain)
     {
-      ESP_LOGD(TAG, "Storing updated session info in NVS..");
-      // define nvs_key name based on domain
-      const char *nvs_key = domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT ? nvs_key_infotainment : nvs_key_vcsec;
+      ESP_LOGD(TAG, "Storing updated session info in NVS for domain %s", domain_to_string(domain));
+      const char *nvs_key = (domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT) ? nvs_key_infotainment : nvs_key_vcsec;
 
-      esp_err_t err = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
-      if (err != ESP_OK)
-      {
-        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
-        return 1;
-      }
+      // Estimate required buffer size
+      size_t session_info_encode_buffer_size = Signatures_SessionInfo_size + 10; // Add some padding
+      std::vector<pb_byte_t> session_info_encode_buffer(session_info_encode_buffer_size);
 
-      // encode session info to protobuf
-      size_t session_info_encode_buffer_size = 1024;
-      pb_byte_t session_info_encode_buffer[session_info_encode_buffer_size];
-      int return_code = TeslaBLE::pb_encode_fields(session_info_encode_buffer, &session_info_encode_buffer_size, Signatures_SessionInfo_fields, &session_info);
+      // Encode session info into protobuf message
+      int return_code = TeslaBLE::pb_encode_fields(session_info_encode_buffer.data(), &session_info_encode_buffer_size, Signatures_SessionInfo_fields, &session_info);
       if (return_code != 0)
       {
-        ESP_LOGE(TAG, "Failed to encode session info");
+        ESP_LOGE(TAG, "Failed to encode session info for domain %s. Error code: %d", domain_to_string(domain), return_code);
         return return_code;
       }
-      ESP_LOGD(TAG, "Session info encoded to %d bytes", session_info_encode_buffer_size);
+      ESP_LOGD(TAG, "Session info encoded to %d bytes for domain %s", session_info_encode_buffer_size, domain_to_string(domain));
+      ESP_LOGD(TAG, "Session info: %s", format_hex(session_info_encode_buffer.data(), session_info_encode_buffer_size).c_str());
 
-      // save session info to NVS
-      err = nvs_set_blob(this->storage_handle_, nvs_key, session_info_encode_buffer, session_info_encode_buffer_size);
+      // Store encoded session info in NVS
+      esp_err_t err = nvs_set_blob(this->storage_handle_, nvs_key, session_info_encode_buffer.data(), session_info_encode_buffer_size);
       if (err != ESP_OK)
       {
         ESP_LOGE(TAG, "Failed to set %s key in storage: %s", domain_to_string(domain), esp_err_to_name(err));
-        return 1;
+        return static_cast<int>(err);
       }
 
+      // Commit the changes to NVS
       err = nvs_commit(this->storage_handle_);
       if (err != ESP_OK)
       {
-        ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to commit storage for domain %s: %s", domain_to_string(domain), esp_err_to_name(err));
+        return static_cast<int>(err);
       }
+
+      ESP_LOGD(TAG, "Successfully saved session info for domain %s", domain_to_string(domain));
       return 0;
     }
 
-    int TeslaBLEVehicle::nvs_load_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain)
+    int TeslaBLEVehicle::nvs_load_session_info(Signatures_SessionInfo *session_info, const UniversalMessage_Domain domain)
     {
-      // define nvs_key name based on domain
-      const char *nvs_key = domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT ? nvs_key_infotainment : nvs_key_vcsec;
+      if (session_info == nullptr)
+      {
+        ESP_LOGE(TAG, "Invalid session_info pointer");
+        return 1;
+      }
 
-      // load session info from NVS
+      const std::string nvs_key = (domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT) ? nvs_key_infotainment : nvs_key_vcsec;
+
       size_t required_session_info_size = 0;
-      esp_err_t err = nvs_get_blob(this->storage_handle_, nvs_key, NULL, &required_session_info_size);
+      esp_err_t err = nvs_get_blob(this->storage_handle_, nvs_key.c_str(), nullptr, &required_session_info_size);
       if (err != ESP_OK)
       {
-        ESP_LOGE(TAG, "Failed read %s key from storage: %s", domain_to_string(domain), esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to read %s key size from storage: %s", domain_to_string(domain), esp_err_to_name(err));
         return 1;
       }
 
-      UniversalMessage_RoutableMessage_session_info_t session_info_protobuf;
-      err = nvs_get_blob(this->storage_handle_, nvs_key, &session_info_protobuf, &required_session_info_size);
+      std::vector<uint8_t> session_info_protobuf(required_session_info_size);
+      err = nvs_get_blob(this->storage_handle_, nvs_key.c_str(), session_info_protobuf.data(), &required_session_info_size);
       if (err != ESP_OK)
       {
-        ESP_LOGE(TAG, "Failed read %s key from storage: %s", domain_to_string(domain), esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to read %s key data from storage: %s", domain_to_string(domain), esp_err_to_name(err));
         return 1;
       }
 
-      // decode session info from protobuf
-      int return_code = tesla_ble_client_->parsePayloadSessionInfo(&session_info_protobuf, session_info);
-      if (return_code != 0)
+      ESP_LOGI(TAG, "Loaded %s session info from NVS", domain_to_string(domain));
+      ESP_LOGD(TAG, "Session info: %s", format_hex(session_info_protobuf.data(), required_session_info_size).c_str());
+
+      pb_istream_t stream = pb_istream_from_buffer(session_info_protobuf.data(), required_session_info_size);
+      if (!pb_decode(&stream, Signatures_SessionInfo_fields, session_info))
       {
-        ESP_LOGE(TAG, "Failed to parse session info response");
-        return return_code;
+        ESP_LOGE(TAG, "Failed to decode session info response: %s", PB_GET_ERROR(&stream));
+        return 1;
       }
+
       log_session_info(TAG, session_info);
 
       auto session = tesla_ble_client_->getPeer(domain);
       session->updateSession(session_info);
+
       return 0;
     }
 
@@ -702,7 +709,7 @@ namespace esphome
       }
 
       // save session info to NVS
-      return_code = nvs_save_session_info(&session_info, domain);
+      return_code = nvs_save_session_info(session_info, domain);
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to save %s session info to NVS", domain_to_string(domain));

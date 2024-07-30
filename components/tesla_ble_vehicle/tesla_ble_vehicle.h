@@ -51,8 +51,8 @@ namespace esphome
 
             void regenerateKey();
             int startPair(void);
-            int nvs_save_session_info(const Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
-            int nvs_load_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
+            int nvs_save_session_info(const Signatures_SessionInfo &session_info, const UniversalMessage_Domain domain);
+            int nvs_load_session_info(Signatures_SessionInfo *session_info, const UniversalMessage_Domain domain);
             int nvs_initialize_private_key();
 
             int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
@@ -71,6 +71,7 @@ namespace esphome
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
 
+            // sensors
             void set_binary_sensor_asleep(binary_sensor::BinarySensor *s) { asleepSensor = s; }
             void updateAsleepState(bool asleep)
             {
@@ -79,7 +80,6 @@ namespace esphome
                     asleepSensor->publish_state(asleep);
                 }
             }
-            void loadSessionInfo();
 
         protected:
             TeslaBLE::Client *tesla_ble_client_;
@@ -100,6 +100,7 @@ namespace esphome
             void initializeFlash();
             void openNVSHandle();
             void initializePrivateKey();
+            void loadSessionInfo();
             void loadDomainSessionInfo(UniversalMessage_Domain domain);
         };
 
