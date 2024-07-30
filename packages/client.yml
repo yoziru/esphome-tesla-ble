@@ -29,7 +29,7 @@ button:
   - platform: template
     id: ble_pair
     name: Pair BLE key
-    icon: mdi:bluetooth-connect
+    icon: mdi:key-wireless
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->startPair();
 
@@ -41,6 +41,7 @@ button:
 
   - platform: template
     name: Regenerate key
+    icon: mdi:key-change
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->regenerateKey();
     entity_category: diagnostic
