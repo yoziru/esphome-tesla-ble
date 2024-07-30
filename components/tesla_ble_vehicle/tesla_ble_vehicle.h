@@ -17,6 +17,8 @@
 #include <universal_message.pb.h>
 #include <vcsec.pb.h>
 
+#include "custom_binary_sensor.h"
+
 namespace TeslaBLE
 {
     class Client;
@@ -73,39 +75,30 @@ namespace esphome
 
             // sensors
             // Sleep state (vehicleSleepStatus)
-            void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = s; }
+            void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
             void updateIsAsleep(bool asleep)
             {
-                if (isAsleepSensor != nullptr)
-                {
-                    isAsleepSensor->publish_state(asleep);
-                }
+                isAsleepSensor->publish_state(asleep);
             }
             // Door lock (vehicleLockState)
-            void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = s; }
+            void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
             void updateisUnlocked(bool locked)
             {
-                if (isUnlockedSensor != nullptr)
-                {
-                    isUnlockedSensor->publish_state(locked);
-                }
+                isUnlockedSensor->publish_state(locked);
             }
             // User presence (userPresence)
-            void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = s; }
+            void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
             void updateIsUserPresent(bool present)
             {
-                if (isUserPresentSensor != nullptr)
-                {
-                    isUserPresentSensor->publish_state(present);
-                }
+                isUserPresentSensor->publish_state(present);
             }
 
             // set sensors to unknown (e.g. when vehicle is disconnected)
-            void setSensorsUnknown()
+            void setSensors(bool has_state)
             {
-                updateIsAsleep(NAN);
-                updateisUnlocked(NAN);
-                updateIsUserPresent(NAN);
+                isAsleepSensor->set_has_state(has_state);
+                isUnlockedSensor->set_has_state(has_state);
+                isUserPresentSensor->set_has_state(has_state);
             }
 
         protected:
@@ -121,9 +114,9 @@ namespace esphome
             espbt::ESPBTUUID write_uuid_;
 
             // sensors
-            binary_sensor::BinarySensor *isAsleepSensor;
-            binary_sensor::BinarySensor *isUnlockedSensor;
-            binary_sensor::BinarySensor *isUserPresentSensor;
+            binary_sensor::CustomBinarySensor *isAsleepSensor;
+            binary_sensor::CustomBinarySensor *isUnlockedSensor;
+            binary_sensor::CustomBinarySensor *isUserPresentSensor;
 
             std::vector<unsigned char> read_buffer;
             size_t current_size = 0;

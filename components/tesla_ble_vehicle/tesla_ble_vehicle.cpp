@@ -781,6 +781,8 @@ namespace esphome
         if (param->open.status == ESP_GATT_OK)
         {
           ESP_LOGI(TAG, "Connected successfully!");
+          this->status_clear_warning();
+          this->setSensors(true);
 
           // generate random connection id 16 bytes
           pb_byte_t connection_id[16];
@@ -801,16 +803,26 @@ namespace esphome
         ESP_LOGD(TAG, "ESP_GATTC_SRVC_CHG_EVT, bd_addr: %s", format_hex(bda, sizeof(esp_bd_addr_t)).c_str());
         break;
       }
+
+      case ESP_GATTC_CLOSE_EVT:
+      {
+        ESP_LOGW(TAG, "BLE connection closed!");
+        this->node_state = espbt::ClientState::IDLE;
+
+        // set binary sensors to unknown
+        this->setSensors(false);
+
+        // TODO: charging switch off
+        this->status_set_warning("BLE connection closed");
+        break;
+      }
+
       case ESP_GATTC_DISCONNECT_EVT:
       {
         this->handle_ = 0;
         this->read_handle_ = 0;
         this->write_handle_ = 0;
-
-        // asleep sensor off
-        this->setSensorsUnknown();
-        // TODO: charging switch off
-
+        this->node_state = espbt::ClientState::DISCONNECTING;
         ESP_LOGW(TAG, "Disconnected!");
         break;
       }
