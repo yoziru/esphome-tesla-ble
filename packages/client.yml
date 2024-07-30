@@ -70,6 +70,11 @@ switch:
     turn_off_action:
       - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(false);
 
+  - platform: ble_client
+    ble_client_id: ble_tesla_id
+    name: "BLE Connection"
+    entity_category: diagnostic
+
 number:
   - platform: template
     name: "Charging amps"
