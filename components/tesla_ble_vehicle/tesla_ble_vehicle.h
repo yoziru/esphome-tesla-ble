@@ -52,10 +52,12 @@ namespace esphome
 
             void regenerateKey();
             int startPair(void);
-            int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
             int nvs_save_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
             int nvs_load_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
             int nvs_initialize_private_key();
+
+            int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
+            int handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus);
 
             int wakeVehicle(void);
             int sendCommand(VCSEC_RKEAction_E action);

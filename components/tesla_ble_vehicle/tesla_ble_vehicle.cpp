@@ -702,6 +702,25 @@ namespace esphome
       return 0;
     }
 
+    int TeslaBLEVehicle::handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus)
+    {
+      log_vehicle_status(TAG, &vehicleStatus);
+      switch (vehicleStatus.vehicleSleepStatus)
+      {
+      case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
+        this->updateAsleepState(false);
+        break;
+      case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
+        this->updateAsleepState(true);
+        break;
+      case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
+      default:
+        this->updateAsleepState(NAN);
+        break;
+      }
+      return 0;
+    }
+
     void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                               esp_ble_gattc_cb_param_t *param)
     {
@@ -1064,20 +1083,7 @@ namespace esphome
             case VCSEC_FromVCSECMessage_vehicleStatus_tag:
             {
               ESP_LOGD(TAG, "Received vehicle status");
-              log_vehicle_status(TAG, &vcsec_message.sub_message.vehicleStatus);
-              switch (vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus)
-              {
-              case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
-                this->updateAsleepState(false);
-                break;
-              case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
-                this->updateAsleepState(true);
-                break;
-              case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
-              default:
-                this->updateAsleepState(NAN);
-                break;
-              }
+              handleVCSECVehicleStatus(vcsec_message.sub_message.vehicleStatus);
               break;
             }
             case VCSEC_FromVCSECMessage_commandStatus_tag:
