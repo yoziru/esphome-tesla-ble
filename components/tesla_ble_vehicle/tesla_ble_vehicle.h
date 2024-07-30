@@ -72,13 +72,40 @@ namespace esphome
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
 
             // sensors
-            void set_binary_sensor_asleep(binary_sensor::BinarySensor *s) { asleepSensor = s; }
-            void updateAsleepState(bool asleep)
+            // Sleep state (vehicleSleepStatus)
+            void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = s; }
+            void updateIsAsleep(bool asleep)
             {
-                if (asleepSensor != nullptr)
+                if (isAsleepSensor != nullptr)
                 {
-                    asleepSensor->publish_state(asleep);
+                    isAsleepSensor->publish_state(asleep);
                 }
+            }
+            // Door lock (vehicleLockState)
+            void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = s; }
+            void updateisUnlocked(bool locked)
+            {
+                if (isUnlockedSensor != nullptr)
+                {
+                    isUnlockedSensor->publish_state(locked);
+                }
+            }
+            // User presence (userPresence)
+            void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = s; }
+            void updateIsUserPresent(bool present)
+            {
+                if (isUserPresentSensor != nullptr)
+                {
+                    isUserPresentSensor->publish_state(present);
+                }
+            }
+
+            // set sensors to unknown (e.g. when vehicle is disconnected)
+            void setSensorsUnknown()
+            {
+                updateIsAsleep(NAN);
+                updateisUnlocked(NAN);
+                updateIsUserPresent(NAN);
             }
 
         protected:
@@ -92,7 +119,11 @@ namespace esphome
             espbt::ESPBTUUID service_uuid_;
             espbt::ESPBTUUID read_uuid_;
             espbt::ESPBTUUID write_uuid_;
-            binary_sensor::BinarySensor *asleepSensor;
+
+            // sensors
+            binary_sensor::BinarySensor *isAsleepSensor;
+            binary_sensor::BinarySensor *isUnlockedSensor;
+            binary_sensor::BinarySensor *isUserPresentSensor;
 
             std::vector<unsigned char> read_buffer;
             size_t current_size = 0;

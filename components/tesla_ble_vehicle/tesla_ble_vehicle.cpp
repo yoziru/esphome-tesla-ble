@@ -30,7 +30,7 @@ namespace esphome
     void TeslaBLEVehicle::dump_config()
     {
       ESP_LOGCONFIG(TAG, "Tesla BLE Vehicle:");
-      LOG_BINARY_SENSOR("  ", "Asleep Sensor", this->asleepSensor);
+      LOG_BINARY_SENSOR("  ", "Asleep Sensor", this->isAsleepSensor);
     }
     TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{})
     {
@@ -117,10 +117,10 @@ namespace esphome
       {
         ESP_LOGD(TAG, "Vehicle is not connected");
         // set sleep status to unknown if it's not yet
-        if (this->asleepSensor->has_state() == true)
+        if (this->isAsleepSensor->has_state() == true)
         {
 
-          this->updateAsleepState(NAN);
+          this->updateIsAsleep(NAN);
         }
       }
     }
@@ -433,7 +433,7 @@ namespace esphome
     int TeslaBLEVehicle::wakeVehicle()
     {
       ESP_LOGI(TAG, "Waking vehicle");
-      if (this->asleepSensor->state == false)
+      if (this->isAsleepSensor->state == false)
       {
         ESP_LOGI(TAG, "Vehicle is already awake");
         return 0;
@@ -528,7 +528,7 @@ namespace esphome
 
       ESP_LOGD(TAG, "Checking if car is awake..");
       // first handle case where state is Unknown (NAN) (e.g. on boot)
-      if (this->asleepSensor->has_state() == false)
+      if (this->isAsleepSensor->has_state() == false)
       {
         ESP_LOGI(TAG, "Car state is unknown, sending info status");
         return_code = this->sendInfoStatus();
@@ -539,7 +539,7 @@ namespace esphome
         }
       }
 
-      if (this->asleepSensor->state == false)
+      if (this->isAsleepSensor->state == false)
       {
         ESP_LOGD(TAG, "Car is awake");
       }
@@ -723,16 +723,45 @@ namespace esphome
       switch (vehicleStatus.vehicleSleepStatus)
       {
       case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
-        this->updateAsleepState(false);
+        this->updateIsAsleep(false);
         break;
       case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
-        this->updateAsleepState(true);
+        this->updateIsAsleep(true);
         break;
       case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
       default:
-        this->updateAsleepState(NAN);
+        this->updateIsAsleep(NAN);
         break;
-      }
+      } // switch vehicleSleepStatus
+
+      switch (vehicleStatus.userPresence)
+      {
+      case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT:
+        this->updateIsUserPresent(true);
+        break;
+      case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_NOT_PRESENT:
+        this->updateIsUserPresent(false);
+        break;
+      case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_UNKNOWN:
+      default:
+        this->updateIsUserPresent(NAN);
+        break;
+      } // switch userPresence
+
+      switch (vehicleStatus.vehicleLockState)
+      {
+      case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED:
+      case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED:
+        this->updateisUnlocked(true);
+        break;
+      case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_LOCKED:
+      case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED:
+        this->updateisUnlocked(false);
+        break;
+      default:
+        this->updateisUnlocked(NAN);
+        break;
+      } // switch vehicleLockState
       return 0;
     }
 
@@ -779,7 +808,7 @@ namespace esphome
         this->write_handle_ = 0;
 
         // asleep sensor off
-        this->updateAsleepState(NAN);
+        this->setSensorsUnknown();
         // TODO: charging switch off
 
         ESP_LOGW(TAG, "Disconnected!");

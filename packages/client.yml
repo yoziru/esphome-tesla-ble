@@ -13,8 +13,12 @@ tesla_ble_vehicle:
   id: tesla_ble_vehicle_id
   vin: !secret tesla_vin
   update_interval: 1min # default
-  asleep:
+  is_asleep:
     name: "Asleep"
+  is_user_present:
+    name: "User presence"
+  is_unlocked:
+    name: "Doors"
 
 button:
   - platform: restart
