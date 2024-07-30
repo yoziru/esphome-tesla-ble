@@ -23,30 +23,75 @@ namespace esphome
 {
   namespace tesla_ble_vehicle
   {
-
     static const char *const TAG = "tesla_ble_vehicle";
     static const char *nvs_key_infotainment = "tk_infotainment";
     static const char *nvs_key_vcsec = "tk_vcsec";
 
     void TeslaBLEVehicle::dump_config()
     {
-      ESP_LOGD(TAG, "Dumping Config");
+      ESP_LOGCONFIG(TAG, "Tesla BLE Vehicle:");
+      LOG_BINARY_SENSOR("  ", "Asleep Sensor", this->asleepSensor);
     }
     TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{})
     {
-      ESP_LOGD(TAG, "Constructing Tesla BLE Vehicle component");
-      this->init();
-
+      ESP_LOGCONFIG(TAG, "Constructing Tesla BLE Vehicle component");
       this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
       this->read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
       this->write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
     }
+
     void TeslaBLEVehicle::setup()
     {
+      ESP_LOGCONFIG(TAG, "Setting up TeslaBLEVehicle");
+      this->initializeFlash();
+      this->openNVSHandle();
+      this->initializePrivateKey();
+      this->loadSessionInfo();
     }
-    void TeslaBLEVehicle::set_vin(const char *vin)
+
+    void TeslaBLEVehicle::initializeFlash()
     {
-      tesla_ble_client_->setVIN(vin);
+      esp_err_t err = nvs_flash_init();
+      if (err != ESP_OK)
+      {
+        ESP_LOGE(TAG, "Failed to initialize flash: %s", esp_err_to_name(err));
+        esp_restart();
+      }
+    }
+
+    void TeslaBLEVehicle::openNVSHandle()
+    {
+      esp_err_t err = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
+      if (err != ESP_OK)
+      {
+        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+        esp_restart();
+      }
+    }
+
+    void TeslaBLEVehicle::initializePrivateKey()
+    {
+      if (nvs_initialize_private_key() != 0)
+      {
+        ESP_LOGE(TAG, "Failed to initialize private key");
+        esp_restart();
+      }
+    }
+
+    void TeslaBLEVehicle::loadSessionInfo()
+    {
+      loadDomainSessionInfo(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+      loadDomainSessionInfo(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+    }
+
+    void TeslaBLEVehicle::loadDomainSessionInfo(UniversalMessage_Domain domain)
+    {
+      ESP_LOGCONFIG(TAG, "Loading %s session info from NVS..", domain_to_string(domain));
+      Signatures_SessionInfo session_info = Signatures_SessionInfo_init_default;
+      if (nvs_load_session_info(&session_info, domain) != 0)
+      {
+        ESP_LOGW(TAG, "Failed to load %s session info from NVS", domain_to_string(domain));
+      }
     }
 
     void TeslaBLEVehicle::loop()
@@ -158,15 +203,9 @@ namespace esphome
 
     int TeslaBLEVehicle::nvs_initialize_private_key()
     {
-      int err = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
-      if (err != ESP_OK)
-      {
-        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
-        esp_restart();
-      }
       size_t required_private_key_size = 0;
-      err = nvs_get_blob(this->storage_handle_, "private_key", NULL,
-                         &required_private_key_size);
+      int err = nvs_get_blob(this->storage_handle_, "private_key", NULL,
+                             &required_private_key_size);
 
       if (err != ESP_OK)
       {
@@ -227,39 +266,9 @@ namespace esphome
       return 0;
     }
 
-    void TeslaBLEVehicle::init()
+    void TeslaBLEVehicle::set_vin(const char *vin)
     {
-      ESP_LOGI(TAG, "Initializing Tesla BLE Vehicle component");
-      esp_err_t err = nvs_flash_init();
-      if (err != ESP_OK)
-      {
-        ESP_LOGE(TAG, "Failed to initialize flash: %s", esp_err_to_name(err));
-        esp_restart();
-      }
-
-      int result_code = nvs_initialize_private_key();
-      if (result_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to initialize private key");
-        esp_restart();
-      }
-
-      // load session info from NVS
-      ESP_LOGD(TAG, "Loading VCSEC session info from NVS..");
-      Signatures_SessionInfo session_info_vcsec = Signatures_SessionInfo_init_default;
-      result_code = nvs_load_session_info(&session_info_vcsec, UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-      if (result_code != 0)
-      {
-        ESP_LOGW(TAG, "Failed to load VCSEC session info from NVS");
-      }
-
-      ESP_LOGD(TAG, "Loading INFOTAINMENT session info from NVS..");
-      Signatures_SessionInfo session_info_infotainment = Signatures_SessionInfo_init_default;
-      result_code = nvs_load_session_info(&session_info_infotainment, UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-      if (result_code != 0)
-      {
-        ESP_LOGW(TAG, "Failed to load INFOTAINMENT session info from NVS");
-      }
+      tesla_ble_client_->setVIN(vin);
     }
 
     void TeslaBLEVehicle::regenerateKey()
@@ -277,29 +286,29 @@ namespace esphome
       tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
                                        &private_key_length);
 
-      esp_err_t result_flash_init = nvs_flash_init();
-      if (result_flash_init != ESP_OK)
+      esp_err_t err = nvs_flash_init();
+      if (err != ESP_OK)
       {
-        ESP_LOGE(TAG, "Failed to initialize flash: %s", esp_err_to_name(result_flash_init));
+        ESP_LOGE(TAG, "Failed to initialize flash: %s", esp_err_to_name(err));
       }
 
-      esp_err_t result_nvs_open = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
-      if (result_nvs_open != ESP_OK)
+      err = nvs_open("storage", NVS_READWRITE, &this->storage_handle_);
+      if (err != ESP_OK)
       {
-        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(result_nvs_open));
+        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
       }
 
-      esp_err_t result_nvs_set_blob = nvs_set_blob(this->storage_handle_, "private_key",
-                                                   private_key_buffer, private_key_length);
-      if (result_nvs_set_blob != ESP_OK)
+      err = nvs_set_blob(this->storage_handle_, "private_key",
+                         private_key_buffer, private_key_length);
+      if (err != ESP_OK)
       {
-        ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(result_nvs_set_blob));
+        ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(err));
       }
 
-      esp_err_t result_nvs_commit = nvs_commit(this->storage_handle_);
-      if (result_nvs_commit != ESP_OK)
+      err = nvs_commit(this->storage_handle_);
+      if (err != ESP_OK)
       {
-        ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(result_nvs_commit));
+        ESP_LOGE(TAG, "Failed commit storage: %s", esp_err_to_name(err));
       }
 
       ESP_LOGI(TAG, "Private key successfully created");
@@ -697,7 +706,6 @@ namespace esphome
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to save %s session info to NVS", domain_to_string(domain));
-        // return return_code;
       }
       return 0;
     }

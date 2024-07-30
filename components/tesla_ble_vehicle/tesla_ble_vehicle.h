@@ -47,12 +47,11 @@ namespace esphome
             void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                      esp_ble_gattc_cb_param_t *param) override;
             void dump_config() override;
-            void init();
             void set_vin(const char *vin);
 
             void regenerateKey();
             int startPair(void);
-            int nvs_save_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
+            int nvs_save_session_info(const Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
             int nvs_load_session_info(Signatures_SessionInfo *session_info, UniversalMessage_Domain domain);
             int nvs_initialize_private_key();
 
@@ -80,6 +79,7 @@ namespace esphome
                     asleepSensor->publish_state(asleep);
                 }
             }
+            void loadSessionInfo();
 
         protected:
             TeslaBLE::Client *tesla_ble_client_;
@@ -96,6 +96,11 @@ namespace esphome
 
             std::vector<unsigned char> read_buffer;
             size_t current_size = 0;
+
+            void initializeFlash();
+            void openNVSHandle();
+            void initializePrivateKey();
+            void loadDomainSessionInfo(UniversalMessage_Domain domain);
         };
 
     } // namespace tesla_ble_vehicle
