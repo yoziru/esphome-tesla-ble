@@ -43,19 +43,8 @@ button:
     disabled_by_default: true
 
   - platform: template
-    name: Request VCSEC
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-    entity_category: diagnostic
-
-  - platform: template
-    name: Request INFOTAINMENT
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-    entity_category: diagnostic
-
-  - platform: template
-    name: Request VCSEC InfoStatus
+    name: Force data update
+    icon: mdi:database-sync
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->sendInfoStatus();
     entity_category: diagnostic
