@@ -65,6 +65,7 @@ switch:
   - platform: template
     name: "Charger switch"
     optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(true);
     turn_off_action:
@@ -85,6 +86,7 @@ number:
     max_value: 32
     step: 1
     optimistic: true
+    restore_value: true
     on_value:
       then:
         - lambda: |-
@@ -99,6 +101,7 @@ number:
     max_value: 100
     step: 1
     optimistic: true
+    restore_value: true
     on_value:
       then:
         - lambda: |-
