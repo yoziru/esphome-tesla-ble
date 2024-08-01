@@ -80,6 +80,7 @@ number:
     name: "Charging amps"
     id: charging_amps
     icon: mdi:ev-station
+    unit_of_measurement: "A"
     mode: slider
     min_value: 0
     max_value: 32
@@ -95,6 +96,7 @@ number:
     name: "Charging limit"
     id: charging_limit
     icon: mdi:ev-station
+    unit_of_measurement: "%"
     mode: slider
     min_value: 50
     max_value: 100
