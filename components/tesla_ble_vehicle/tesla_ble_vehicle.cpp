@@ -3,6 +3,7 @@
 #include <esphome/core/log.h>
 #include <nvs_flash.h>
 #include <pb_decode.h>
+#include <algorithm>
 #include <cstring>
 #include <mutex>
 #include <ctime>
@@ -91,7 +92,7 @@ namespace esphome
       }
     }
 
-    void TeslaBLEVehicle::process_queue()
+    void TeslaBLEVehicle::process_command_queue()
     {
       if (command_queue_.empty())
       {
@@ -102,9 +103,9 @@ namespace esphome
       uint32_t now = millis();
 
       // Overall timeout check
-      if (now - current_command.started_at > OVERALL_TIMEOUT)
+      if (now - current_command.started_at > COMMAND_TIMEOUT)
       {
-        ESP_LOGE(TAG, "Command timed out after %d ms", OVERALL_TIMEOUT);
+        ESP_LOGE(TAG, "Command timed out after %d ms", COMMAND_TIMEOUT);
         command_queue_.pop();
         return;
       }
@@ -113,17 +114,17 @@ namespace esphome
       {
       case BLECommandState::IDLE:
         current_command.started_at = now;
-        switch (current_command.required_auth)
+        switch (current_command.domain)
         {
-        case BLECommand::RequiredAuth::NONE:
+        case UniversalMessage_Domain_DOMAIN_BROADCAST:
           ESP_LOGD(TAG, "No auth required, executing command");
           current_command.state = BLECommandState::READY;
           break;
-        case BLECommand::RequiredAuth::VCSEC:
+        case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
           ESP_LOGD(TAG, "VCSEC required, initiating VCSEC auth");
           current_command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH;
           break;
-        case BLECommand::RequiredAuth::INFOTAINMENT:
+        case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
           ESP_LOGD(TAG, "Infotainment required, initiating Infotainment auth");
           current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
           break;
@@ -136,16 +137,16 @@ namespace esphome
           if (session->isInitialized())
           {
             ESP_LOGD(TAG, "VCSEC authenticated");
-            switch (current_command.required_auth)
+            switch (current_command.domain)
             {
-            case BLECommand::RequiredAuth::VCSEC:
+            case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
               current_command.state = BLECommandState::READY;
               break;
-            case BLECommand::RequiredAuth::INFOTAINMENT:
+            case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
               ESP_LOGD(TAG, "Not authenticated with Infotainment yet, initiating Infotainment auth");
               current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
               break;
-            case BLECommand::RequiredAuth::NONE:
+            case UniversalMessage_Domain_DOMAIN_BROADCAST:
               ESP_LOGE(TAG, "Invalid state: VCSEC authenticated but no auth required");
               // pop command
               command_queue_.pop();
@@ -338,6 +339,28 @@ namespace esphome
       }
     }
 
+    void TeslaBLEVehicle::process_ble_write_queue()
+    {
+      if (this->ble_write_queue_.empty())
+      {
+        return;
+      }
+
+      BLETXChunk chunk = this->ble_write_queue_.front();
+      int gattc_if = this->parent()->get_gattc_if();
+      uint16_t conn_id = this->parent()->get_conn_id();
+      esp_err_t err = esp_ble_gattc_write_char(gattc_if, conn_id, this->write_handle_, chunk.data.size(), chunk.data.data(), chunk.write_type, chunk.auth_req);
+      if (err)
+      {
+        ESP_LOGW(TAG, "Error sending write value to BLE gattc server, error=%d", err);
+      }
+      else
+      {
+        ESP_LOGV(TAG, "BLE TX: %s", format_hex(chunk.data.data(), chunk.data.size()).c_str());
+        this->ble_write_queue_.pop();
+      }
+    }
+
     void TeslaBLEVehicle::loop()
     {
       if (this->node_state != espbt::ClientState::ESTABLISHED)
@@ -351,7 +374,8 @@ namespace esphome
       }
 
       // make sure we run at most 1 command per loop iteration
-      process_queue();
+      process_ble_write_queue();
+      process_command_queue();
     }
 
     void TeslaBLEVehicle::update()
@@ -360,8 +384,8 @@ namespace esphome
       if (this->node_state == espbt::ClientState::ESTABLISHED)
       {
         ESP_LOGD(TAG, "Querying vehicle status update..");
-        command_queue_.push(BLECommand(
-            BLECommand::RequiredAuth::VCSEC,
+        command_queue_.emplace(
+            UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
             [this]()
             {
               int return_code = this->sendVCSECInformationRequest();
@@ -371,7 +395,7 @@ namespace esphome
                 return return_code;
               }
               return 0;
-            }));
+            });
         return;
       }
     }
@@ -623,40 +647,24 @@ namespace esphome
       return 0;
     }
 
-    int TeslaBLEVehicle::writeBLE(const unsigned char *message_buffer, size_t message_length,
-                                  esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req)
+    int TeslaBLEVehicle::writeBLE(
+        const unsigned char *message_buffer, size_t message_length,
+        esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req)
     {
       std::lock_guard<std::mutex> guard(this->write_mutex_);
       ESP_LOGD(TAG, "BLE TX: %s", format_hex(message_buffer, message_length).c_str());
       // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
-      int gattc_if = this->parent()->get_gattc_if();
-      uint16_t conn_id = this->parent()->get_conn_id();
       for (size_t i = 0; i < message_length; i += BLOCK_LENGTH)
       {
-        size_t chunkLength = BLOCK_LENGTH;
-        if (i + chunkLength > message_length)
-        {
-          chunkLength = message_length - i;
-        }
-        unsigned char chunk[chunkLength];
-        std::memcpy(chunk, message_buffer + i, chunkLength);
-        esp_err_t err = esp_ble_gattc_write_char(gattc_if, conn_id, this->write_handle_, chunkLength, chunk, write_type, auth_req);
-        if (err)
-        {
-          ESP_LOGW(TAG, "[writeBLE] Error sending write value to BLE gattc server, error=%d", err);
-          return 1;
-        }
+        size_t chunkLength = std::min(static_cast<size_t>(BLOCK_LENGTH), message_length - i);
+        std::vector<unsigned char> chunk(message_buffer + i, message_buffer + i + chunkLength);
+
+        // add to write queue
+        this->ble_write_queue_.emplace(chunk, write_type, auth_req);
       }
-      ESP_LOGD(TAG, "[writeBLE] Command sent.");
+      ESP_LOGD(TAG, "[writeBLE] Added to write queue.");
       return 0;
     }
-
-    // void addCommandToQueue(
-    //     BLECommand::RequiredAuth r,
-    //     std::function<int()> command)
-    // {
-    //   command_queue_.push(BLECommand(r, command));
-    // }
 
     int TeslaBLEVehicle::sendVCSECActionMessage(VCSEC_RKEAction_E action)
     {
@@ -695,8 +703,8 @@ namespace esphome
 
       // enqueue command
       ESP_LOGI(TAG, "Adding wakeVehicle command to queue");
-      command_queue_.push(BLECommand(
-          BLECommand::RequiredAuth::VCSEC, [this]()
+      command_queue_.emplace(
+          UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, [this]()
           {
         int return_code = this->sendVCSECActionMessage(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
         if (return_code != 0)
@@ -704,7 +712,7 @@ namespace esphome
           ESP_LOGE(TAG, "Failed to send wake command");
           return return_code;
         }
-        return 0; }));
+        return 0; });
 
       return 0;
     }
@@ -737,10 +745,9 @@ namespace esphome
     int TeslaBLEVehicle::sendCarServerVehicleActionMessage(BLE_CarServer_VehicleAction action, int param)
     {
       ESP_LOGI(TAG, "Adding sendCarServerVehicleActionMessage command to queue");
-      command_queue_.push(
-          BLECommand(
-              BLECommand::RequiredAuth::INFOTAINMENT, [this, action, param]()
-              {
+      command_queue_.emplace(
+          UniversalMessage_Domain_DOMAIN_INFOTAINMENT, [this, action, param]()
+          {
         pb_byte_t message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
         size_t message_length = 0;
         int return_code = 0;
@@ -782,7 +789,7 @@ namespace esphome
           ESP_LOGE(TAG, "Failed to send charging message");
           return return_code;
         }
-        return 0; }));
+        return 0; });
       return 0;
     }
 
@@ -823,17 +830,17 @@ namespace esphome
         BLECommand &current_command = command_queue_.front();
         if (domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY && current_command.state == BLECommandState::WAITING_FOR_VCSEC_AUTH_RESPONSE)
         {
-          switch (current_command.required_auth)
+          switch (current_command.domain)
           {
-          case BLECommand::RequiredAuth::VCSEC:
+          case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
             current_command.state = BLECommandState::READY;
             current_command.retry_count = 0;
             break;
-          case BLECommand::RequiredAuth::INFOTAINMENT:
+          case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
             current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
             current_command.retry_count = 0;
             break;
-          case BLECommand::RequiredAuth::NONE:
+          case UniversalMessage_Domain_DOMAIN_BROADCAST:
             ESP_LOGE(TAG, "Invalid state: VCSEC authenticated but no auth required");
             // pop command
             command_queue_.pop();
@@ -857,15 +864,15 @@ namespace esphome
       if (!command_queue_.empty())
       {
         BLECommand &current_command = command_queue_.front();
-        switch (current_command.required_auth)
+        switch (current_command.domain)
         {
-        case BLECommand::RequiredAuth::VCSEC:
+        case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
           if (domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY)
           {
             current_command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH;
           }
           break;
-        case BLECommand::RequiredAuth::INFOTAINMENT:
+        case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
           if (domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT)
           {
             current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;

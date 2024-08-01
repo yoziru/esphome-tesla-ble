@@ -48,17 +48,11 @@ namespace esphome
         static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
         static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 
-        static const int RX_TIMEOUT = 1 * 1000;  // Timeout interval between receiving chunks of a message (1s)
-        static const int MAX_LATENCY = 4 * 1000; // Max allowed error when syncing vehicle clock (4s)
-        static const int BLOCK_LENGTH = 20;      // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
-        static const int MAX_RETRIES = 5;        // Max number of retries for a command
-        static const int OVERALL_TIMEOUT = 30 * 1000; // Overall timeout for a command (30s)
-        const uint32_t AUTH_TIMEOUT = 5 * 1000; // 5 seconds
-        const uint32_t WAKE_TIMEOUT = 10 * 1000; // 10 seconds
-        const uint32_t COMMAND_TIMEOUT = 5 * 1000; // 5 seconds
-        const int MAX_AUTH_RETRIES = 5;
-        const int MAX_WAKE_RETRIES = 5;
-        const int MAX_COMMAND_RETRIES = 3;
+        static const int RX_TIMEOUT = 1 * 1000;       // Timeout interval between receiving chunks of a message (1s)
+        static const int MAX_LATENCY = 4 * 1000;      // Max allowed error when syncing vehicle clock (4s)
+        static const int BLOCK_LENGTH = 20;           // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
+        static const int MAX_RETRIES = 5;             // Max number of retries for a command
+        static const int COMMAND_TIMEOUT = 30 * 1000; // Overall timeout for a command (30s)
 
         enum class BLECommandState
         {
@@ -71,19 +65,11 @@ namespace esphome
             WAITING_FOR_WAKE_RESPONSE,
             READY,
             WAITING_FOR_RESPONSE,
-            // DONE,
         };
 
         struct BLECommand
         {
-
-            enum class RequiredAuth
-            {
-                NONE,
-                VCSEC,
-                INFOTAINMENT,
-            };
-            RequiredAuth required_auth;
+            UniversalMessage_Domain domain;
             std::function<int()> execute;
             std::string execute_name;
             BLECommandState state;
@@ -91,8 +77,20 @@ namespace esphome
             uint32_t last_tx_at = 0;
             uint8_t retry_count = 0;
 
-            BLECommand(RequiredAuth r, std::function<int()> e, std::string n = "")
-                : required_auth(r), execute(e), execute_name(n), state(BLECommandState::IDLE) {}
+            BLECommand(UniversalMessage_Domain d, std::function<int()> e, std::string n = "")
+                : domain(d), execute(e), execute_name(n), state(BLECommandState::IDLE) {}
+        };
+
+        struct BLETXChunk
+        {
+            std::vector<unsigned char> data;
+            esp_gatt_write_type_t write_type;
+            esp_gatt_auth_req_t auth_req;
+            uint32_t sent_at = millis();
+            uint8_t retry_count = 0;
+
+            BLETXChunk(std::vector<unsigned char> d, esp_gatt_write_type_t wt, esp_gatt_auth_req_t ar)
+                : data(d), write_type(wt), auth_req(ar) {}
         };
 
         class TeslaBLEVehicle : public PollingComponent, public ble_client::BLEClientNode
@@ -106,7 +104,8 @@ namespace esphome
                                      esp_ble_gattc_cb_param_t *param) override;
             void dump_config() override;
             void set_vin(const char *vin);
-            void process_queue();
+            void process_command_queue();
+            void process_ble_write_queue();
             void invalidateSession(UniversalMessage_Domain domain);
 
             void regenerateKey();
@@ -163,6 +162,7 @@ namespace esphome
         protected:
             // add a command to the command queue
             std::queue<BLECommand> command_queue_;
+            std::queue<BLETXChunk> ble_write_queue_;
 
             TeslaBLE::Client *tesla_ble_client_;
             uint32_t storage_handle_;
