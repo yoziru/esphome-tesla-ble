@@ -14,11 +14,6 @@ esphome:
   libraries:
     - https://github.com/yoziru/tesla-ble.git#v2.2.1
 
-packages:
-  common: !include common.yml
-  client: !include client.yml
-  # listener: !include listener.yml # Uncomment this to scan find your VIN BLE MAC address
-
 logger:
   level: INFO
 
@@ -52,3 +47,4 @@ wifi:
     - esp32_ble_tracker.stop_scan:
 
 captive_portal:
+
