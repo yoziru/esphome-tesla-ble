@@ -1040,7 +1040,7 @@ namespace esphome
       ESP_LOGI(TAG, "Not authenticated yet, building whitelist message");
       unsigned char whitelist_message_buffer[VCSEC_ToVCSECMessage_size];
       size_t whitelist_message_length = 0;
-      // support for wake command added to ROLE_CHARGING_MANAGER in 2024.26.x (not sure?)
+      // support for wake command will be added to ROLE_CHARGING_MANAGER in a future vehicle firmware update
       // https://github.com/teslamotors/vehicle-command/issues/232#issuecomment-2181503570
       // TODO: change back to ROLE_CHARGING_MANAGER when it's supported
       int return_code = tesla_ble_client_->buildWhiteListMessage(Keys_Role_ROLE_OWNER, VCSEC_KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY, whitelist_message_buffer, &whitelist_message_length);
