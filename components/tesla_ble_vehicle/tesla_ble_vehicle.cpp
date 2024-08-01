@@ -667,6 +667,27 @@ namespace esphome
                 }
                 break;
               case CarServer_OperationStatus_E_OPERATIONSTATUS_ERROR:
+                // if charging switch is turned on and reason = "is_charging" it's OK
+                // if charging switch is turned of and reason = "is_not_charging" it's OK
+                if (carserver_response.actionStatus.has_result_reason)
+                {
+                  switch (carserver_response.actionStatus.result_reason.which_reason)
+                  {
+                  case CarServer_ResultReason_plain_text_tag:
+                    if (strcmp(carserver_response.actionStatus.result_reason.reason.plain_text, "is_charging") == 0 || strcmp(carserver_response.actionStatus.result_reason.reason.plain_text, "is_not_charging") == 0)
+                    {
+                      ESP_LOGD(TAG, "Received charging status: %s", carserver_response.actionStatus.result_reason.reason.plain_text);
+                      if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                      {
+                        ESP_LOGI(TAG, "Received OK message from domain %s, finished command", domain_to_string(domain));
+                        command_queue_.pop();
+                      }
+                    }
+                    break;
+                  default:
+                    break;
+                  }
+                }
                 ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
                 if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
                 {
