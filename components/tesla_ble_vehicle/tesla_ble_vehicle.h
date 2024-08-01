@@ -48,6 +48,7 @@ namespace esphome
         static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
         static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 
+        static const int MAX_BLE_MESSAGE_SIZE = 1024; // Max size of a BLE message
         static const int RX_TIMEOUT = 1 * 1000;       // Timeout interval between receiving chunks of a message (1s)
         static const int MAX_LATENCY = 4 * 1000;      // Max allowed error when syncing vehicle clock (4s)
         static const int BLOCK_LENGTH = 20;           // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
@@ -93,6 +94,13 @@ namespace esphome
                 : data(d), write_type(wt), auth_req(ar) {}
         };
 
+        struct BLERXChunk
+        {
+            std::vector<unsigned char> buffer;
+
+            BLERXChunk(std::vector<unsigned char> b) : buffer(b) {}
+        };
+
         class TeslaBLEVehicle : public PollingComponent, public ble_client::BLEClientNode
         {
         public:
@@ -105,6 +113,7 @@ namespace esphome
             void dump_config() override;
             void set_vin(const char *vin);
             void process_command_queue();
+            void process_ble_read_queue();
             void process_ble_write_queue();
             void invalidateSession(UniversalMessage_Domain domain);
 
@@ -116,10 +125,6 @@ namespace esphome
 
             int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
             int handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus);
-
-            // void addCommandToQueue(
-            //     RequiredAuth r,
-            //     std::function<int()> command);
 
             int wakeVehicle(void);
             int sendVCSECActionMessage(VCSEC_RKEAction_E action);
@@ -160,9 +165,9 @@ namespace esphome
             }
 
         protected:
-            // add a command to the command queue
-            std::queue<BLECommand> command_queue_;
+            std::queue<BLERXChunk> ble_read_queue_;
             std::queue<BLETXChunk> ble_write_queue_;
+            std::queue<BLECommand> command_queue_;
 
             TeslaBLE::Client *tesla_ble_client_;
             uint32_t storage_handle_;
@@ -180,8 +185,7 @@ namespace esphome
             binary_sensor::CustomBinarySensor *isUnlockedSensor;
             binary_sensor::CustomBinarySensor *isUserPresentSensor;
 
-            std::vector<unsigned char> read_buffer;
-            size_t current_size = 0;
+            std::vector<unsigned char> ble_read_buffer_;
 
             void initializeFlash();
             void openNVSHandle();

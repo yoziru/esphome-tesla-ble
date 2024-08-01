@@ -361,6 +361,348 @@ namespace esphome
       }
     }
 
+    void TeslaBLEVehicle::process_ble_read_queue()
+    {
+      if (this->ble_read_queue_.empty())
+      {
+        return;
+      }
+
+      ESP_LOGV(TAG, "Processing BLE read queue..");
+      BLERXChunk read_chunk_ = this->ble_read_queue_.front();
+      ESP_LOGV(TAG, "BLE RX chunk: %s", format_hex(read_chunk_.buffer.data(), read_chunk_.buffer.size()).c_str());
+
+      // check we are not overflowing the buffer before appending data
+      size_t buffer_len_post_append = read_chunk_.buffer.size() + this->ble_read_buffer_.size();
+      if (buffer_len_post_append > tesla_ble_client_->MAX_BLE_MESSAGE_SIZE)
+      {
+        ESP_LOGE(TAG, "BLE RX: Message length (%d) exceeds max BLE message size", buffer_len_post_append);
+        // clear buffer
+        this->ble_read_buffer_.clear();
+        this->ble_read_buffer_.shrink_to_fit();
+        return;
+      }
+
+      // Append the new data
+      ESP_LOGV(TAG, "BLE RX: Appending new data to read buffer");
+      this->ble_read_buffer_.insert(this->ble_read_buffer_.end(), read_chunk_.buffer.begin(), read_chunk_.buffer.end());
+      this->ble_read_queue_.pop();
+
+      if (this->ble_read_buffer_.size() >= 2)
+      {
+        int message_length = (this->ble_read_buffer_[0] << 8) | this->ble_read_buffer_[1];
+
+        if (this->ble_read_buffer_.size() >= 2 + message_length)
+        {
+          ESP_LOGD(TAG, "BLE RX: %s", format_hex(this->ble_read_buffer_.data(), this->ble_read_buffer_.size()).c_str());
+        }
+        else
+        {
+          ESP_LOGD(TAG, "BLE RX: Buffered chunk, waiting for more data.. (%d/%d)", this->ble_read_buffer_.size(), 2 + message_length);
+          return;
+        }
+      }
+      else
+      {
+        ESP_LOGD(TAG, "BLE RX: Not enough data to determine message length");
+        return;
+      }
+
+      UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
+      int return_code = tesla_ble_client_->parseUniversalMessageBLE(
+          this->ble_read_buffer_.data(), this->ble_read_buffer_.size(), &message);
+      if (return_code != 0)
+      {
+        ESP_LOGW(TAG, "Failed to parse incoming message (maybe chunk?)");
+        return;
+      }
+      ESP_LOGD(TAG, "Parsed UniversalMessage");
+      // clear read buffer
+      this->ble_read_buffer_.clear();         // This will set the size to 0 and free unused memory
+      this->ble_read_buffer_.shrink_to_fit(); // This will reduce the capacity to fit the size
+
+      if (not message.has_from_destination)
+      {
+        ESP_LOGW(TAG, "[x] Dropping message with missing source");
+        return;
+      }
+      UniversalMessage_Domain domain = message.from_destination.sub_destination.domain;
+
+      if (message.request_uuid.size != 0 && message.request_uuid.size != 16)
+      {
+        ESP_LOGW(TAG, "[x] Dropping message with invalid request UUID length");
+        return;
+      }
+      std::string request_uuid_hex_string = format_hex(message.request_uuid.bytes, message.request_uuid.size);
+      const char *request_uuid_hex = request_uuid_hex_string.c_str();
+
+      if (not message.has_to_destination)
+      {
+        ESP_LOGW(TAG, "[%s] Dropping message with missing destination", request_uuid_hex);
+        return;
+      }
+
+      switch (message.to_destination.which_sub_destination)
+      {
+      case UniversalMessage_Destination_domain_tag:
+      {
+        ESP_LOGD(TAG, "[%s] Dropping message to %s", request_uuid_hex, domain_to_string(domain));
+        return;
+      }
+      case UniversalMessage_Destination_routing_address_tag:
+      {
+        // Continue
+        ESP_LOGD(TAG, "Continuing message with routing address");
+        break;
+      }
+      default:
+      {
+        ESP_LOGW(TAG, "[%s] Dropping message with unrecognized destination type, %d", request_uuid_hex, message.to_destination.which_sub_destination);
+        return;
+      }
+      }
+
+      if (sizeof(message.to_destination.sub_destination.routing_address) != 16)
+      {
+        ESP_LOGW(TAG, "[%s] Dropping message with invalid address length", request_uuid_hex);
+        return;
+      }
+
+      if (message.has_signedMessageStatus && message.signedMessageStatus.operation_status == UniversalMessage_OperationStatus_E_OPERATIONSTATUS_ERROR)
+      {
+        // reset authentication for domain
+        auto session = tesla_ble_client_->getPeer(domain);
+        invalidateSession(domain);
+      }
+
+      if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
+      {
+        return_code = this->handleSessionInfoUpdate(message, domain);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to handle session info update");
+          return;
+        }
+        ESP_LOGI(TAG, "[%s] Updated session info for %s", request_uuid_hex, domain_to_string(domain));
+      }
+
+      if (message.has_signedMessageStatus)
+      {
+        ESP_LOGD(TAG, "Received signed message status from domain %s", domain_to_string(domain));
+        log_message_status(TAG, &message.signedMessageStatus);
+        if (message.signedMessageStatus.operation_status == UniversalMessage_OperationStatus_E_OPERATIONSTATUS_ERROR)
+        {
+          ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
+          return;
+        }
+        else if (message.signedMessageStatus.operation_status ==
+                 UniversalMessage_OperationStatus_E_OPERATIONSTATUS_WAIT)
+        {
+          ESP_LOGI(TAG, "Received wait message from domain %s", domain_to_string(domain));
+          return;
+        }
+        else
+        {
+          ESP_LOGI(TAG, "Received success message from domain %s", domain_to_string(domain));
+        }
+        return;
+      }
+
+      if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
+      {
+        // log error and return if session info is present
+        return;
+      }
+
+      log_routable_message(TAG, &message);
+      switch (message.from_destination.which_sub_destination)
+      {
+      case UniversalMessage_Destination_domain_tag:
+      {
+        ESP_LOGI(TAG, "Received message from domain %s", domain_to_string(message.from_destination.sub_destination.domain));
+        switch (message.from_destination.sub_destination.domain)
+        {
+        case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
+        {
+          VCSEC_FromVCSECMessage vcsec_message = VCSEC_FromVCSECMessage_init_default;
+          int return_code = tesla_ble_client_->parseFromVCSECMessage(&message.payload.protobuf_message_as_bytes, &vcsec_message);
+          if (return_code != 0)
+          {
+            ESP_LOGE(TAG, "Failed to parse incoming message");
+            return;
+          }
+          ESP_LOGD(TAG, "Parsed VCSEC message");
+
+          switch (vcsec_message.which_sub_message)
+          {
+          case VCSEC_FromVCSECMessage_vehicleStatus_tag:
+          {
+            ESP_LOGD(TAG, "Received vehicle status");
+            handleVCSECVehicleStatus(vcsec_message.sub_message.vehicleStatus);
+
+            if (!command_queue_.empty())
+            {
+              BLECommand &current_command = command_queue_.front();
+              switch (current_command.domain)
+              {
+              case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
+                if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                {
+                  ESP_LOGI(TAG, "Received vehicle status from domain %s, finished command", domain_to_string(domain));
+                  command_queue_.pop();
+                }
+                break;
+              case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
+                if (current_command.state == BLECommandState::WAITING_FOR_WAKE || current_command.state == BLECommandState::WAITING_FOR_WAKE_RESPONSE)
+                {
+                  current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+                  current_command.retry_count = 0;
+                  break;
+                }
+              default:
+                break;
+              }
+            }
+            break;
+          }
+          case VCSEC_FromVCSECMessage_commandStatus_tag:
+          {
+            ESP_LOGD(TAG, "Received command status");
+            log_vcsec_command_status(TAG, &vcsec_message.sub_message.commandStatus);
+            if (!command_queue_.empty())
+            {
+              BLECommand &current_command = command_queue_.front();
+              if (current_command.domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY)
+              {
+                switch (vcsec_message.sub_message.commandStatus.operationStatus)
+                {
+                case VCSEC_OperationStatus_E_OPERATIONSTATUS_OK:
+                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                  {
+
+                    ESP_LOGI(TAG, "Received OK message from domain %s, finished command", domain_to_string(domain));
+                    command_queue_.pop();
+                  }
+                  break;
+                case VCSEC_OperationStatus_E_OPERATIONSTATUS_WAIT:
+                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                  {
+
+                    ESP_LOGW(TAG, "Received WAIT message from domain %s, requeuing command..", domain_to_string(domain));
+                    current_command.last_tx_at = millis();
+                    current_command.state = BLECommandState::READY;
+                  }
+                  break;
+                case VCSEC_OperationStatus_E_OPERATIONSTATUS_ERROR:
+                  ESP_LOGW(TAG, "Received error message from domain %s, retrying command..", domain_to_string(domain));
+                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                  {
+                    current_command.state = BLECommandState::READY;
+                  }
+                  break;
+                }
+              }
+            }
+            break;
+          }
+          case VCSEC_FromVCSECMessage_whitelistInfo_tag:
+          {
+            ESP_LOGD(TAG, "Received whitelist info");
+            break;
+          }
+          case VCSEC_FromVCSECMessage_whitelistEntryInfo_tag:
+          {
+            ESP_LOGD(TAG, "Received whitelist entry info");
+            break;
+          }
+          case VCSEC_FromVCSECMessage_nominalError_tag:
+          {
+            ESP_LOGE(TAG, "Received nominal error");
+            ESP_LOGE(TAG, "  error: %s", generic_error_to_string(vcsec_message.sub_message.nominalError.genericError));
+            break;
+          }
+          default:
+          {
+            // probably information request with public key
+            VCSEC_InformationRequest info_message = VCSEC_InformationRequest_init_default;
+            int return_code = tesla_ble_client_->parseVCSECInformationRequest(&message.payload.protobuf_message_as_bytes, &info_message);
+            if (return_code != 0)
+            {
+              ESP_LOGE(TAG, "Failed to parse incoming VSSEC message");
+              return;
+            }
+            ESP_LOGD(TAG, "Parsed VCSEC InformationRequest message");
+            // log received public key
+            ESP_LOGD(TAG, "InformationRequest public key: %s", format_hex(info_message.key.publicKey.bytes, info_message.key.publicKey.size).c_str());
+            return;
+          }
+          break;
+          }
+          break;
+        }
+
+        case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
+        {
+          CarServer_Response carserver_response = CarServer_Response_init_default;
+          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, &carserver_response);
+          if (return_code != 0)
+          {
+            ESP_LOGE(TAG, "Failed to parse incoming message");
+            return;
+          }
+          ESP_LOGD(TAG, "Parsed CarServer.Response");
+          log_carserver_response(TAG, &carserver_response);
+          if (carserver_response.has_actionStatus && !command_queue_.empty())
+          {
+            BLECommand &current_command = command_queue_.front();
+            if (current_command.domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT)
+            {
+              switch (carserver_response.actionStatus.result)
+              {
+              case CarServer_OperationStatus_E_OPERATIONSTATUS_OK:
+                if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                {
+                  ESP_LOGI(TAG, "Received OK message from domain %s, finished command", domain_to_string(domain));
+                  command_queue_.pop();
+                }
+                break;
+              case CarServer_OperationStatus_E_OPERATIONSTATUS_ERROR:
+                ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
+                if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                {
+                  current_command.state = BLECommandState::READY;
+                }
+                break;
+              }
+            }
+          }
+          break;
+        }
+        default:
+        {
+          ESP_LOGD(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
+          ESP_LOGD(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
+          break;
+        }
+        break;
+        }
+        break;
+      }
+
+      case UniversalMessage_Destination_routing_address_tag:
+      {
+        ESP_LOGD(TAG, "Received message from routing address");
+        break;
+      }
+      default:
+      {
+        ESP_LOGD(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
+        break;
+      }
+      break;
+      }
+    }
+
     void TeslaBLEVehicle::loop()
     {
       if (this->node_state != espbt::ClientState::ESTABLISHED)
@@ -373,9 +715,9 @@ namespace esphome
         return;
       }
 
-      // make sure we run at most 1 command per loop iteration
-      process_ble_write_queue();
+      process_ble_read_queue();
       process_command_queue();
+      process_ble_write_queue();
     }
 
     void TeslaBLEVehicle::update()
@@ -810,7 +1152,7 @@ namespace esphome
       }
       log_session_info(TAG, &session_info);
 
-      switch ( session_info.status )
+      switch (session_info.status)
       {
       case Signatures_Session_Info_Status_SESSION_INFO_STATUS_OK:
         ESP_LOGD(TAG, "Session is valid: key paired with vehicle");
@@ -1124,344 +1466,9 @@ namespace esphome
           break;
         }
         ESP_LOGV(TAG, "%d: - RAM left %ld", __LINE__, esp_get_free_heap_size());
-        ESP_LOGV(TAG, "BLE RX chunk: %s", format_hex(param->notify.value, param->notify.value_len).c_str());
-
-        UniversalMessage_RoutableMessage message = UniversalMessage_RoutableMessage_init_default;
-        ESP_LOGV(TAG, "Receiving message in chunks");
-        // append to buffer
-        // Ensure the buffer has enough space
-        if (this->current_size + param->notify.value_len > this->read_buffer.size())
-        {
-          ESP_LOGV(TAG, "Resizing read buffer");
-          this->read_buffer.resize(this->current_size + param->notify.value_len);
-        }
-
-        // Append the new data
-        std::memcpy(this->read_buffer.data() + this->current_size, param->notify.value, param->notify.value_len);
-        this->current_size += param->notify.value_len;
-
-        if (this->current_size >= 2)
-        {
-          int message_length = (this->read_buffer[0] << 8) | this->read_buffer[1];
-          ESP_LOGV(TAG, "Message length: %d", message_length);
-          if (message_length > tesla_ble_client_->MAX_BLE_MESSAGE_SIZE)
-          {
-            ESP_LOGW(TAG, "Message length (%d) exceeds max BLE message size", message_length);
-            this->current_size = 0;
-            this->read_buffer.clear();         // This will set the size to 0 and free unused memory
-            this->read_buffer.shrink_to_fit(); // This will reduce the capacity to fit the size
-            return;
-          }
-
-          // if len(c.inputBuffer) >= 2+msgLength {
-          if (this->current_size >= 2 + message_length)
-          {
-            ESP_LOGD(TAG, "BLE RX: %s", format_hex(this->read_buffer.data(), this->current_size).c_str());
-          }
-          else
-          {
-            ESP_LOGD(TAG, "Buffered chunk, waiting for more data..");
-            return;
-          }
-        }
-        else
-        {
-          ESP_LOGD(TAG, "Not enough data to determine message length");
-          return;
-        }
-
-        int return_code = tesla_ble_client_->parseUniversalMessageBLE(this->read_buffer.data(), this->current_size, &message);
-        if (return_code != 0)
-        {
-          ESP_LOGW(TAG, "Failed to parse incoming message (maybe chunk?)");
-          break;
-        }
-        ESP_LOGV(TAG, "Parsed UniversalMessage");
-        // clear read buffer
-        this->current_size = 0;
-        this->read_buffer.clear();         // This will set the size to 0 and free unused memory
-        this->read_buffer.shrink_to_fit(); // This will reduce the capacity to fit the size
-
-        if (not message.has_from_destination)
-        {
-          ESP_LOGW(TAG, "[x] Dropping message with missing source");
-          return;
-        }
-        UniversalMessage_Domain domain = message.from_destination.sub_destination.domain;
-
-        if (message.request_uuid.size != 0 && message.request_uuid.size != 16)
-        {
-          ESP_LOGW(TAG, "[x] Dropping message with invalid request UUID length");
-          return;
-        }
-        std::string request_uuid_hex_string = format_hex(message.request_uuid.bytes, message.request_uuid.size);
-        const char *request_uuid_hex = request_uuid_hex_string.c_str();
-
-        if (not message.has_to_destination)
-        {
-          ESP_LOGW(TAG, "[%s] Dropping message with missing destination", request_uuid_hex);
-          return;
-        }
-
-        switch (message.to_destination.which_sub_destination)
-        {
-        case UniversalMessage_Destination_domain_tag:
-        {
-          ESP_LOGD(TAG, "[%s] Dropping message to %s", request_uuid_hex, domain_to_string(domain));
-          return;
-        }
-        case UniversalMessage_Destination_routing_address_tag:
-        {
-          // Continue
-          ESP_LOGD(TAG, "Continuing message with routing address");
-          break;
-        }
-        default:
-        {
-          ESP_LOGW(TAG, "[%s] Dropping message with unrecognized destination type, %d", request_uuid_hex, message.to_destination.which_sub_destination);
-          return;
-        }
-        }
-
-        if (sizeof(message.to_destination.sub_destination.routing_address) != 16)
-        {
-          ESP_LOGW(TAG, "[%s] Dropping message with invalid address length", request_uuid_hex);
-          return;
-        }
-
-        if (message.has_signedMessageStatus && message.signedMessageStatus.operation_status == UniversalMessage_OperationStatus_E_OPERATIONSTATUS_ERROR)
-        {
-          // reset authentication for domain
-          auto session = tesla_ble_client_->getPeer(domain);
-          invalidateSession(domain);
-        }
-
-        if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
-        {
-          return_code = this->handleSessionInfoUpdate(message, domain);
-          if (return_code != 0)
-          {
-            ESP_LOGE(TAG, "Failed to handle session info update");
-            return;
-          }
-          ESP_LOGI(TAG, "[%s] Updated session info for %s", request_uuid_hex, domain_to_string(domain));
-        }
-
-        if (message.has_signedMessageStatus)
-        {
-          ESP_LOGD(TAG, "Received signed message status from domain %s", domain_to_string(domain));
-          log_message_status(TAG, &message.signedMessageStatus);
-          if (message.signedMessageStatus.operation_status == UniversalMessage_OperationStatus_E_OPERATIONSTATUS_ERROR)
-          {
-            ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
-            return;
-          }
-          else if (message.signedMessageStatus.operation_status ==
-                   UniversalMessage_OperationStatus_E_OPERATIONSTATUS_WAIT)
-          {
-            ESP_LOGI(TAG, "Received wait message from domain %s", domain_to_string(domain));
-            return;
-          }
-          else
-          {
-            ESP_LOGI(TAG, "Received success message from domain %s", domain_to_string(domain));
-          }
-          return;
-        }
-
-        if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
-        {
-          // log error and return if session info is present
-          return;
-        }
-
-        log_routable_message(TAG, &message);
-        switch (message.from_destination.which_sub_destination)
-        {
-        case UniversalMessage_Destination_domain_tag:
-        {
-          ESP_LOGI(TAG, "Received message from domain %s", domain_to_string(message.from_destination.sub_destination.domain));
-          switch (message.from_destination.sub_destination.domain)
-          {
-          case UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY:
-          {
-            VCSEC_FromVCSECMessage vcsec_message = VCSEC_FromVCSECMessage_init_default;
-            int return_code = tesla_ble_client_->parseFromVCSECMessage(&message.payload.protobuf_message_as_bytes, &vcsec_message);
-            if (return_code != 0)
-            {
-              ESP_LOGE(TAG, "Failed to parse incoming message");
-              return;
-            }
-            ESP_LOGD(TAG, "Parsed VCSEC message");
-
-            switch (vcsec_message.which_sub_message)
-            {
-            case VCSEC_FromVCSECMessage_vehicleStatus_tag:
-            {
-              ESP_LOGD(TAG, "Received vehicle status");
-              handleVCSECVehicleStatus(vcsec_message.sub_message.vehicleStatus);
-
-              if (!command_queue_.empty())
-              {
-                BLECommand &current_command = command_queue_.front();
-                switch (current_command.required_auth)
-                {
-                case BLECommand::RequiredAuth::VCSEC:
-                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
-                  {
-                    ESP_LOGI(TAG, "Received vehicle status from domain %s, finished command", domain_to_string(domain));
-                    command_queue_.pop();
-                  }
-                  break;
-                case BLECommand::RequiredAuth::INFOTAINMENT:
-                  if (current_command.state == BLECommandState::WAITING_FOR_WAKE || current_command.state == BLECommandState::WAITING_FOR_WAKE_RESPONSE)
-                  {
-                    current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
-                    current_command.retry_count = 0;
-                    break;
-                  }
-                default:
-                  break;
-                }
-              }
-              break;
-            }
-            case VCSEC_FromVCSECMessage_commandStatus_tag:
-            {
-              ESP_LOGD(TAG, "Received command status");
-              log_vcsec_command_status(TAG, &vcsec_message.sub_message.commandStatus);
-              if (!command_queue_.empty())
-              {
-                BLECommand &current_command = command_queue_.front();
-                if (current_command.required_auth == BLECommand::RequiredAuth::VCSEC)
-                {
-                  switch (vcsec_message.sub_message.commandStatus.operationStatus)
-                  {
-                  case VCSEC_OperationStatus_E_OPERATIONSTATUS_OK:
-                    if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
-                    {
-
-                      ESP_LOGI(TAG, "Received OK message from domain %s, finished command", domain_to_string(domain));
-                      command_queue_.pop();
-                    }
-                    break;
-                  case VCSEC_OperationStatus_E_OPERATIONSTATUS_WAIT:
-                    if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
-                    {
-
-                      ESP_LOGW(TAG, "Received WAIT message from domain %s, requeuing command..", domain_to_string(domain));
-                      current_command.last_tx_at = millis();
-                      current_command.state = BLECommandState::READY;
-                    }
-                    break;
-                  case VCSEC_OperationStatus_E_OPERATIONSTATUS_ERROR:
-                    ESP_LOGW(TAG, "Received error message from domain %s, retrying command..", domain_to_string(domain));
-                    if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
-                    {
-                      current_command.state = BLECommandState::READY;
-                    }
-                    break;
-                  }
-                }
-              }
-              break;
-            }
-            case VCSEC_FromVCSECMessage_whitelistInfo_tag:
-            {
-              ESP_LOGD(TAG, "Received whitelist info");
-              break;
-            }
-            case VCSEC_FromVCSECMessage_whitelistEntryInfo_tag:
-            {
-              ESP_LOGD(TAG, "Received whitelist entry info");
-              break;
-            }
-            case VCSEC_FromVCSECMessage_nominalError_tag:
-            {
-              ESP_LOGE(TAG, "Received nominal error");
-              ESP_LOGE(TAG, "  error: %s", generic_error_to_string(vcsec_message.sub_message.nominalError.genericError));
-              break;
-            }
-            default:
-            {
-              // probably information request with public key
-              VCSEC_InformationRequest info_message = VCSEC_InformationRequest_init_default;
-              int return_code = tesla_ble_client_->parseVCSECInformationRequest(&message.payload.protobuf_message_as_bytes, &info_message);
-              if (return_code != 0)
-              {
-                ESP_LOGE(TAG, "Failed to parse incoming VSSEC message");
-                return;
-              }
-              ESP_LOGD(TAG, "Parsed VCSEC InformationRequest message");
-              // log received public key
-              ESP_LOGD(TAG, "InformationRequest public key: %s", format_hex(info_message.key.publicKey.bytes, info_message.key.publicKey.size).c_str());
-              return;
-            }
-            break;
-            }
-            break;
-          }
-
-          case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
-          {
-            CarServer_Response carserver_response = CarServer_Response_init_default;
-            int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, &carserver_response);
-            if (return_code != 0)
-            {
-              ESP_LOGE(TAG, "Failed to parse incoming message");
-              return;
-            }
-            ESP_LOGD(TAG, "Parsed CarServer.Response");
-            log_carserver_response(TAG, &carserver_response);
-            if (carserver_response.has_actionStatus && !command_queue_.empty())
-            {
-              BLECommand &current_command = command_queue_.front();
-              if (current_command.required_auth == BLECommand::RequiredAuth::INFOTAINMENT)
-              {
-                switch (carserver_response.actionStatus.result)
-                {
-                case CarServer_OperationStatus_E_OPERATIONSTATUS_OK:
-                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
-                  {
-                    ESP_LOGI(TAG, "Received OK message from domain %s, finished command", domain_to_string(domain));
-                    command_queue_.pop();
-                  }
-                  break;
-                case CarServer_OperationStatus_E_OPERATIONSTATUS_ERROR:
-                  ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
-                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
-                  {
-                    current_command.state = BLECommandState::READY;
-                  }
-                  break;
-                }
-              }
-            }
-            break;
-          }
-          default:
-          {
-            ESP_LOGD(TAG, "Received message for %s", domain_to_string(message.to_destination.sub_destination.domain));
-            ESP_LOGD(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
-            break;
-          }
-          break;
-          }
-          break;
-        }
-
-        case UniversalMessage_Destination_routing_address_tag:
-        {
-          ESP_LOGD(TAG, "Received message from routing address");
-          break;
-        }
-        default:
-        {
-          ESP_LOGD(TAG, "Received message from unknown domain %s", domain_to_string(message.from_destination.sub_destination.domain));
-          break;
-        }
-        break;
-        }
+        // copy notify value to buffer
+        std::vector<unsigned char> buffer(param->notify.value, param->notify.value + param->notify.value_len);
+        ble_read_queue_.emplace(buffer);
         break;
       }
 
