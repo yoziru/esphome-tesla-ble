@@ -99,11 +99,24 @@ namespace esphome
         struct BLERXChunk
         {
             std::vector<unsigned char> buffer;
+            uint32_t received_at = millis();
 
-            BLERXChunk(std::vector<unsigned char> b) : buffer(b) {}
+            BLERXChunk(std::vector<unsigned char> b)
+                : buffer(b) {}
         };
 
-        class TeslaBLEVehicle : public PollingComponent, public ble_client::BLEClientNode
+        struct BLEResponse
+        {
+            // universal message
+            UniversalMessage_RoutableMessage message;
+            uint32_t received_at = millis();
+
+            BLEResponse(UniversalMessage_RoutableMessage m)
+                : message(m) {}
+        };
+
+        class TeslaBLEVehicle : public PollingComponent,
+                                public ble_client::BLEClientNode
         {
         public:
             TeslaBLEVehicle();
@@ -115,6 +128,7 @@ namespace esphome
             void dump_config() override;
             void set_vin(const char *vin);
             void process_command_queue();
+            void process_response_queue();
             void process_ble_read_queue();
             void process_ble_write_queue();
             void invalidateSession(UniversalMessage_Domain domain);
@@ -168,6 +182,7 @@ namespace esphome
 
         protected:
             std::queue<BLERXChunk> ble_read_queue_;
+            std::queue<BLEResponse> response_queue_;
             std::queue<BLETXChunk> ble_write_queue_;
             std::queue<BLECommand> command_queue_;
 

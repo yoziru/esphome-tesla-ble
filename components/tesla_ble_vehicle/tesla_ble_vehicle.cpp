@@ -413,13 +413,26 @@ namespace esphome
           this->ble_read_buffer_.data(), this->ble_read_buffer_.size(), &message);
       if (return_code != 0)
       {
-        ESP_LOGW(TAG, "Failed to parse incoming message (maybe chunk?)");
-        return;
+        ESP_LOGW(TAG, "BLE RX: Failed to parse incoming message");
       }
-      ESP_LOGD(TAG, "Parsed UniversalMessage");
+      ESP_LOGD(TAG, "BLE RX: Parsed UniversalMessage");
       // clear read buffer
       this->ble_read_buffer_.clear();         // This will set the size to 0 and free unused memory
       this->ble_read_buffer_.shrink_to_fit(); // This will reduce the capacity to fit the size
+
+      response_queue_.emplace(message);
+      return;
+    }
+    void TeslaBLEVehicle::process_response_queue()
+    {
+      if (response_queue_.empty())
+      {
+        return;
+      }
+
+      BLEResponse response = response_queue_.front();
+      UniversalMessage_RoutableMessage message = response.message;
+      response_queue_.pop();
 
       if (not message.has_from_destination)
       {
@@ -477,7 +490,7 @@ namespace esphome
 
       if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)
       {
-        return_code = this->handleSessionInfoUpdate(message, domain);
+        int return_code = this->handleSessionInfoUpdate(message, domain);
         if (return_code != 0)
         {
           ESP_LOGE(TAG, "Failed to handle session info update");
@@ -737,6 +750,7 @@ namespace esphome
       }
 
       process_ble_read_queue();
+      process_response_queue();
       process_command_queue();
       process_ble_write_queue();
     }
