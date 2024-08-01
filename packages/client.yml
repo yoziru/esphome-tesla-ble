@@ -51,7 +51,7 @@ button:
     name: Force data update
     icon: mdi:database-sync
     on_press:
-      - lambda: id(tesla_ble_vehicle_id)->enqueueVCSECInformationRequest();
+      - lambda: id(tesla_ble_vehicle_id)->enqueueVCSECInformationRequest(true);
     entity_category: diagnostic
 
 sensor:

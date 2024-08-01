@@ -147,7 +147,7 @@ namespace esphome
 
             int sendSessionInfoRequest(UniversalMessage_Domain domain);
             int sendVCSECInformationRequest(void);
-            void enqueueVCSECInformationRequest(void);
+            void enqueueVCSECInformationRequest(bool force = false);
 
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
