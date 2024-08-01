@@ -48,6 +48,8 @@ namespace esphome
         static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
         static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 
+        static const int PRIVATE_KEY_SIZE = 228;
+        static const int PUBLIC_KEY_SIZE = 65;
         static const int MAX_BLE_MESSAGE_SIZE = 1024; // Max size of a BLE message
         static const int RX_TIMEOUT = 1 * 1000;       // Timeout interval between receiving chunks of a message (1s)
         static const int MAX_LATENCY = 4 * 1000;      // Max allowed error when syncing vehicle clock (4s)

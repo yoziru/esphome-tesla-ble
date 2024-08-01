@@ -846,7 +846,7 @@ namespace esphome
           return result_code;
         }
 
-        unsigned char private_key_buffer[228];
+        unsigned char private_key_buffer[PRIVATE_KEY_SIZE];
         size_t private_key_length = 0;
         tesla_ble_client_->getPrivateKey(
             private_key_buffer, sizeof(private_key_buffer),
@@ -905,7 +905,7 @@ namespace esphome
         return;
       }
 
-      unsigned char private_key_buffer[228];
+      unsigned char private_key_buffer[PRIVATE_KEY_SIZE];
       size_t private_key_length = 0;
       tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
                                        &private_key_length);
@@ -942,7 +942,7 @@ namespace esphome
     {
       ESP_LOGI(TAG, "Starting pairing");
       ESP_LOGI(TAG, "Not authenticated yet, building whitelist message");
-      unsigned char whitelist_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+      unsigned char whitelist_message_buffer[VCSEC_ToVCSECMessage_size];
       size_t whitelist_message_length = 0;
       // support for wake command added to ROLE_CHARGING_MANAGER in 2024.26.x (not sure?)
       // https://github.com/teslamotors/vehicle-command/issues/232#issuecomment-2181503570
@@ -967,7 +967,7 @@ namespace esphome
 
     int TeslaBLEVehicle::sendSessionInfoRequest(UniversalMessage_Domain domain)
     {
-      unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+      unsigned char message_buffer[UniversalMessage_RoutableMessage_size];
       size_t message_length = 0;
       int return_code = tesla_ble_client_->buildSessionInfoRequestMessage(
           domain,
@@ -1011,7 +1011,7 @@ namespace esphome
     int TeslaBLEVehicle::sendVCSECActionMessage(VCSEC_RKEAction_E action)
     {
       ESP_LOGD(TAG, "Building sendVCSECActionMessage");
-      unsigned char action_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+      unsigned char action_message_buffer[UniversalMessage_RoutableMessage_size];
       size_t action_message_buffer_length = 0;
       int return_code = tesla_ble_client_->buildVCSECActionMessage(action, action_message_buffer, &action_message_buffer_length);
       if (return_code != 0)
@@ -1062,7 +1062,7 @@ namespace esphome
     int TeslaBLEVehicle::sendVCSECInformationRequest()
     {
       ESP_LOGD(TAG, "Building sendVCSECInformationRequest");
-      unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+      unsigned char message_buffer[UniversalMessage_RoutableMessage_size];
       size_t message_length = 0;
       int return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
           VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
@@ -1090,7 +1090,7 @@ namespace esphome
       command_queue_.emplace(
           UniversalMessage_Domain_DOMAIN_INFOTAINMENT, [this, action, param]()
           {
-        pb_byte_t message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+        unsigned char message_buffer[UniversalMessage_RoutableMessage_size];
         size_t message_length = 0;
         int return_code = 0;
         switch (action)
@@ -1414,7 +1414,7 @@ namespace esphome
         }
         this->node_state = espbt::ClientState::ESTABLISHED;
 
-        unsigned char private_key_buffer[228];
+        unsigned char private_key_buffer[PRIVATE_KEY_SIZE];
         size_t private_key_length = 0;
         int return_code = tesla_ble_client_->getPrivateKey(private_key_buffer, sizeof(private_key_buffer),
                                                            &private_key_length);
@@ -1425,7 +1425,7 @@ namespace esphome
         }
         ESP_LOGD(TAG, "Loaded private key");
 
-        unsigned char public_key_buffer[65];
+        unsigned char public_key_buffer[PUBLIC_KEY_SIZE];
         size_t public_key_length;
         return_code = tesla_ble_client_->getPublicKey(public_key_buffer, &public_key_length);
         if (return_code != 0)
