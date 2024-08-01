@@ -391,7 +391,7 @@ namespace esphome
 
       // check we are not overflowing the buffer before appending data
       size_t buffer_len_post_append = read_chunk_.buffer.size() + this->ble_read_buffer_.size();
-      if (buffer_len_post_append > tesla_ble_client_->MAX_BLE_MESSAGE_SIZE)
+      if (buffer_len_post_append > MAX_BLE_MESSAGE_SIZE)
       {
         ESP_LOGE(TAG, "BLE RX: Message length (%d) exceeds max BLE message size", buffer_len_post_append);
         // clear buffer
