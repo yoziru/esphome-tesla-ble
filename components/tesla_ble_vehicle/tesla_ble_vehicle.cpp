@@ -290,7 +290,7 @@ namespace esphome
         break;
 
       case BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE:
-        if (now - current_command.last_tx_at > MAX_LATENCY * 2)
+        if (now - current_command.last_tx_at > MAX_LATENCY)
         {
           ESP_LOGW(TAG, "Timeout while waiting for Infotainment SessionInfo, retrying..");
           current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
@@ -300,34 +300,38 @@ namespace esphome
 
       case BLECommandState::READY:
         // Ready to send a command
-        if (now - current_command.last_tx_at < MAX_LATENCY)
+        if (now - current_command.last_tx_at > MAX_LATENCY)
         {
-          break;
-        }
-        ESP_LOGI(TAG, "Executing command, attempt %d/%d", current_command.retry_count, MAX_RETRIES);
-        int result = current_command.execute();
-        current_command.last_tx_at = now;
-        if (result == 0)
-        {
-          ESP_LOGI(TAG, "Command executed successfully");
-          command_queue_.pop();
-        }
-        else
-        {
-          ESP_LOGE(TAG, "Command execution failed");
-          if (current_command.retry_count < MAX_RETRIES)
-          {
-            current_command.retry_count++;
-          }
-          else
+          current_command.retry_count++;
+          if (current_command.retry_count > MAX_RETRIES)
           {
             ESP_LOGE(TAG, "Failed to execute command after %d retries", MAX_RETRIES);
             command_queue_.pop();
           }
+          else
+          {
+            ESP_LOGI(TAG, "Executing command, attempt %d/%d", current_command.retry_count, MAX_RETRIES);
+            int result = current_command.execute();
+            current_command.last_tx_at = now;
+            if (result == 0)
+            {
+              ESP_LOGI(TAG, "Command executed successfully, waiting for response..");
+              current_command.state = BLECommandState::WAITING_FOR_RESPONSE;
+            }
+            else
+            {
+              ESP_LOGE(TAG, "Command execution failed, retrying..");
+            }
+          }
         }
         break;
-        // case BLECommandState::WAITING_FOR_RESPONSE:
-        //   break;
+      case BLECommandState::WAITING_FOR_RESPONSE:
+        if (now - current_command.last_tx_at > MAX_LATENCY)
+        {
+          ESP_LOGE(TAG, "Timed out while waiting for command response");
+          current_command.state = BLECommandState::READY;
+        }
+        break;
         // case BLECommandState::DONE:
         //   command_queue_.pop();
         //   break;
@@ -656,13 +660,7 @@ namespace esphome
 
     int TeslaBLEVehicle::sendVCSECActionMessage(VCSEC_RKEAction_E action)
     {
-      // int return_code = this->vcsecPreflightCheck();
-      // if (return_code != 0)
-      // {
-      //   ESP_LOGE(TAG, "Failed VCSEC preflight check");
-      //   return return_code;
-      // }
-
+      ESP_LOGD(TAG, "Building sendVCSECActionMessage");
       unsigned char action_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t action_message_buffer_length = 0;
       int return_code = tesla_ble_client_->buildVCSECActionMessage(action, action_message_buffer, &action_message_buffer_length);
@@ -696,6 +694,7 @@ namespace esphome
       }
 
       // enqueue command
+      ESP_LOGI(TAG, "Adding wakeVehicle command to queue");
       command_queue_.push(BLECommand(
           BLECommand::RequiredAuth::VCSEC, [this]()
           {
@@ -712,7 +711,7 @@ namespace esphome
 
     int TeslaBLEVehicle::sendVCSECInformationRequest()
     {
-      ESP_LOGD(TAG, "sendVCSECInformationRequest");
+      ESP_LOGD(TAG, "Building sendVCSECInformationRequest");
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t message_length = 0;
       int return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
@@ -737,6 +736,7 @@ namespace esphome
     // combined function for setting charging parameters
     int TeslaBLEVehicle::sendCarServerVehicleActionMessage(BLE_CarServer_VehicleAction action, int param)
     {
+      ESP_LOGI(TAG, "Adding sendCarServerVehicleActionMessage command to queue");
       command_queue_.push(
           BLECommand(
               BLECommand::RequiredAuth::INFOTAINMENT, [this, action, param]()
@@ -884,23 +884,6 @@ namespace esphome
       {
       case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
         this->updateIsAsleep(false);
-
-        if (!command_queue_.empty())
-        {
-          BLECommand &current_command = command_queue_.front();
-          if (current_command.state == BLECommandState::WAITING_FOR_WAKE || current_command.state == BLECommandState::WAITING_FOR_WAKE_RESPONSE)
-          {
-            switch (current_command.required_auth)
-            {
-            case BLECommand::RequiredAuth::INFOTAINMENT:
-              current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
-              current_command.retry_count = 0;
-              break;
-            default:
-              break;
-            }
-          }
-        }
         break;
       case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
         this->updateIsAsleep(true);
@@ -1300,12 +1283,70 @@ namespace esphome
             {
               ESP_LOGD(TAG, "Received vehicle status");
               handleVCSECVehicleStatus(vcsec_message.sub_message.vehicleStatus);
+
+              if (!command_queue_.empty())
+              {
+                BLECommand &current_command = command_queue_.front();
+                switch (current_command.required_auth)
+                {
+                case BLECommand::RequiredAuth::VCSEC:
+                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                  {
+                    ESP_LOGI(TAG, "Received vehicle status from domain %s, finished command", domain_to_string(domain));
+                    command_queue_.pop();
+                  }
+                  break;
+                case BLECommand::RequiredAuth::INFOTAINMENT:
+                  if (current_command.state == BLECommandState::WAITING_FOR_WAKE || current_command.state == BLECommandState::WAITING_FOR_WAKE_RESPONSE)
+                  {
+                    current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+                    current_command.retry_count = 0;
+                    break;
+                  }
+                default:
+                  break;
+                }
+              }
               break;
             }
             case VCSEC_FromVCSECMessage_commandStatus_tag:
             {
               ESP_LOGD(TAG, "Received command status");
               log_vcsec_command_status(TAG, &vcsec_message.sub_message.commandStatus);
+              if (!command_queue_.empty())
+              {
+                BLECommand &current_command = command_queue_.front();
+                if (current_command.required_auth == BLECommand::RequiredAuth::VCSEC)
+                {
+                  switch (vcsec_message.sub_message.commandStatus.operationStatus)
+                  {
+                  case VCSEC_OperationStatus_E_OPERATIONSTATUS_OK:
+                    if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                    {
+
+                      ESP_LOGI(TAG, "Received OK message from domain %s, finished command", domain_to_string(domain));
+                      command_queue_.pop();
+                    }
+                    break;
+                  case VCSEC_OperationStatus_E_OPERATIONSTATUS_WAIT:
+                    if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                    {
+
+                      ESP_LOGW(TAG, "Received WAIT message from domain %s, requeuing command..", domain_to_string(domain));
+                      current_command.last_tx_at = millis();
+                      current_command.state = BLECommandState::READY;
+                    }
+                    break;
+                  case VCSEC_OperationStatus_E_OPERATIONSTATUS_ERROR:
+                    ESP_LOGW(TAG, "Received error message from domain %s, retrying command..", domain_to_string(domain));
+                    if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                    {
+                      current_command.state = BLECommandState::READY;
+                    }
+                    break;
+                  }
+                }
+              }
               break;
             }
             case VCSEC_FromVCSECMessage_whitelistInfo_tag:
@@ -1355,6 +1396,30 @@ namespace esphome
             }
             ESP_LOGD(TAG, "Parsed CarServer.Response");
             log_carserver_response(TAG, &carserver_response);
+            if (carserver_response.has_actionStatus && !command_queue_.empty())
+            {
+              BLECommand &current_command = command_queue_.front();
+              if (current_command.required_auth == BLECommand::RequiredAuth::INFOTAINMENT)
+              {
+                switch (carserver_response.actionStatus.result)
+                {
+                case CarServer_OperationStatus_E_OPERATIONSTATUS_OK:
+                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                  {
+                    ESP_LOGI(TAG, "Received OK message from domain %s, finished command", domain_to_string(domain));
+                    command_queue_.pop();
+                  }
+                  break;
+                case CarServer_OperationStatus_E_OPERATIONSTATUS_ERROR:
+                  ESP_LOGE(TAG, "Received error message from domain %s", domain_to_string(domain));
+                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                  {
+                    current_command.state = BLECommandState::READY;
+                  }
+                  break;
+                }
+              }
+            }
             break;
           }
           default:

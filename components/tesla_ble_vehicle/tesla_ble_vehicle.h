@@ -70,7 +70,7 @@ namespace esphome
             WAITING_FOR_WAKE,
             WAITING_FOR_WAKE_RESPONSE,
             READY,
-            // WAITING_FOR_RESPONSE,
+            WAITING_FOR_RESPONSE,
             // DONE,
         };
 
