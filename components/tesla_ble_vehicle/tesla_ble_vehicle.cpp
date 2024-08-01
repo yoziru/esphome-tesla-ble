@@ -625,6 +625,8 @@ namespace esphome
       std::lock_guard<std::mutex> guard(this->write_mutex_);
       ESP_LOGD(TAG, "BLE TX: %s", format_hex(message_buffer, message_length).c_str());
       // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
+      int gattc_if = this->parent()->get_gattc_if();
+      uint16_t conn_id = this->parent()->get_conn_id();
       for (size_t i = 0; i < message_length; i += BLOCK_LENGTH)
       {
         size_t chunkLength = BLOCK_LENGTH;
@@ -634,14 +636,14 @@ namespace esphome
         }
         unsigned char chunk[chunkLength];
         std::memcpy(chunk, message_buffer + i, chunkLength);
-        auto err = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(), this->write_handle_, chunkLength, chunk, write_type, auth_req);
+        esp_err_t err = esp_ble_gattc_write_char(gattc_if, conn_id, this->write_handle_, chunkLength, chunk, write_type, auth_req);
         if (err)
         {
-          ESP_LOGW(TAG, "Error sending write value to BLE gattc server, error=%d", err);
+          ESP_LOGW(TAG, "[writeBLE] Error sending write value to BLE gattc server, error=%d", err);
           return 1;
         }
       }
-      ESP_LOGD(TAG, "Command sent.");
+      ESP_LOGD(TAG, "[writeBLE] Command sent.");
       return 0;
     }
 
