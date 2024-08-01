@@ -621,14 +621,14 @@ namespace esphome
                   }
                   else if (strcmp(current_command.execute_name.c_str(), "data update | forced") == 0)
                   {
-                    if (vcsec_message.sub_message.vehicleStatus.has_closureStatuses)
+                    switch (vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus)
                     {
+                    case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
                       ESP_LOGI(TAG, "[%s] Received vehicle status, command completed",
                                current_command.execute_name.c_str());
                       command_queue_.pop();
-                    }
-                    else
-                    {
+                      break;
+                    default:
                       ESP_LOGD(TAG, "[%s] Received vehicle status, infotainment is not awake",
                                current_command.execute_name.c_str());
                       invalidateSession(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
@@ -1423,24 +1423,31 @@ namespace esphome
         break;
       } // switch vehicleLockState
 
-      if (vehicleStatus.has_closureStatuses)
+      if (vehicleStatus.vehicleSleepStatus == VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE)
       {
         if (!this->isChargeFlapOpenSensor->has_state())
         {
           this->setChargeFlapHasState(true);
         }
-        switch (vehicleStatus.closureStatuses.chargePort)
+        if (vehicleStatus.has_closureStatuses)
         {
-        case VCSEC_ClosureState_E_CLOSURESTATE_OPEN:
-          this->updateIsChargeFlapOpen(true);
-          break;
-        case VCSEC_ClosureState_E_CLOSURESTATE_CLOSED:
+          switch (vehicleStatus.closureStatuses.chargePort)
+          {
+          case VCSEC_ClosureState_E_CLOSURESTATE_OPEN:
+            this->updateIsChargeFlapOpen(true);
+            break;
+          case VCSEC_ClosureState_E_CLOSURESTATE_CLOSED:
+            this->updateIsChargeFlapOpen(false);
+            break;
+          default:
+            break;
+          } // switch chargePort
+        }
+        else
+        {
           this->updateIsChargeFlapOpen(false);
-          break;
-        default:
-          break;
-        } // switch chargePort
-      } // switch has_closureStatuses
+        }
+      }
 
       return 0;
     }
