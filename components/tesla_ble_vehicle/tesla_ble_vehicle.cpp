@@ -810,6 +810,16 @@ namespace esphome
       }
       log_session_info(TAG, &session_info);
 
+      switch ( session_info.status )
+      {
+      case Signatures_Session_Info_Status_SESSION_INFO_STATUS_OK:
+        ESP_LOGD(TAG, "Session is valid: key paired with vehicle");
+        break;
+      case Signatures_Session_Info_Status_SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST:
+        ESP_LOGE(TAG, "Session is invalid: Key not on whitelist");
+        return 1;
+      };
+
       ESP_LOGD(TAG, "Updating session info..");
       return_code = session->updateSession(&session_info);
       if (return_code != 0)
