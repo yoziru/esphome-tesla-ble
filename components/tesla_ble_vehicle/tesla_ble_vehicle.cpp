@@ -1390,6 +1390,26 @@ namespace esphome
         this->updateisUnlocked(NAN);
         break;
       } // switch vehicleLockState
+
+      if (vehicleStatus.has_closureStatuses)
+      {
+        if (!this->isChargeFlapOpenSensor->has_state())
+        {
+          this->setChargeFlapHasState(true);
+        }
+        switch (vehicleStatus.closureStatuses.chargePort)
+        {
+        case VCSEC_ClosureState_E_CLOSURESTATE_OPEN:
+          this->updateIsChargeFlapOpen(true);
+          break;
+        case VCSEC_ClosureState_E_CLOSURESTATE_CLOSED:
+          this->updateIsChargeFlapOpen(false);
+          break;
+        default:
+          break;
+        } // switch chargePort
+      } // switch has_closureStatuses
+
       return 0;
     }
 
@@ -1439,6 +1459,7 @@ namespace esphome
 
         // set binary sensors to unknown
         this->setSensors(false);
+        this->setChargeFlapHasState(false);
 
         // TODO: charging switch off
         this->status_set_warning("BLE connection closed");

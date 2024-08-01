@@ -16,6 +16,7 @@ CONF_VIN = "vin"
 CONF_IS_ASLEEP = "is_asleep"
 CONF_IS_UNLOCKED = "is_unlocked"
 CONF_IS_USER_PRESENT = "is_user_present"
+CONF_IS_CHARGE_FLAP_OPEN = "is_charge_flap_open"
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -31,6 +32,9 @@ CONFIG_SCHEMA = (
             ).extend(),
             cv.Optional(CONF_IS_USER_PRESENT): binary_sensor.binary_sensor_schema(
                 icon="mdi:account-check", device_class=binary_sensor.DEVICE_CLASS_OCCUPANCY
+            ).extend(),
+            cv.Optional(CONF_IS_CHARGE_FLAP_OPEN): binary_sensor.binary_sensor_schema(
+                icon="mdi:ev-plug-tesla", device_class=binary_sensor.DEVICE_CLASS_DOOR
             ).extend(),
         }
     )
@@ -61,3 +65,8 @@ async def to_code(config):
         conf = config[CONF_IS_USER_PRESENT]
         bs = await binary_sensor.new_binary_sensor(conf)
         cg.add(var.set_binary_sensor_is_user_present(bs))
+
+    if CONF_IS_CHARGE_FLAP_OPEN in config:
+        conf = config[CONF_IS_CHARGE_FLAP_OPEN]
+        bs = await binary_sensor.new_binary_sensor(conf)
+        cg.add(var.set_binary_sensor_is_charge_flap_open(bs))

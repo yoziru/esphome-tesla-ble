@@ -171,6 +171,16 @@ namespace esphome
             {
                 isUserPresentSensor->publish_state(present);
             }
+            // Charge flap (chargeFlapStatus)
+            void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s) { isChargeFlapOpenSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void updateIsChargeFlapOpen(bool open)
+            {
+                isChargeFlapOpenSensor->publish_state(open);
+            }
+            void setChargeFlapHasState(bool has_state)
+            {
+                isChargeFlapOpenSensor->set_has_state(has_state);
+            }
 
             // set sensors to unknown (e.g. when vehicle is disconnected)
             void setSensors(bool has_state)
@@ -200,6 +210,7 @@ namespace esphome
             binary_sensor::CustomBinarySensor *isAsleepSensor;
             binary_sensor::CustomBinarySensor *isUnlockedSensor;
             binary_sensor::CustomBinarySensor *isUserPresentSensor;
+            binary_sensor::CustomBinarySensor *isChargeFlapOpenSensor;
 
             std::vector<unsigned char> ble_read_buffer_;
 

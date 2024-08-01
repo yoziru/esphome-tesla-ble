@@ -17,6 +17,8 @@ tesla_ble_vehicle:
     name: "User presence"
   is_unlocked:
     name: "Doors"
+  is_charge_flap_open:
+    name: "Charge flap"
 
 button:
   - platform: restart
