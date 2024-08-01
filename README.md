@@ -3,7 +3,10 @@
 This project lets you use an ESP32 device to manage charging a Tesla vehicle over BLE, using the [yoziru/tesla-ble](http://github.com/yoziru/tesla-ble) library.
 Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 
-<img src="./docs/ha-device.png" width="300">
+| Controls | Sensors | Diagnostic |
+| - | - | - |
+| <img src="./docs/ha-controls.png"> | <img src="./docs/ha-sensors.png"> | <img src="./docs/ha-diagnostic.png"> |
+
 
 ## Features
 - [x] Pair BLE key with vehicle
@@ -87,6 +90,9 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 1. Tap your NFC card to your car's center console
 1. A prompt will appear on the screen of your car asking if you want to pair the key
     > Note: if the popup does not appear, you may need to press "Pair BLE key" and tap your card again
+
+    <img src="./docs/vehicle-pair-request.png" width="500">
 1. Hit confirm on the screen
 1. To verify the key was added, tap Controls > Locks, and you should see a new key named "Unknown device" in the list
 1. [optional] Rename your key to "ESPHome BLE" to make it easier to identify
+    <img src="./docs/vehicle-locks.png" width="500">
