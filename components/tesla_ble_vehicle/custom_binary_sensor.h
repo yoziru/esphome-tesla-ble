@@ -14,7 +14,6 @@ namespace esphome
             void set_has_state(bool has_state)
             {
                 this->has_state_ = has_state;
-                // this->state = NAN;
                 this->state_callback_.call(this->state);
             }
         };
