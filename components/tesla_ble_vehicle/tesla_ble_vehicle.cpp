@@ -165,6 +165,7 @@ namespace esphome
             if (current_command.retry_count <= MAX_RETRIES)
             {
               sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+              sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
               current_command.last_tx_at = now;
               current_command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH_RESPONSE;
             }
@@ -211,6 +212,7 @@ namespace esphome
                        current_command.execute_name.c_str(), current_command.retry_count, MAX_RETRIES);
               if (current_command.retry_count <= MAX_RETRIES)
               {
+                sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
                 sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
                 current_command.last_tx_at = now;
                 current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE;
@@ -586,15 +588,26 @@ namespace esphome
                 {
                 case BLECommandState::WAITING_FOR_WAKE:
                 case BLECommandState::WAITING_FOR_WAKE_RESPONSE:
-                  ESP_LOGI(TAG, "[%s] Received vehicle status, vehicle is awake", current_command.execute_name.c_str());
-                  current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
-                  current_command.retry_count = 0;
+                  switch (vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus)
+                  {
+                  case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
+                    ESP_LOGI(TAG, "[%s] Received vehicle status, vehicle is awake",
+                             current_command.execute_name.c_str());
+                    current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+                    current_command.retry_count = 0;
+                    break;
+                  default:
+                    ESP_LOGD(TAG, "[%s] Received vehicle status, vehicle is not awake",
+                             current_command.execute_name.c_str());
+                    break;
+                  }
                   break;
 
                 case BLECommandState::WAITING_FOR_RESPONSE:
                   if (strcmp(current_command.execute_name.c_str(), "wake vehicle") == 0)
                   {
-                    ESP_LOGI(TAG, "[%s] Received vehicle status, command completed", current_command.execute_name.c_str());
+                    ESP_LOGI(TAG, "[%s] Received vehicle status, command completed",
+                             current_command.execute_name.c_str());
                     command_queue_.pop();
                   }
                   break;
@@ -795,19 +808,7 @@ namespace esphome
       if (this->node_state == espbt::ClientState::ESTABLISHED)
       {
         ESP_LOGD(TAG, "Querying vehicle status update..");
-        command_queue_.emplace(
-            UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-            [this]()
-            {
-              int return_code = this->sendVCSECInformationRequest();
-              if (return_code != 0)
-              {
-                ESP_LOGE(TAG, "Failed to send info status");
-                return return_code;
-              }
-              return 0;
-            },
-            "vehicle status update");
+        enqueueVCSECInformationRequest();
         return;
       }
     }
@@ -1152,6 +1153,22 @@ namespace esphome
         return return_code;
       }
       return 0;
+    }
+
+    void TeslaBLEVehicle::enqueueVCSECInformationRequest()
+    {
+      ESP_LOGD(TAG, "Enqueueing VCSECInformationRequest");
+      command_queue_.emplace(
+          UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, [this]()
+          {
+        int return_code = this->sendVCSECInformationRequest();
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send VCSECInformationRequest");
+          return return_code;
+        }
+        return 0; },
+          "vehicle status update");
     }
 
     // combined function for setting charging parameters
