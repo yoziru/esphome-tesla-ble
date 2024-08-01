@@ -4,7 +4,6 @@
 #include <cstring>
 #include <iterator>
 #include <vector>
-#include <mutex>
 #include <queue>
 
 #include <esp_gattc_api.h>
@@ -192,7 +191,6 @@ namespace esphome
             uint16_t handle_;
             uint16_t read_handle_{0};
             uint16_t write_handle_{0};
-            std::mutex write_mutex_;
 
             espbt::ESPBTUUID service_uuid_;
             espbt::ESPBTUUID read_uuid_;

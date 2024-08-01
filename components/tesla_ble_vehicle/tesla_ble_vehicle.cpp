@@ -5,7 +5,6 @@
 #include <pb_decode.h>
 #include <algorithm>
 #include <cstring>
-#include <mutex>
 #include <ctime>
 
 #include <car_server.pb.h>
@@ -1064,7 +1063,6 @@ namespace esphome
         const unsigned char *message_buffer, size_t message_length,
         esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req)
     {
-      std::lock_guard<std::mutex> guard(this->write_mutex_);
       ESP_LOGD(TAG, "BLE TX: %s", format_hex(message_buffer, message_length).c_str());
       // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
       for (size_t i = 0; i < message_length; i += BLOCK_LENGTH)
