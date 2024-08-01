@@ -23,10 +23,6 @@ namespace esphome
 {
   namespace tesla_ble_vehicle
   {
-    static const char *const TAG = "tesla_ble_vehicle";
-    static const char *nvs_key_infotainment = "tk_infotainment";
-    static const char *nvs_key_vcsec = "tk_vcsec";
-
     void TeslaBLEVehicle::dump_config()
     {
       ESP_LOGCONFIG(TAG, "Tesla BLE Vehicle:");
@@ -35,14 +31,15 @@ namespace esphome
     TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{})
     {
       ESP_LOGCONFIG(TAG, "Constructing Tesla BLE Vehicle component");
-      this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
-      this->read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
-      this->write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
     }
 
     void TeslaBLEVehicle::setup()
     {
       ESP_LOGCONFIG(TAG, "Setting up TeslaBLEVehicle");
+      this->service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
+      this->read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
+      this->write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
+
       this->initializeFlash();
       this->openNVSHandle();
       this->initializePrivateKey();
@@ -94,8 +91,263 @@ namespace esphome
       }
     }
 
+    void TeslaBLEVehicle::process_queue()
+    {
+      if (command_queue_.empty())
+      {
+        return;
+      }
+
+      BLECommand &current_command = command_queue_.front();
+      uint32_t now = millis();
+
+      // Overall timeout check
+      if (now - current_command.started_at > OVERALL_TIMEOUT)
+      {
+        ESP_LOGE(TAG, "Command timed out after %d ms", OVERALL_TIMEOUT);
+        command_queue_.pop();
+        return;
+      }
+
+      switch (current_command.state)
+      {
+      case BLECommandState::IDLE:
+        current_command.started_at = now;
+        switch (current_command.required_auth)
+        {
+        case BLECommand::RequiredAuth::NONE:
+          ESP_LOGD(TAG, "No auth required, executing command");
+          current_command.state = BLECommandState::READY;
+          break;
+        case BLECommand::RequiredAuth::VCSEC:
+          ESP_LOGD(TAG, "VCSEC required, initiating VCSEC auth");
+          current_command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH;
+          break;
+        case BLECommand::RequiredAuth::INFOTAINMENT:
+          ESP_LOGD(TAG, "Infotainment required, initiating Infotainment auth");
+          current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+          break;
+        }
+        break;
+      case BLECommandState::WAITING_FOR_VCSEC_AUTH:
+        if (now - current_command.last_tx_at > MAX_LATENCY)
+        {
+          auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+          if (session->isInitialized())
+          {
+            ESP_LOGD(TAG, "VCSEC authenticated");
+            switch (current_command.required_auth)
+            {
+            case BLECommand::RequiredAuth::VCSEC:
+              current_command.state = BLECommandState::READY;
+              break;
+            case BLECommand::RequiredAuth::INFOTAINMENT:
+              ESP_LOGD(TAG, "Not authenticated with Infotainment yet, initiating Infotainment auth");
+              current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+              break;
+            case BLECommand::RequiredAuth::NONE:
+              ESP_LOGE(TAG, "Invalid state: VCSEC authenticated but no auth required");
+              // pop command
+              command_queue_.pop();
+              break;
+            }
+            break;
+          }
+          else
+          {
+            ESP_LOGW(TAG, "Not authenticated yet, initiating VCSEC auth");
+            current_command.retry_count++;
+            ESP_LOGD(TAG, "Waiting for VCSEC auth, attempt %d/%d", current_command.retry_count, MAX_RETRIES);
+            if (current_command.retry_count <= MAX_RETRIES)
+            {
+              sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
+              current_command.last_tx_at = now;
+              current_command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH_RESPONSE;
+            }
+            else
+            {
+              ESP_LOGE(TAG, "Failed to authenticate with VCSEC after %d retries, giving up", MAX_RETRIES);
+              // pop command
+              command_queue_.pop();
+            }
+          }
+        }
+        break;
+
+      case BLECommandState::WAITING_FOR_VCSEC_AUTH_RESPONSE:
+        if (now - current_command.last_tx_at > MAX_LATENCY)
+        {
+          ESP_LOGW(TAG, "Timeout while waiting for VCSEC SessionInfo, retrying..");
+          current_command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH;
+        }
+        break;
+
+      case BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH:
+        if (now - current_command.last_tx_at > MAX_LATENCY)
+        {
+          if (!this->isAsleepSensor->state == false)
+          {
+            ESP_LOGW(TAG, "Car is asleep, initiating wake");
+            current_command.state = BLECommandState::WAITING_FOR_WAKE;
+          }
+          else
+          {
+            auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+            if (session->isInitialized())
+            {
+              ESP_LOGD(TAG, "Infotainment authenticated");
+              current_command.state = BLECommandState::READY;
+            }
+            else
+            {
+              ESP_LOGW(TAG, "Not authenticated yet, initiating Infotainment auth");
+              current_command.retry_count++;
+              ESP_LOGD(TAG, "Waiting for Infotainment auth, attempt %d/%d", current_command.retry_count, MAX_RETRIES);
+              if (current_command.retry_count <= MAX_RETRIES)
+              {
+                sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+                current_command.last_tx_at = now;
+                current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE;
+              }
+              else
+              {
+                ESP_LOGE(TAG, "Failed to authenticate with Infotainment after %d retries, giving up", MAX_RETRIES);
+                // pop command
+                command_queue_.pop();
+              }
+            }
+          }
+        }
+        break;
+
+      case BLECommandState::WAITING_FOR_WAKE:
+        if (now - current_command.last_tx_at > MAX_LATENCY)
+        {
+          if (current_command.retry_count > MAX_RETRIES)
+          {
+            ESP_LOGE(TAG, "Failed to wake vehicle after %d retries", MAX_RETRIES);
+            // pop command
+            command_queue_.pop();
+          }
+          else
+          {
+            ESP_LOGD(TAG, "Sending wake command, attempt %d/%d", current_command.retry_count, MAX_RETRIES);
+            int result = this->sendVCSECActionMessage(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+            if (result != 0)
+            {
+              ESP_LOGE(TAG, "Failed to send wake command");
+            }
+            current_command.last_tx_at = now;
+            current_command.retry_count++;
+            current_command.state = BLECommandState::WAITING_FOR_WAKE_RESPONSE;
+          }
+        }
+        break;
+
+      case BLECommandState::WAITING_FOR_WAKE_RESPONSE:
+        if (now - current_command.last_tx_at > MAX_LATENCY)
+        {
+          if (this->isAsleepSensor->state == false)
+          {
+            ESP_LOGI(TAG, "Vehicle is awake");
+            current_command.retry_count = 0;
+            current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+          }
+          else
+          {
+            // send info status
+            ESP_LOGD(TAG, "Polling for wake response, attempt %d/%d", current_command.retry_count, MAX_RETRIES);
+
+            // alternate between sending wake command and info status
+            // vehicle can need multiple wake commands to wake up
+            if (current_command.retry_count % 2 == 0)
+            {
+              int result = this->sendVCSECActionMessage(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+              if (result != 0)
+              {
+                ESP_LOGE(TAG, "Failed to send wake command");
+              }
+            }
+            else
+            {
+              int result = this->sendVCSECInformationRequest();
+              if (result != 0)
+              {
+                ESP_LOGE(TAG, "Failed to send info status");
+              }
+            }
+            current_command.last_tx_at = now;
+            current_command.retry_count++;
+
+            if (current_command.retry_count > MAX_RETRIES)
+            {
+              ESP_LOGE(TAG, "Failed to wake vehicle after %d retries", MAX_RETRIES);
+              // pop command
+              command_queue_.pop();
+            }
+          }
+        }
+        break;
+
+      case BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE:
+        if (now - current_command.last_tx_at > MAX_LATENCY * 2)
+        {
+          ESP_LOGW(TAG, "Timeout while waiting for Infotainment SessionInfo, retrying..");
+          current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+          current_command.retry_count++;
+        }
+        break;
+
+      case BLECommandState::READY:
+        // Ready to send a command
+        if (now - current_command.last_tx_at < MAX_LATENCY)
+        {
+          break;
+        }
+        ESP_LOGI(TAG, "Executing command, attempt %d/%d", current_command.retry_count, MAX_RETRIES);
+        int result = current_command.execute();
+        current_command.last_tx_at = now;
+        if (result == 0)
+        {
+          ESP_LOGI(TAG, "Command executed successfully");
+          command_queue_.pop();
+        }
+        else
+        {
+          ESP_LOGE(TAG, "Command execution failed");
+          if (current_command.retry_count < MAX_RETRIES)
+          {
+            current_command.retry_count++;
+          }
+          else
+          {
+            ESP_LOGE(TAG, "Failed to execute command after %d retries", MAX_RETRIES);
+            command_queue_.pop();
+          }
+        }
+        break;
+        // case BLECommandState::WAITING_FOR_RESPONSE:
+        //   break;
+        // case BLECommandState::DONE:
+        //   command_queue_.pop();
+        //   break;
+      }
+    }
+
     void TeslaBLEVehicle::loop()
     {
+      if (this->node_state != espbt::ClientState::ESTABLISHED)
+      {
+        if (!command_queue_.empty())
+        {
+          // clear command queue if not connected or on first boot (prevent restore value triggering commands)
+          command_queue_.pop();
+        }
+        return;
+      }
+
+      // make sure we run at most 1 command per loop iteration
+      process_queue();
     }
 
     void TeslaBLEVehicle::update()
@@ -103,25 +355,20 @@ namespace esphome
       ESP_LOGD(TAG, "Updating Tesla BLE Vehicle component..");
       if (this->node_state == espbt::ClientState::ESTABLISHED)
       {
-        ESP_LOGD(TAG, "Polling for vehicle status..");
-        int return_code = this->sendInfoStatus();
-        if (return_code != 0)
-        {
-          ESP_LOGE(TAG, "Failed to send info status");
-          return;
-        }
-        ESP_LOGD(TAG, "Sent info status");
+        ESP_LOGD(TAG, "Querying vehicle status update..");
+        command_queue_.push(BLECommand(
+            BLECommand::RequiredAuth::VCSEC,
+            [this]()
+            {
+              int return_code = this->sendVCSECInformationRequest();
+              if (return_code != 0)
+              {
+                ESP_LOGE(TAG, "Failed to send info status");
+                return return_code;
+              }
+              return 0;
+            }));
         return;
-      }
-      else
-      {
-        ESP_LOGD(TAG, "Vehicle is not connected");
-        // set sleep status to unknown if it's not yet
-        if (this->isAsleepSensor->has_state() == true)
-        {
-
-          this->updateIsAsleep(NAN);
-        }
       }
     }
 
@@ -398,24 +645,31 @@ namespace esphome
       return 0;
     }
 
-    int TeslaBLEVehicle::sendCommand(VCSEC_RKEAction_E action)
+    // void addCommandToQueue(
+    //     BLECommand::RequiredAuth r,
+    //     std::function<int()> command)
+    // {
+    //   command_queue_.push(BLECommand(r, command));
+    // }
+
+    int TeslaBLEVehicle::sendVCSECActionMessage(VCSEC_RKEAction_E action)
     {
-      int return_code = this->vcsecPreflightCheck();
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed VCSEC preflight check");
-        return return_code;
-      }
+      // int return_code = this->vcsecPreflightCheck();
+      // if (return_code != 0)
+      // {
+      //   ESP_LOGE(TAG, "Failed VCSEC preflight check");
+      //   return return_code;
+      // }
 
       unsigned char action_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t action_message_buffer_length = 0;
-      return_code = tesla_ble_client_->buildVCSECActionMessage(action, action_message_buffer, &action_message_buffer_length);
+      int return_code = tesla_ble_client_->buildVCSECActionMessage(action, action_message_buffer, &action_message_buffer_length);
       if (return_code != 0)
       {
         if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
         {
           auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-          session->setIsValid(false);
+          invalidateSession(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
         }
         ESP_LOGE(TAG, "Failed to build action message");
         return return_code;
@@ -439,36 +693,27 @@ namespace esphome
         return 0;
       }
 
-      int return_code = this->sendCommand(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to send wake command");
-        return return_code;
-      }
+      // enqueue command
+      command_queue_.push(BLECommand(
+          BLECommand::RequiredAuth::VCSEC, [this]()
+          {
+        int return_code = this->sendVCSECActionMessage(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send wake command");
+          return return_code;
+        }
+        return 0; }));
 
-      // get updated state after waking vehicle
-      ESP_LOGD(TAG, "Getting updated VCSEC state");
-      return_code = this->sendInfoStatus();
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to send info status");
-        return return_code;
-      }
       return 0;
     }
 
-    int TeslaBLEVehicle::sendInfoStatus()
+    int TeslaBLEVehicle::sendVCSECInformationRequest()
     {
-      int return_code = this->vcsecPreflightCheck();
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed VCSEC preflight check");
-        return return_code;
-      }
-      ESP_LOGD(TAG, "sendInfoStatus");
+      ESP_LOGD(TAG, "sendVCSECInformationRequest");
       unsigned char message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
       size_t message_length = 0;
-      return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
+      int return_code = tesla_ble_client_->buildVCSECInformationRequestMessage(
           VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
           message_buffer,
           &message_length);
@@ -487,199 +732,55 @@ namespace esphome
       return 0;
     }
 
-    int TeslaBLEVehicle::vcsecPreflightCheck()
+    // combined function for setting charging parameters
+    int TeslaBLEVehicle::sendCarServerVehicleActionMessage(BLE_CarServer_VehicleAction action, int param)
     {
-      ESP_LOGD(TAG, "Running VCSEC preflight checks..");
-      // make sure we're connected
-      if (this->node_state != espbt::ClientState::ESTABLISHED)
-      {
-        ESP_LOGW(TAG, "Not connected yet");
-        return 1;
-      }
-      // make sure we're authenticated
-
-      auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-      if (!session->isInitialized())
-      {
-        ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-        int return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY);
-        if (return_code != 0)
+      command_queue_.push(
+          BLECommand(
+              BLECommand::RequiredAuth::INFOTAINMENT, [this, action, param]()
+              {
+        pb_byte_t message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
+        size_t message_length = 0;
+        int return_code = 0;
+        switch (action)
         {
-          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
-          return return_code;
+        case SET_CHARGING_SWITCH:
+          ESP_LOGI(TAG, "[setChargingParameters] Setting charging switch");
+          return_code = tesla_ble_client_->buildChargingSwitchMessage(
+              static_cast<bool>(param), message_buffer, &message_length);
+          break;
+        case SET_CHARGING_AMPS:
+          ESP_LOGI(TAG, "[setChargingParameters] Setting charging amps");
+          return_code = tesla_ble_client_->buildChargingAmpsMessage(
+              static_cast<int32_t>(param), message_buffer, &message_length);
+          break;
+        case SET_CHARGING_LIMIT:
+          ESP_LOGI(TAG, "[setChargingParameters] Setting charging limit");
+          return_code = tesla_ble_client_->buildChargingSetLimitMessage(
+              static_cast<int32_t>(param), message_buffer, &message_length);
+          break;
+        default:
+          ESP_LOGE(TAG, "Invalid action: %d", static_cast<int>(action));
+          return 1;
         }
-        ESP_LOGI(TAG, "SessionInfoRequest sent to VEHICLE_SECURITY");
-        return 0;
-      }
-      // all good
-      ESP_LOGD(TAG, "VCSEC preflight check passed");
-      return 0;
-    }
-
-    int TeslaBLEVehicle::infotainmentPreflightCheck()
-    {
-      ESP_LOGD(TAG, "Running INFOTAINMENT preflight checks..");
-      int return_code = this->vcsecPreflightCheck();
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed VCSEC preflight check");
-        return return_code;
-      }
-
-      ESP_LOGD(TAG, "Checking if car is awake..");
-      // first handle case where state is Unknown (NAN) (e.g. on boot)
-      if (this->isAsleepSensor->has_state() == false)
-      {
-        ESP_LOGI(TAG, "Car state is unknown, sending info status");
-        return_code = this->sendInfoStatus();
         if (return_code != 0)
         {
-          ESP_LOGE(TAG, "Failed to send info status");
-          return return_code;
-        }
-      }
-
-      if (this->isAsleepSensor->state == false)
-      {
-        ESP_LOGD(TAG, "Car is awake");
-      }
-      else
-      {
-        ESP_LOGW(TAG, "Car is asleep, waking up");
-        return_code = this->wakeVehicle();
-        if (return_code != 0)
-        {
-          ESP_LOGE(TAG, "Failed to wake vehicle");
-          return return_code;
-        }
-        // fail so that we can retry after waking up
-        return 1;
-      }
-
-      // make sure we're authenticated
-
-      auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-      if (session->isInitialized() == false)
-      {
-        ESP_LOGW(TAG, "Not authenticated yet, try again in a few seconds");
-        return_code = this->sendSessionInfoRequest(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code != 0)
-        {
-          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
+          ESP_LOGE(TAG, "Failed to build charging message");
+          auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+          if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
+          {
+            invalidateSession(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
+          }
           return return_code;
         }
 
-        ESP_LOGI(TAG, "SessionInfoRequest sent to INFOTAINMENT");
-      }
-
-      // all good
-      ESP_LOGD(TAG, "Infotainment preflight check passed");
-      return 0;
-    }
-
-    int TeslaBLEVehicle::setChargingSwitch(bool isOn)
-    {
-      int return_code = this->infotainmentPreflightCheck();
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed infotainment preflight check");
-        return return_code;
-      }
-
-      ESP_LOGI(TAG, "Setting charging switch to %s", isOn ? "ON" : "OFF");
-      unsigned char charge_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
-      size_t charge_message_length = 0;
-      return_code = tesla_ble_client_->buildChargingSwitchMessage(isOn, charge_message_buffer, &charge_message_length);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to build setChargingSwitch message");
-
-        auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
+        return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+        if (return_code != 0)
         {
-          session->setIsValid(false);
+          ESP_LOGE(TAG, "Failed to send charging message");
+          return return_code;
         }
-        return return_code;
-      }
-
-      return_code = writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to send charge message");
-        return return_code;
-      }
-      return 0;
-    }
-
-    int TeslaBLEVehicle::setChargingAmps(int input_amps)
-    {
-      int return_code = this->infotainmentPreflightCheck();
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed infotainment preflight check");
-        return return_code;
-      }
-
-      // convert to uint32_t
-      uint32_t amps = input_amps;
-
-      ESP_LOGI(TAG, "Setting charge amps to %ld", amps);
-      unsigned char charge_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
-      size_t charge_message_length;
-      return_code = tesla_ble_client_->buildChargingAmpsMessage(amps, charge_message_buffer, &charge_message_length);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to build setChargingAmps message");
-        auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
-        {
-          session->setIsValid(false);
-        }
-        return return_code;
-      }
-
-      return_code = writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to send charge amps message");
-        return return_code;
-      }
-      return 0;
-    }
-
-    int TeslaBLEVehicle::setChargingLimit(int input_percent)
-    {
-      int return_code = this->infotainmentPreflightCheck();
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed infotainment preflight check");
-        return return_code;
-      }
-
-      // convert to uint32_t
-      uint32_t percent = input_percent;
-
-      ESP_LOGI(TAG, "Setting charge limit to %ld", percent);
-      unsigned char charge_message_buffer[tesla_ble_client_->MAX_BLE_MESSAGE_SIZE];
-      size_t charge_message_length;
-      return_code = tesla_ble_client_->buildChargingSetLimitMessage(percent, charge_message_buffer, &charge_message_length);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to build setChargingLimit message");
-        auto session = tesla_ble_client_->getPeer(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-        if (return_code == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION)
-        {
-          session->setIsValid(false);
-        }
-        return return_code;
-      }
-
-      return_code = writeBLE(charge_message_buffer, charge_message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-      if (return_code != 0)
-      {
-        ESP_LOGE(TAG, "Failed to send charge limit message");
-        return return_code;
-      }
+        return 0; }));
       return 0;
     }
 
@@ -714,7 +815,64 @@ namespace esphome
       {
         ESP_LOGE(TAG, "Failed to save %s session info to NVS", domain_to_string(domain));
       }
+
+      if (!command_queue_.empty())
+      {
+        BLECommand &current_command = command_queue_.front();
+        if (domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY && current_command.state == BLECommandState::WAITING_FOR_VCSEC_AUTH_RESPONSE)
+        {
+          switch (current_command.required_auth)
+          {
+          case BLECommand::RequiredAuth::VCSEC:
+            current_command.state = BLECommandState::READY;
+            current_command.retry_count = 0;
+            break;
+          case BLECommand::RequiredAuth::INFOTAINMENT:
+            current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+            current_command.retry_count = 0;
+            break;
+          case BLECommand::RequiredAuth::NONE:
+            ESP_LOGE(TAG, "Invalid state: VCSEC authenticated but no auth required");
+            // pop command
+            command_queue_.pop();
+            break;
+          }
+        }
+        else if (domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT && current_command.state == BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE)
+        {
+          current_command.state = BLECommandState::READY;
+          current_command.retry_count = 0;
+        }
+      }
       return 0;
+    }
+
+    void TeslaBLEVehicle::invalidateSession(UniversalMessage_Domain domain)
+    {
+      auto session = tesla_ble_client_->getPeer(domain);
+      session->setIsValid(false);
+      // check if we need to update the state in the command queue
+      if (!command_queue_.empty())
+      {
+        BLECommand &current_command = command_queue_.front();
+        switch (current_command.required_auth)
+        {
+        case BLECommand::RequiredAuth::VCSEC:
+          if (domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY)
+          {
+            current_command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH;
+          }
+          break;
+        case BLECommand::RequiredAuth::INFOTAINMENT:
+          if (domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT)
+          {
+            current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+          }
+          break;
+        default:
+          break;
+        }
+      }
     }
 
     int TeslaBLEVehicle::handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus)
@@ -724,6 +882,23 @@ namespace esphome
       {
       case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
         this->updateIsAsleep(false);
+
+        if (!command_queue_.empty())
+        {
+          BLECommand &current_command = command_queue_.front();
+          if (current_command.state == BLECommandState::WAITING_FOR_WAKE || current_command.state == BLECommandState::WAITING_FOR_WAKE_RESPONSE)
+          {
+            switch (current_command.required_auth)
+            {
+            case BLECommand::RequiredAuth::INFOTAINMENT:
+              current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+              current_command.retry_count = 0;
+              break;
+            default:
+              break;
+            }
+          }
+        }
         break;
       case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
         this->updateIsAsleep(true);
@@ -915,23 +1090,6 @@ namespace esphome
           break;
         }
         ESP_LOGD(TAG, "Loaded public key");
-
-        return_code = this->vcsecPreflightCheck();
-        if (return_code != 0)
-        {
-          ESP_LOGE(TAG, "Failed to send SessionInfoRequest");
-          break;
-        }
-        ESP_LOGI(TAG, "SessionInfoRequest sent to VEHICLE_SECURITY");
-
-        return_code = this->sendInfoStatus();
-        if (return_code != 0)
-        {
-          ESP_LOGE(TAG, "Failed to send info status");
-          break;
-        }
-        ESP_LOGI(TAG, "Sent initial info status request");
-
         break;
       }
 
@@ -1073,7 +1231,7 @@ namespace esphome
         {
           // reset authentication for domain
           auto session = tesla_ble_client_->getPeer(domain);
-          session->setIsValid(false);
+          invalidateSession(domain);
         }
 
         if (message.which_payload == UniversalMessage_RoutableMessage_session_info_tag)

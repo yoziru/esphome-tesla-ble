@@ -5,6 +5,7 @@
 #include <iterator>
 #include <vector>
 #include <mutex>
+#include <queue>
 
 #include <esp_gattc_api.h>
 #include <esphome/components/binary_sensor/binary_sensor.h>
@@ -16,6 +17,7 @@
 
 #include <universal_message.pb.h>
 #include <vcsec.pb.h>
+#include <errors.h>
 
 #include "custom_binary_sensor.h"
 
@@ -24,6 +26,13 @@ namespace TeslaBLE
     class Client;
 }
 
+typedef enum BLE_CarServer_VehicleAction_E
+{
+    SET_CHARGING_SWITCH,
+    SET_CHARGING_AMPS,
+    SET_CHARGING_LIMIT
+} BLE_CarServer_VehicleAction;
+
 namespace esphome
 {
 
@@ -31,13 +40,60 @@ namespace esphome
     {
         namespace espbt = esphome::esp32_ble_tracker;
 
+        static const char *const TAG = "tesla_ble_vehicle";
+        static const char *nvs_key_infotainment = "tk_infotainment";
+        static const char *nvs_key_vcsec = "tk_vcsec";
+
         static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";
         static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
         static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 
-        static const int RX_TIMEOUT = 1 * 1000;  // Timeout interval between receiving chunks of a mesasge (1s)
+        static const int RX_TIMEOUT = 1 * 1000;  // Timeout interval between receiving chunks of a message (1s)
         static const int MAX_LATENCY = 4 * 1000; // Max allowed error when syncing vehicle clock (4s)
         static const int BLOCK_LENGTH = 20;      // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
+        static const int MAX_RETRIES = 5;        // Max number of retries for a command
+        static const int OVERALL_TIMEOUT = 30 * 1000; // Overall timeout for a command (30s)
+        const uint32_t AUTH_TIMEOUT = 5 * 1000; // 5 seconds
+        const uint32_t WAKE_TIMEOUT = 10 * 1000; // 10 seconds
+        const uint32_t COMMAND_TIMEOUT = 5 * 1000; // 5 seconds
+        const int MAX_AUTH_RETRIES = 5;
+        const int MAX_WAKE_RETRIES = 5;
+        const int MAX_COMMAND_RETRIES = 3;
+
+        enum class BLECommandState
+        {
+            IDLE,
+            WAITING_FOR_VCSEC_AUTH,
+            WAITING_FOR_VCSEC_AUTH_RESPONSE,
+            WAITING_FOR_INFOTAINMENT_AUTH,
+            WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE,
+            WAITING_FOR_WAKE,
+            WAITING_FOR_WAKE_RESPONSE,
+            READY,
+            // WAITING_FOR_RESPONSE,
+            // DONE,
+        };
+
+        struct BLECommand
+        {
+
+            enum class RequiredAuth
+            {
+                NONE,
+                VCSEC,
+                INFOTAINMENT,
+            };
+            RequiredAuth required_auth;
+            std::function<int()> execute;
+            std::string execute_name;
+            BLECommandState state;
+            uint32_t started_at = millis();
+            uint32_t last_tx_at = 0;
+            uint8_t retry_count = 0;
+
+            BLECommand(RequiredAuth r, std::function<int()> e, std::string n = "")
+                : required_auth(r), execute(e), execute_name(n), state(BLECommandState::IDLE) {}
+        };
 
         class TeslaBLEVehicle : public PollingComponent, public ble_client::BLEClientNode
         {
@@ -50,6 +106,8 @@ namespace esphome
                                      esp_ble_gattc_cb_param_t *param) override;
             void dump_config() override;
             void set_vin(const char *vin);
+            void process_queue();
+            void invalidateSession(UniversalMessage_Domain domain);
 
             void regenerateKey();
             int startPair(void);
@@ -60,15 +118,16 @@ namespace esphome
             int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
             int handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus);
 
+            // void addCommandToQueue(
+            //     RequiredAuth r,
+            //     std::function<int()> command);
+
             int wakeVehicle(void);
-            int sendCommand(VCSEC_RKEAction_E action);
+            int sendVCSECActionMessage(VCSEC_RKEAction_E action);
+            int sendCarServerVehicleActionMessage(BLE_CarServer_VehicleAction action, int param);
+
             int sendSessionInfoRequest(UniversalMessage_Domain domain);
-            int sendInfoStatus(void);
-            int setChargingAmps(int input_amps);
-            int setChargingLimit(int input_percent);
-            int setChargingSwitch(bool isOn);
-            int vcsecPreflightCheck(void);
-            int infotainmentPreflightCheck(void);
+            int sendVCSECInformationRequest(void);
 
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
@@ -102,6 +161,9 @@ namespace esphome
             }
 
         protected:
+            // add a command to the command queue
+            std::queue<BLECommand> command_queue_;
+
             TeslaBLE::Client *tesla_ble_client_;
             uint32_t storage_handle_;
             uint16_t handle_;
