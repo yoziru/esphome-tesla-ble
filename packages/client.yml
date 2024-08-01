@@ -32,6 +32,7 @@ button:
     icon: mdi:key-wireless
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->startPair();
+    entity_category: diagnostic
 
   - platform: template
     name: Wake up
@@ -61,6 +62,7 @@ sensor:
     name: "BLE Signal"
     icon: mdi:bluetooth
     update_interval: 60s
+    entity_category: diagnostic
 
 switch:
   - platform: template
