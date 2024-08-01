@@ -1,16 +1,23 @@
 # ESPHome Tesla BLE
 
-This project lets you use an ESP32 device to manage charging a Tesla vehicle over BLE. Tested with M5Stack NanoC6 and Tesla firmware 2024.20.9.
+This project lets you use an ESP32 device to manage charging a Tesla vehicle over BLE, using the [yoziru/tesla-ble](http://github.com/yoziru/tesla-ble) library.
+Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 
 <img src="./docs/ha-device.png" width="300">
 
 ## Features
 - [x] Pair BLE key with vehicle
-- [x] Wake up vehicle (requires firmware 2024.26.x or newer when using the [Charging Manager](https://github.com/teslamotors/vehicle-command/blob/main/pkg/protocol/protocol.md#roles) role)
+- [x] Wake up vehicle
+  - [ ] Use [Charging Manager](https://github.com/teslamotors/vehicle-command/blob/main/pkg/protocol/protocol.md#roles) role (wake command [not yet supported](https://github.com/teslamotors/vehicle-command/issues/232#issuecomment-2181503570) as of 2024.26.3.1)
 - [x] Set charging amps
 - [x] Set charging limit (percent)
 - [x] Turn on/off charging
-- [x] Sleep state sensor 
+- [x] BLE information sensors
+  - [x] Asleep / awake
+  - [x] Doors locked / unlocked
+  - [x] User present / not present
+  - [x] Charging flap open / closed (only when vehicle is awake)
+  - [x] BLE signal strength 
 
 ## Usage
 
