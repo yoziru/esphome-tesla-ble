@@ -17,6 +17,8 @@ tesla_ble_vehicle:
     name: "User presence"
   is_unlocked:
     name: "Doors"
+  is_charge_flap_open:
+    name: "Charge flap"
 
 button:
   - platform: restart
@@ -49,7 +51,7 @@ button:
     name: Force data update
     icon: mdi:database-sync
     on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendInfoStatus();
+      - lambda: id(tesla_ble_vehicle_id)->enqueueVCSECInformationRequest(true);
     entity_category: diagnostic
 
 sensor:
@@ -66,9 +68,9 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
-      - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(true);
+      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 1);
     turn_off_action:
-      - lambda: id(tesla_ble_vehicle_id)->setChargingSwitch(false);
+      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 0);
 
   - platform: ble_client
     ble_client_id: ble_tesla_id
@@ -91,7 +93,7 @@ number:
       then:
         - lambda: |-
             int var_x = static_cast<int>(x);
-            id(tesla_ble_vehicle_id)->setChargingAmps(var_x);
+            id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, var_x);
   - platform: template
     name: "Charging limit"
     id: charging_limit
@@ -107,4 +109,4 @@ number:
       then:
         - lambda: |-
             int var_x = static_cast<int>(x);
-            id(tesla_ble_vehicle_id)->setChargingLimit(var_x);
+            id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_LIMIT, var_x);

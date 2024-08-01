@@ -6,3 +6,4 @@ secrets.yaml
 .venv
 firmware.bin.gz
 foo
+*.log

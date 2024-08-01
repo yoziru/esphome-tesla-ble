@@ -4,13 +4,13 @@ PROJECT := tesla-ble
 TARGET := $(PROJECT)-$(BOARD).yml
 HOST_SUFFIX := ""
 
-compile: .esphome/build/$(PROJECT)/.pioenvs/tesla-ble/firmware.bin .esphome/build/$(PROJECT)/$(TARGET).touchfile  ## Read the configuration and compile the binary.
+compile: .esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin .esphome/build/$(PROJECT)/$(TARGET).touchfile  ## Read the configuration and compile the binary.
 
 .esphome/build/$(PROJECT)/$(TARGET).touchfile: .venv/touchfile $(TARGET) packages/*.yml boards/$(BOARD).yml  ## Validate the configuration and create a binary.
 	. .venv/bin/activate; esphome compile $(TARGET)
 	touch .esphome/build/$(TARGET).touchfile
 
-.esphome/build/$(PROJECT)/.pioenvs/tesla-ble/firmware.bin: .esphome/build/$(PROJECT)/$(TARGET).touchfile ## Create the binary.
+.esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin: .esphome/build/$(PROJECT)/$(TARGET).touchfile ## Create the binary.
 
 upload: .esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin ## Validate the configuration, create a binary, upload it, and start logs.
 	if [ "$(HOST_SUFFIX)" = "" ]; then \
