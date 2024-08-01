@@ -280,7 +280,7 @@ void log_destination(const char *tag,
         ESP_LOGD(tag, "  domain: %s", domain_to_string(dest->sub_destination.domain));
         break;
     case UniversalMessage_Destination_routing_address_tag:
-        ESP_LOGD(tag, "  routing_address: %s", format_hex(dest->sub_destination.routing_address, 16).c_str());
+        ESP_LOGD(tag, "  routing_address: %s", format_hex(dest->sub_destination.routing_address.bytes, dest->sub_destination.routing_address.size).c_str());
         break;
     default:
         ESP_LOGD(tag, "  unknown sub_destination");
@@ -403,8 +403,14 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
         log_signature_data(tag, &msg->sub_sigData.signature_data);
     }
 
-    // ESP_LOGD(tag, "  request_uuid: %s", format_hex(msg->request_uuid, 16).c_str());
-    ESP_LOGD(tag, "  uuid: %s", format_hex(msg->uuid, 16).c_str());
+    if (msg->request_uuid.size > 0)
+    {
+        ESP_LOGD(tag, "  request_uuid: %s", format_hex(msg->request_uuid.bytes, msg->request_uuid.size).c_str());
+    }
+    if (msg->uuid.size > 0)
+    {
+        ESP_LOGD(tag, "  uuid: %s", format_hex(msg->uuid.bytes, msg->uuid.size).c_str());
+    }
     ESP_LOGD(tag, "  flags: %" PRIu32, msg->flags);
 }
 

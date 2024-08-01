@@ -492,7 +492,7 @@ namespace esphome
       }
       }
 
-      if (sizeof(message.to_destination.sub_destination.routing_address) != 16)
+      if (message.to_destination.sub_destination.routing_address.size != 16)
       {
         ESP_LOGW(TAG, "[%s] Dropping message with invalid address length", request_uuid_hex);
         return;
