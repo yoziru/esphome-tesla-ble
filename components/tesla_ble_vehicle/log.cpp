@@ -572,17 +572,17 @@ const char *carserver_operation_status_to_string(CarServer_OperationStatus_E sta
 
 void log_carserver_response(const char *tag, const CarServer_Response *msg)
 {
-    ESP_LOGI(tag, "CarServerResponse:");
+    ESP_LOGD(tag, "CarServerResponse:");
     if (msg->has_actionStatus)
     {
-        ESP_LOGI(tag, "  ActionStatus:");
-        ESP_LOGI(tag, "    result: %s", carserver_operation_status_to_string(msg->actionStatus.result));
+        ESP_LOGD(tag, "  ActionStatus:");
+        ESP_LOGD(tag, "    result: %s", carserver_operation_status_to_string(msg->actionStatus.result));
         if (msg->actionStatus.has_result_reason)
         {
             switch (msg->actionStatus.result_reason.which_reason)
             {
             case CarServer_ResultReason_plain_text_tag:
-                ESP_LOGI(tag, "    reason: %s", msg->actionStatus.result_reason.reason.plain_text);
+                ESP_LOGD(tag, "    reason: %s", msg->actionStatus.result_reason.reason.plain_text);
                 break;
             default:
                 ESP_LOGD(tag, "    unknown reason");
