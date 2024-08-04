@@ -64,6 +64,7 @@ switch:
   - platform: template
     name: "Charger switch"
     optimistic: true
+    assumed_state: true # we can't read the state of the charger over
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 1);
