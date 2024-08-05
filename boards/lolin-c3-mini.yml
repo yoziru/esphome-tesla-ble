@@ -1,0 +1,13 @@
+substitutions:
+  friendly_name: "LolinC3 Tesla BLE"
+  devicename: "lolinc3-tesla-ble"
+  device_description: "Lolin C3 Mini"
+
+esp32:
+  board: lolin_c3_mini
+  flash_size: 4MB
+  variant: esp32c3
+  framework:
+    type: esp-idf
+    version: 5.2.2
+    platform_version: 6.7.0
