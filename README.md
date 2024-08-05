@@ -24,6 +24,8 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 
 ## Usage
 
+> For ESPHome dashboard, see [`tesla-ble-example.yml`](./tesla-ble.example.yml)
+
 ### Pre-requisites
 - Python 3.10+
 - GNU Make

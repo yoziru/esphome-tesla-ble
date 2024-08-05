@@ -1,0 +1,14 @@
+esp32_ble_tracker:
+  scan_parameters:
+    # Depending on the model and state, BLE advertisements come every 20ms or every 150ms.
+    interval: 150ms
+    # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
+    continuous: false
+
+wifi:
+  # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
+  on_connect:
+    - esp32_ble_tracker.start_scan:
+        continuous: true
+  on_disconnect:
+    - esp32_ble_tracker.stop_scan:

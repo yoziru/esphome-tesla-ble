@@ -1,7 +1,12 @@
 substitutions:
-  friendly_name: ESPHome Tesla BLE
+  friendly_name: Tesla BLE
   device_name: tesla-ble
-  device_description:  Tesla BLE
+  device_description: Interact with Tesla vehicles over BLE using ESPHome and Home Assistant
+
+packages:
+  board: !include board.yml
+  common: !include common.yml
+  project: !include project.yml
 
 esphome:
   name: ${device_name}
@@ -10,7 +15,7 @@ esphome:
   comment: ${device_description}
   project:
     name: yoziru.esphome-tesla-ble
-    version: "2024.8.0"
+    version: "2024.8.1"
   libraries:
     - https://github.com/yoziru/tesla-ble.git#v2.2.1
 
@@ -25,26 +30,11 @@ ota:
   platform: esphome
   password: !secret ota_password
 
-
-esp32_ble_tracker:
-  scan_parameters:
-    # Depending on the model and state, BLE advertisements come every 20ms or every 150ms.
-    interval: 150ms
-    # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
-    continuous: false
-
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     password: !secret wifi_hotspot_password
-  # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
-  on_connect:
-    - esp32_ble_tracker.start_scan:
-       continuous: true
-  on_disconnect:
-    - esp32_ble_tracker.stop_scan:
 
 captive_portal:
-

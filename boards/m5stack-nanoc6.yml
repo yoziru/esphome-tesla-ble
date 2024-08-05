@@ -1,22 +1,17 @@
 substitutions:
-  friendly_name: "NanoC6 Tesla BLE"
-  devicename: "nanoc6-tesla-ble"
-  device_description: "M5NanoC6"
-
-esp32:
   board: esp32-c6-devkitm-1
   variant: esp32c6
   flash_size: 4MB
+
+esp32:
   framework:
-    type: esp-idf
-    version: 5.3.0
-    platform_version: 6.8.1
     sdkconfig_options:
       CONFIG_OPENTHREAD_ENABLED: n
       CONFIG_ENABLE_WIFI_STATION: y
       CONFIG_USE_MINIMAL_MDNS: y
       CONFIG_ESPTOOLPY_FLASHSIZE_4MB: y
 
+# Board specific entities
 light:
   - platform: status_led
     name: "Status LED"

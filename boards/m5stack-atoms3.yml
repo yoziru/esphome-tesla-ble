@@ -1,17 +1,9 @@
 substitutions:
-  friendly_name: "AtomS3 Tesla BLE"
-  devicename: "atoms3-tesla-ble"
-  device_description: "M5AtomS3"
-
-esp32:
-  board: m5stack-atoms3
+  board: esp32-s3-devkitc-1
   variant: esp32s3
   flash_size: 8MB
-  framework:
-    type: esp-idf
-    version: 5.3.0
-    platform_version: 6.8.1
 
+# Board specific entities
 # Output that blinks the LED
 output:
   - platform: template

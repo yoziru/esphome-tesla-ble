@@ -1,0 +1,25 @@
+substitutions:
+  # all substitutions for this project
+  espidf_version: 5.3.0
+  platformio_version: 6.8.1
+  friendly_name: Tesla BLE
+  device_name: tesla-ble
+  device_description: Tesla BLE
+  board: esp32dev
+  variant: esp32
+  flash_size: 4MB
+  ble_mac_address: "A0:B1:C2:D3:E4:F5" # vehicle BLE MAC address
+  tesla_vin: "5YJ30123456789ABC" # vehicle VIN
+  charging_amps_max: "32"
+
+external_components: !include packages/external_components.dashboard.yml
+
+packages:
+  base: !include packages/base.yml
+  client: !include packages/client.yml
+  common: !include packages/common.yml
+  # listener: !include packages/listener.yml # Uncomment this to scan find your VIN BLE MAC address
+  # for ESPHome Dashboard, use this instead of external_components
+
+dashboard_import:
+  package_import_url: github://yoziru/esphome-tesla-ble/tesla-ble.example.yml

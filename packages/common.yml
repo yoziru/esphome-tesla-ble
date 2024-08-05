@@ -9,9 +9,9 @@ sensor:
     update_interval: 60s
     icon: mdi:clock-outline
 
-time:
-  - platform: homeassistant
-    id: esptime
+binary_sensor:
+  - platform: status
+    name: "Status"
 
 text_sensor:
   - platform: version
@@ -21,3 +21,12 @@ text_sensor:
     ip_address:
       name: "IP Address"
 
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+button:
+  - platform: restart
+    name: Restart
+    icon: mdi:restart
+    entity_category: diagnostic

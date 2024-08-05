@@ -1,0 +1,12 @@
+substitutions:
+  espidf_version: "5.3.0"
+  platformio_version: "6.8.1"
+
+esp32:
+  board: $board
+  variant: $variant
+  flash_size: $flash_size
+  framework:
+    type: esp-idf
+    version: $espidf_version
+    platform_version: $platformio_version
