@@ -772,11 +772,14 @@ namespace esphome
                     break;
                   }
                 }
-                ESP_LOGE(TAG, "[%s] Received CarServer ERROR message, retrying command..",
-                         current_command.execute_name.c_str());
-                if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                else
                 {
-                  current_command.state = BLECommandState::READY;
+                  ESP_LOGE(TAG, "[%s] Received CarServer ERROR message, retrying command..",
+                           current_command.execute_name.c_str());
+                  if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                  {
+                    current_command.state = BLECommandState::READY;
+                  }
                 }
                 break;
               }
