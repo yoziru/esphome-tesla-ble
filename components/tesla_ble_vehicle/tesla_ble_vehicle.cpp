@@ -259,9 +259,15 @@ namespace esphome
         {
           if (this->isAsleepSensor->state == false)
           {
-            ESP_LOGI(TAG, "[%s] Vehicle is awake", current_command.execute_name.c_str());
-            current_command.retry_count = 0;
-            current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+            if (strcmp(current_command.execute_name.c_str(), "wake vehicle") == 0) {
+              ESP_LOGI(TAG, "[%s] Vehicle is awake, command completed", current_command.execute_name.c_str());
+              command_queue_.pop();
+            }
+            else {
+              ESP_LOGI(TAG, "[%s] Vehicle is awake, waiting for infotainment auth", current_command.execute_name.c_str());
+              current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+              current_command.retry_count = 0;
+            }
           }
           else
           {
@@ -335,7 +341,15 @@ namespace esphome
               ESP_LOGI(TAG, "[%s] Command executed, waiting for response..",
                        current_command.execute_name.c_str());
               current_command.last_tx_at = now;
-              current_command.state = BLECommandState::WAITING_FOR_RESPONSE;
+
+              if (strcmp(current_command.execute_name.c_str(), "wake vehicle") == 0)
+              {
+                current_command.state = BLECommandState::WAITING_FOR_WAKE_RESPONSE;
+              }
+              else
+              {
+                current_command.state = BLECommandState::WAITING_FOR_RESPONSE;
+              }
             }
             else
             {
@@ -590,7 +604,7 @@ namespace esphome
                   switch (vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus)
                   {
                   case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
-                    if (strcmp(current_command.execute_name.c_str(), "wake vehicle | forced") == 0)
+                    if (strcmp(current_command.execute_name.c_str(), "wake vehicle") == 0)
                     {
                       ESP_LOGI(TAG, "[%s] Received vehicle status, command completed",
                                current_command.execute_name.c_str());
