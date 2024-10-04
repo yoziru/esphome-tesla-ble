@@ -29,7 +29,8 @@ typedef enum BLE_CarServer_VehicleAction_E
 {
     SET_CHARGING_SWITCH,
     SET_CHARGING_AMPS,
-    SET_CHARGING_LIMIT
+    SET_CHARGING_LIMIT,
+    SET_SENTRY_SWITCH
 } BLE_CarServer_VehicleAction;
 
 namespace esphome
