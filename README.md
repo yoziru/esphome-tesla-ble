@@ -20,7 +20,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
   - [x] Doors locked / unlocked
   - [x] User present / not present
   - [x] Charging flap open / closed (only when vehicle is awake)
-  - [x] BLE signal strength 
+  - [x] BLE signal strength
 
 ## Usage
 
@@ -36,7 +36,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 1. Enable the `tesla_ble_listener` package in `packages/base.yml` and build the firmware.
 1. Flash the firmware to your ESP32 device.
 1. Open the ESPHome logs in Home Assistant andto wake it up. watch for the "Found Tesla vehicle" message, which will contain the BLE MAC address of your vehicle.
-    > Note: The vehicle must be in range and awake for the BLE MAC address to be discovered. If the vehicle is not awake, open the Tesla app and run any command 
+    > Note: The vehicle must be in range and awake for the BLE MAC address to be discovered. If the vehicle is not awake, open the Tesla app and run any command
     ```log
     [00:00:00][D][tesla_ble_listener:044]: Parsing device: [CC:BB:D1:E2:34:F0]: BLE Device name 1
     [00:00:00][D][tesla_ble_listener:044]: Parsing device: [19:8A:BB:C3:D2:1F]: 
@@ -80,7 +80,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 
 ### Adding the device to Home Assistant
 
-1. In Home Assistant, go to Settings > Devices & Services. If your device is  discovered automatically, you can add it by clicking the "Configure" button by the discovered device. If not, click the "+ Add integration" button and select "ESPHome" as the integration and enter the IP address of your device.
+1. In Home Assistant, go to Settings > Devices & Services. If your device is discovered automatically, you can add it by clicking the "Configure" button by the discovered device. If not, click the "+ Add integration" button and select "ESPHome" as the integration and enter the IP address of your device.
 2. Enter the API encryption key from the `secrets.yaml` file when prompted.
 3. That's it! You should now see the device in Home Assistant and be able to control it.
 
