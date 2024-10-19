@@ -35,7 +35,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 1. Copy and rename `secrets.yaml.example` to `secrets.yaml` and update it with your WiFi credentials (`wifi_ssid` and `wifi_password`) and vehicle VIN (`tesla_vin`).
 1. Enable the `tesla_ble_listener` package in `packages/base.yml` and build the firmware.
 1. Flash the firmware to your ESP32 device.
-1. Open the ESPHome logs in Home Assistant andto wake it up. watch for the "Found Tesla vehicle" message, which will contain the BLE MAC address of your vehicle.
+1. Open the ESPHome logs in Home Assistant and wake it up. watch for the "Found Tesla vehicle" message, which will contain the BLE MAC address of your vehicle.
     > Note: The vehicle must be in range and awake for the BLE MAC address to be discovered. If the vehicle is not awake, open the Tesla app and run any command
     ```log
     [00:00:00][D][tesla_ble_listener:044]: Parsing device: [CC:BB:D1:E2:34:F0]: BLE Device name 1
