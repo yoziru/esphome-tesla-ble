@@ -54,7 +54,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 ### Building and flashing ESP32 firmware
 1. Connect your ESP32 device to your computer via USB
 1. Copy and rename `secrets.yaml.example` to `secrets.yaml` and update it with your WiFi credentials (`wifi_ssid` and `wifi_password`) and vehicle details (`ble_mac_address` and `tesla_vin`)
-1. Build the image with [ESPHome](https://esphome.io/guides/getting_started_command_line.html)
+1. Build the image with [ESPHome](https://esphome.io/guides/getting_started_command_line.html). Alternate boards are listed in the `boards/` directory.
 
     ```sh
     make compile BOARD=m5stack-nanoc6
