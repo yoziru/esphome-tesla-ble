@@ -63,7 +63,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 1. Upload/flash the firmware to the board.
 
     ```sh
-    make upload
+    make upload BOARD=m5stack-nanoc6
     ```
 
 1. After flashing, you can use the log command to monitor the logs from the device. The host suffix is the last part of the device name in the ESPHome dashboard (e.g. `5b2ac7`).
