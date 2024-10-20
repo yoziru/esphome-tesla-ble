@@ -18,7 +18,6 @@ packages:
   base: !include packages/base.yml
   client: !include packages/client.yml
   common: !include packages/common.yml
-  # listener: !include packages/listener.yml # Uncomment this to scan find your VIN BLE MAC address
   # for ESPHome Dashboard, use this instead of external_components
 
 dashboard_import:
