@@ -15,7 +15,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 - [x] Set charging amps
 - [x] Set charging limit (percent)
 - [x] Turn on/off charging
-- [x] Turn on/off climate
+- [x] Turn on/off HVAC
 - [x] BLE information sensors
   - [x] Asleep / awake
   - [x] Doors locked / unlocked
