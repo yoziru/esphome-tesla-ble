@@ -32,6 +32,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 ### Pre-requisites
 - Python 3.10+
 - GNU Make
+- Compatible ESP32 device
 
 ### Finding the BLE MAC address of your vehicle
 
