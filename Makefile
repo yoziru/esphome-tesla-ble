@@ -30,7 +30,7 @@ deps: .venv/touchfile ## Create the virtual environment and install the requirem
 
 .venv/touchfile: requirements.txt
 	test -d .venv || python -m venv .venv
-	. .venv/bin/activate && pip install --break-system-packages -Ur requirements.txt
+	. .venv/bin/activate && pip install -Ur requirements.txt
 	touch .venv/touchfile
 
 .PHONY: clean
