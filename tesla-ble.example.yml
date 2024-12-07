@@ -3,7 +3,7 @@ substitutions:
   name: tesla-ble-68d2a4
   friendly_name: Tesla BLE - Louie
   device_description: Interact with Tesla vehicles over BLE using ESPHome and Home Assistant
-  esphome_version: "2024.10.3"
+  esphome_version: "2024.11.3"
   device_name: tesla-ble
   ble_mac_address: !secret ble_mac_address_louie
   tesla_vin: !secret tesla_vin_louie
@@ -15,8 +15,8 @@ esp32:
   flash_size: 4MB
   framework:
     type: esp-idf
-    version: "5.3.0"
-    platform_version: "6.8.1"
+    version: "5.3.1"
+    platform_version: "6.9.0"
 
 packages:
   client:
