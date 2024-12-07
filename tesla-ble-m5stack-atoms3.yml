@@ -4,7 +4,6 @@ packages:
   base: !include packages/base.yml
   device_base: !include boards/m5stack-atoms3.yml
   client: !include packages/client.yml
-  # listener: !include packages/listener.yml # Uncomment this to scan find your VIN BLE MAC address
   # for ESPHome Dashboard, use this instead of external_components
 
 dashboard_import:
