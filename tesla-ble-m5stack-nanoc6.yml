@@ -4,7 +4,6 @@ packages:
   base: !include packages/base.yml
   device_base: !include boards/m5stack-nanoc6.yml
   client: !include packages/client.yml
-  # listener: !include packages/listener.yml # Uncomment this to scan find your VIN BLE MAC address
 
 dashboard_import:
   package_import_url: github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml
