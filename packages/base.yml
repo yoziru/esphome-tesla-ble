@@ -7,6 +7,7 @@ packages:
   board: !include board.yml
   common: !include common.yml
   project: !include project.yml
+  # listener: !include packages/listener.yml # Uncomment this to scan find your VIN BLE MAC address
 
 esphome:
   name: ${device_name}
