@@ -32,8 +32,7 @@ typedef enum BLE_CarServer_VehicleAction_E
     SET_CHARGING_LIMIT,
     SET_SENTRY_SWITCH,
     SET_HVAC_SWITCH,
-    SET_HVAC_STEERING_HEATER_SWITCH,
-    SET_OPEN_CHARGE_PORT_DOOR
+    SET_HVAC_STEERING_HEATER_SWITCH
 } BLE_CarServer_VehicleAction;
 
 namespace esphome
