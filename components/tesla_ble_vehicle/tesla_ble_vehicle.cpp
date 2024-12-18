@@ -1242,6 +1242,12 @@ namespace esphome
       case SET_CHARGING_LIMIT:
         action_str = "setChargingLimit";
         break;
+      case SET_OPEN_CHARGE_PORT_DOOR:
+        action_str = "setOpenChargePortDoor";
+        break;
+      case SET_CLOSE_CHARGE_PORT_DOOR:
+        action_str = "setCloseChargePortDoor";
+        break;
       default:
         action_str = "setChargingParameters";
         break;
@@ -1278,6 +1284,18 @@ namespace esphome
           break;
         case SET_CHARGING_LIMIT:
           return_code = tesla_ble_client_->buildChargingSetLimitMessage(
+              static_cast<int32_t>(param), message_buffer, &message_length);
+          break;
+        case SET_OPEN_CHARGE_PORT_DOOR:
+          return_code = tesla_ble_client_->buildOpenChargePortDoorMessage(
+              message_buffer, &message_length);
+          break;
+        case SET_CLOSE_CHARGE_PORT_DOOR:
+          return_code = tesla_ble_client_->buildCloseChargePortDoorMessage(
+              message_buffer, &message_length);
+          break;
+        case SET_CHARGING_PARAMETERS:
+          return_code = tesla_ble_client_->buildChargingParametersMessage(
               static_cast<int32_t>(param), message_buffer, &message_length);
           break;
         default:
