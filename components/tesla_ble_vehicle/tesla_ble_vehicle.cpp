@@ -1224,6 +1224,9 @@ namespace esphome
       std::string action_str;
       switch (action)
       {
+      case SET_OPEN_CHARGE_PORT_DOOR:
+        action_str = "setOpenChargePortDoor";
+        break;
       case SET_SENTRY_SWITCH:
         action_str = "setSentrySwitch";
         break;
@@ -1256,6 +1259,10 @@ namespace esphome
         ESP_LOGI(TAG, "[%s] Building message..", action_str.c_str());
         switch (action)
         {
+        case SET_OPEN_CHARGE_PORT_DOOR:
+          return_code = tesla_ble_client_->buildOpenChargePortDoorMessage(
+              static_cast<bool>(param), message_buffer, &message_length);
+          break;
         case SET_SENTRY_SWITCH:
           return_code = tesla_ble_client_->buildSentrySwitchMessage(
               static_cast<bool>(param), message_buffer, &message_length);
