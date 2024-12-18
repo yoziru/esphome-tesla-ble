@@ -102,9 +102,9 @@ switch:
     assumed_state: true # we can't read the state 
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
-      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_OPEN_CHARGE_PORT_DOOR, 1);
+      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_OPEN_CHARGE_PORT_DOOR);
     turn_off_action:
-      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_OPEN_CHARGE_PORT_DOOR, 1);
+      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_OPEN_CHARGE_PORT_DOOR);
 
   - platform: ble_client
     ble_client_id: ble_tesla_id
