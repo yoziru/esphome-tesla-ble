@@ -1294,10 +1294,6 @@ namespace esphome
           return_code = tesla_ble_client_->buildCloseChargePortDoorMessage(
               message_buffer, &message_length);
           break;
-        case SET_CHARGING_PARAMETERS:
-          return_code = tesla_ble_client_->buildChargingParametersMessage(
-              static_cast<int32_t>(param), message_buffer, &message_length);
-          break;
         default:
           ESP_LOGE(TAG, "Invalid action: %d", static_cast<int>(action));
           return 1;
