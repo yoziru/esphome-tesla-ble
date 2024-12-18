@@ -15,7 +15,7 @@ esphome:
   comment: ${device_description}
   project:
     name: yoziru.esphome-tesla-ble
-    version: "2024.10.3"
+    version: "2024.11.3"
   libraries:
     - https://github.com/mrd0n/tesla-ble.git#main
 
