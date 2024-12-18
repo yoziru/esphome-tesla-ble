@@ -1261,7 +1261,7 @@ namespace esphome
         {
         case SET_OPEN_CHARGE_PORT_DOOR:
           return_code = tesla_ble_client_->buildOpenChargePortDoorMessage(
-              static_cast<bool>(param), message_buffer, &message_length);
+              message_buffer, &message_length);
           break;
         case SET_SENTRY_SWITCH:
           return_code = tesla_ble_client_->buildSentrySwitchMessage(
