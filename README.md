@@ -15,6 +15,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 - [x] Set charging amps
 - [x] Set charging limit (percent)
 - [x] Turn on/off charging
+- [x] Open/Close Charge Port Door
 - [x] BLE information sensors
   - [x] Asleep / awake
   - [x] Doors locked / unlocked
