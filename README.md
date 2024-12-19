@@ -18,6 +18,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 - [x] Turn on/off HVAC
 - [x] Turn on/off steering heat 
 - [x] Turn on/off Sentry mode
+- [x] Open/Close Charge Port Door
 - [x] BLE information sensors
   - [x] Asleep / awake
   - [x] Doors locked / unlocked
