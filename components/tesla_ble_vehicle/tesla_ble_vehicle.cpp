@@ -1233,6 +1233,12 @@ namespace esphome
       case SET_CHARGING_LIMIT:
         action_str = "setChargingLimit";
         break;
+      case SET_HVAC_SWITCH:
+        action_str = "setHVACSwitch";
+        break;
+      case SET_HVAC_STEERING_HEATER_SWITCH:
+        action_str = "setHVACSteeringHeatSwitch";
+        break;
       default:
         action_str = "setChargingParameters";
         break;
@@ -1258,6 +1264,14 @@ namespace esphome
         case SET_CHARGING_LIMIT:
           return_code = tesla_ble_client_->buildChargingSetLimitMessage(
               static_cast<int32_t>(param), message_buffer, &message_length);
+          break;
+        case SET_HVAC_SWITCH:
+          return_code = tesla_ble_client_->buildHVACMessage(
+              static_cast<bool>(param), message_buffer, &message_length);
+          break;
+        case SET_HVAC_STEERING_HEATER_SWITCH:
+          return_code = tesla_ble_client_->buildHVACSteeringHeaterMessage(
+              static_cast<bool>(param), message_buffer, &message_length);
           break;
         default:
           ESP_LOGE(TAG, "Invalid action: %d", static_cast<int>(action));
