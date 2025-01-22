@@ -1,24 +1,116 @@
 substitutions:
-  # all substitutions for this project
-  espidf_version: 5.3.0
-  platformio_version: 6.8.1
-  friendly_name: Tesla BLE
+  # Louie
+  name: tesla-ble-68d2a4
+  friendly_name: Tesla BLE - Louie
+  device_description: Interact with Tesla vehicles over BLE using ESPHome and Home Assistant
+  esphome_version: "2024.11.3"
   device_name: tesla-ble
-  device_description: Tesla BLE
+  ble_mac_address: !secret ble_mac_address_louie
+  tesla_vin: !secret tesla_vin_louie
+  charging_amps_max: "32"
+
+esp32:
   board: esp32dev
   variant: esp32
   flash_size: 4MB
-  ble_mac_address: "A0:B1:C2:D3:E4:F5" # vehicle BLE MAC address
-  tesla_vin: "5YJ30123456789ABC" # vehicle VIN
-  charging_amps_max: "32"
-
-external_components: !include packages/external_components.dashboard.yml
+  framework:
+    type: esp-idf
+    version: "5.3.1"
+    platform_version: "6.9.0"
 
 packages:
-  base: !include packages/base.yml
-  client: !include packages/client.yml
-  common: !include packages/common.yml
-  # for ESPHome Dashboard, use this instead of external_components
+  client:
+    url: https://github.com/mrd0n/esphome-tesla-ble/
+    ref: main
+    files: packages/client.yml
+    refresh: 0s # This seems to not have affect;
 
 dashboard_import:
-  package_import_url: github://yoziru/esphome-tesla-ble/tesla-ble.example.yml
+  package_import_url: github://mrd0n/esphome-tesla-ble/tesla-ble-esp32-generic.dashboard.yml@main
+
+web_server:
+  port: 80
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+  comment: ${device_description}
+  project:
+    name: yoziru.esphome-tesla-ble
+    version: $esphome_version
+  libraries:
+    - https://github.com/mrd0n/tesla-ble.git#main
+
+api:
+  encryption:
+    key: !secret api_encryption_key_louie
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    password: !secret wifi_hotspot_password
+  # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
+  on_connect:
+    - esp32_ble_tracker.start_scan:
+        continuous: true
+  on_disconnect:
+    - esp32_ble_tracker.stop_scan:
+
+external_components:
+  source: github://mrd0n/esphome-tesla-ble/packages/external_components.dashboard.yml@main
+
+captive_portal:
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    icon: mdi:wifi
+
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+    icon: mdi:clock-outline
+
+binary_sensor:
+  - platform: status
+    name: "Status"
+
+text_sensor:
+  - platform: version
+    name: "Version"
+    icon: mdi:cube-outline
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+button:
+  - platform: restart
+    name: Restart
+    icon: mdi:restart
+    entity_category: diagnostic
+
+# Enable this to scan for BLE devices
+# tesla_ble_listener:
+#  vin: $tesla_vin
+
+esp32_ble_tracker:
+  scan_parameters:
+    # Depending on the model and state, BLE advertisements come every 20ms or every 150ms.
+    interval: 150ms
+    # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
+    continuous: false
+
+logger:
+  level: INFO
+
+ota:
+  platform: esphome
+  password: !secret ota_password
