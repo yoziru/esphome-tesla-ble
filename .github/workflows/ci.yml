@@ -16,7 +16,7 @@ jobs:
           - tesla-ble-m5stack-atoms3.yml
           - tesla-ble-m5stack-nanoc6.yml
     steps:
-      - uses: actions/checkout@v4.1.7
+      - uses: actions/checkout@v4.2.2
       - name: Mock secrets.yaml from example
         run: cp secrets.yaml.example secrets.yaml
       - name: Get ESPHome version
