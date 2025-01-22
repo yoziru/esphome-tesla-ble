@@ -1,1 +1,4 @@
 esphome==2024.12.4
+mypy
+ruff
+yamllint

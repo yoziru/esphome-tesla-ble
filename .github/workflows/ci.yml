@@ -21,7 +21,7 @@ jobs:
       - name: Mock secrets.yaml from example
         run: cp secrets.yaml.example secrets.yaml
       - name: Mock tesla-ble.yml from example
-        run: cp tesla-ble.yml.example tesla-ble.yml        
+        run: cp tesla-ble.yml.example tesla-ble.yml
       - name: Build ESPHome firmware to verify configuration
         uses: esphome/build-action@v6.0.0
         with:

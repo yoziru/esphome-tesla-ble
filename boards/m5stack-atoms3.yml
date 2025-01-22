@@ -10,9 +10,9 @@ output:
     id: status_output
     type: binary
     write_action:
-    - if:
-        condition:
-          lambda: return (state);
+      - if:
+          condition:
+            lambda: return (state);
         then:
           - light.turn_on:
               id: led
@@ -55,4 +55,3 @@ binary_sensor:
         pullup: true
     filters:
       - delayed_off: 10ms
-
