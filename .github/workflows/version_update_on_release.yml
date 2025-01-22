@@ -18,10 +18,10 @@ jobs:
             echo "github.event.release.target_commitish: ${{ github.event.release.target_commitish }}"
             echo "github.event.release.prerelease: ${{ github.event.release.prerelease }}"
             echo "github.event.release.draft: ${{ github.event.release.draft }}"
-      - name: Update Version in base.yaml
+      - name: Update Version in base.yml
         if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
         run: |
-          sed -i 's/version\:\s*\".*\"/version\: \"${{ github.ref_name }}\"/g' ./packages/base.yaml
+          sed -i 's/version\:\s*\".*\"/version\: \"${{ github.ref_name }}\"/g' ./packages/base.yml
       - name: Commit & Push Version Changes
         if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false  }}
         uses: actions-js/push@master
