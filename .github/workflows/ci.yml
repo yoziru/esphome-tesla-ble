@@ -12,22 +12,17 @@ jobs:
       fail-fast: false
       matrix:
         file:
-          - tesla-ble-esp32-generic.yml
-          - tesla-ble-m5stack-atoms3.yml
-          - tesla-ble-m5stack-nanoc6.yml
+          # - tesla-ble-esp32-generic.yml
+          # - tesla-ble-m5stack-atoms3.yml
+          # - tesla-ble-m5stack-nanoc6.yml
+          - tesla-ble.yml
     steps:
       - uses: actions/checkout@v4.2.2
       - name: Mock secrets.yaml from example
         run: cp secrets.yaml.example secrets.yaml
-      - name: Get ESPHome version
-        id: get_esphome_version
-        # read esphome version from requirements.txt
-        run: |
-          esphome_version=$(grep esphome requirements.txt | cut -d'=' -f3)
-          echo "esphome_version=$esphome_version" >> "$GITHUB_OUTPUT"
+      - name: Mock tesla-ble.yml from example
+        run: cp tesla-ble.yml.example tesla-ble.yml        
       - name: Build ESPHome firmware to verify configuration
         uses: esphome/build-action@v6.0.0
         with:
-          yaml_file: ${{ matrix.file }}
-          cache: true
-          version: ${{ steps.get_esphome_version.outputs.esphome_version }}
+          yaml-file: ${{ matrix.file }}

@@ -1,6 +1,8 @@
 # ESPHome Tesla BLE
 
-This project lets you use an ESP32 device to manage charging a Tesla vehicle over BLE, using the [yoziru/tesla-ble](http://github.com/yoziru/tesla-ble) library.
+Forked from [yoziru/tesla-ble](https://github.com/yoziru/esphome-tesla-ble) 
+
+This project lets you use an ESP32 device to manage charging a Tesla vehicle over BLE, using the [tesla-ble](http://github.com/Snuffy2/tesla-ble) forked from [yoziru](http://github.com/yoziru/tesla-ble) library.
 Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 
 | Controls | Sensors | Diagnostic |

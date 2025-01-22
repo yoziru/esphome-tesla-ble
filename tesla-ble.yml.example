@@ -1,12 +1,10 @@
 substitutions:
-  # Louie
-  name: tesla-ble-68d2a4
-  friendly_name: Tesla BLE - Louie
-  device_description: Interact with Tesla vehicles over BLE using ESPHome and Home Assistant
-  esphome_version: "2024.11.3"
+  name: tesla-ble
+  friendly_name: Tesla BLE
+  # esphome_version: "2024.12.4"
   device_name: tesla-ble
-  ble_mac_address: !secret ble_mac_address_louie
-  tesla_vin: !secret tesla_vin_louie
+  ble_mac_address: !secret ble_mac_address
+  tesla_vin: !secret tesla_vin
   charging_amps_max: "32"
 
 esp32:
@@ -15,18 +13,16 @@ esp32:
   flash_size: 4MB
   framework:
     type: esp-idf
-    version: "5.3.1"
-    platform_version: "6.9.0"
 
 packages:
   client:
-    url: https://github.com/mrd0n/esphome-tesla-ble/
+    url: https://github.com/snuffy2/esphome-tesla-ble/
     ref: main
     files: packages/client.yml
-    refresh: 0s # This seems to not have affect;
+    refresh: 0s # This seems to not have any effect
 
 dashboard_import:
-  package_import_url: github://mrd0n/esphome-tesla-ble/tesla-ble-esp32-generic.dashboard.yml@main
+  package_import_url: github://snuffy2/esphome-tesla-ble/tesla-ble-esp32-generic.dashboard.yml@main
 
 web_server:
   port: 80
@@ -35,22 +31,23 @@ esphome:
   name: ${name}
   name_add_mac_suffix: false
   friendly_name: ${friendly_name}
-  comment: ${device_description}
+  # comment: ${device_description}
   project:
-    name: yoziru.esphome-tesla-ble
-    version: $esphome_version
+    name: snuffy2.esphome-tesla-ble
+    version: "2025.1.0"
   libraries:
-    - https://github.com/mrd0n/tesla-ble.git#main
+    - https://github.com/snuffy2/tesla-ble.git#main
 
 api:
   encryption:
-    key: !secret api_encryption_key_louie
+    key: !secret api_encryption_key
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
+    ssid: "Tesla-BLE Fallback Hotspot"
     password: !secret wifi_hotspot_password
   # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
   on_connect:
@@ -60,7 +57,7 @@ wifi:
     - esp32_ble_tracker.stop_scan:
 
 external_components:
-  source: github://mrd0n/esphome-tesla-ble/packages/external_components.dashboard.yml@main
+  source: github://snuffy2/esphome-tesla-ble/packages/external_components.dashboard.yml@main
 
 captive_portal:
 
@@ -99,7 +96,7 @@ button:
 
 # Enable this to scan for BLE devices
 # tesla_ble_listener:
-#  vin: $tesla_vin
+#   vin: $tesla_vin
 
 esp32_ble_tracker:
   scan_parameters:

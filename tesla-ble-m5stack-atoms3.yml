@@ -7,4 +7,4 @@ packages:
   # for ESPHome Dashboard, use this instead of external_components
 
 dashboard_import:
-  package_import_url: github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-atoms3.dashboard.yml
+  package_import_url: github://snuffy2/esphome-tesla-ble/tesla-ble-m5stack-atoms3.dashboard.yml

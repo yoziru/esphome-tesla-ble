@@ -10,11 +10,11 @@ tesla_ble_vehicle:
   is_asleep:
     name: "Asleep"
   is_user_present:
-    name: "User presence"
+    name: "User Present"
   is_unlocked:
     name: "Doors"
   is_charge_flap_open:
-    name: "Charge flap"
+    name: "Charge Door"
 
 button:
   - platform: template
@@ -59,7 +59,7 @@ switch:
   - platform: template
     name: "Charger switch"
     optimistic: true
-    assumed_state: true # we can't read the state of the charger over
+    assumed_state: true # we can't read the state
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 1);
@@ -69,7 +69,7 @@ switch:
   - platform: template
     name: "HVAC switch"
     optimistic: true
-    assumed_state: true # we can't read the state 
+    assumed_state: true # we can't read the state
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_HVAC_SWITCH, 1);
@@ -79,7 +79,7 @@ switch:
   - platform: template
     name: "Steering Heater switch"
     optimistic: true
-    assumed_state: true # we can't read the state 
+    assumed_state: true # we can't read the state
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_HVAC_STEERING_HEATER_SWITCH, 1);
@@ -89,7 +89,7 @@ switch:
   - platform: template
     name: "Sentry switch"
     optimistic: true
-    assumed_state: true # we can't read the state 
+    assumed_state: true # we can't read the state
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_SENTRY_SWITCH, 1);
@@ -99,7 +99,7 @@ switch:
   - platform: template
     name: "Charge Port switch"
     optimistic: true
-    assumed_state: true # we can't read the state 
+    assumed_state: true # we can't read the state
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_OPEN_CHARGE_PORT_DOOR,1);

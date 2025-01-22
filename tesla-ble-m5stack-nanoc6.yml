@@ -6,4 +6,4 @@ packages:
   client: !include packages/client.yml
 
 dashboard_import:
-  package_import_url: github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml
+  package_import_url: github://snuffy2/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml
