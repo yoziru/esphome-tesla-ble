@@ -5,6 +5,16 @@ substitutions:
   tesla_vin: "5YJ30123456789ABC" # !secret tesla_vin
   charging_amps_max: "32"
 
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+  project:
+    name: snuffy2.esphome-tesla-ble
+    version: "2025.1.0"
+  libraries:
+    - https://github.com/snuffy2/tesla-ble.git#main
+
 external_components: !include packages/external_components.yml
 
 packages:

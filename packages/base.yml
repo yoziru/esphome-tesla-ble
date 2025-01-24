@@ -7,16 +7,6 @@ packages:
   common: !include common.yml
   project: !include project.yml
 
-esphome:
-  name: ${name}
-  name_add_mac_suffix: false
-  friendly_name: ${friendly_name}
-  project:
-    name: snuffy2.esphome-tesla-ble
-    version: "2025.1.0"
-  libraries:
-    - https://github.com/snuffy2/tesla-ble.git#main
-
 safe_mode:
 
 api:
