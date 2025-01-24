@@ -1,4 +1,0 @@
-<<: !include tesla-ble-esp32-generic.yml
-
-# override external_components to use the dashboard version
-external_components: !include packages/external_components.dashboard.yml

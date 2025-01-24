@@ -1,11 +1,11 @@
 ble_client:
-  - mac_address: $ble_mac_address
+  - mac_address: ${ble_mac_address}
     id: ble_tesla_id
 
 tesla_ble_vehicle:
   ble_client_id: ble_tesla_id
   id: tesla_ble_vehicle_id
-  vin: $tesla_vin
+  vin: ${tesla_vin}
   update_interval: 1min # default
   is_asleep:
     name: "Asleep"
@@ -119,7 +119,7 @@ number:
     unit_of_measurement: "A"
     mode: slider
     min_value: 0
-    max_value: $charging_amps_max
+    max_value: ${charging_amps_max}
     step: 1
     optimistic: true
     restore_value: true

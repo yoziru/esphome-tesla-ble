@@ -1,41 +1,37 @@
-substitutions:
+defaults:
   friendly_name: Tesla BLE
-  device_name: tesla-ble
-  device_description: Interact with Tesla vehicles over BLE using ESPHome and Home Assistant
+  name: tesla-ble
 
 packages:
   board: !include board.yml
   common: !include common.yml
   project: !include project.yml
-  # listener: !include listener.yml # Uncomment this to scan find your VIN BLE MAC address
 
 esphome:
-  name: ${device_name}
+  name: ${name}
   name_add_mac_suffix: false
   friendly_name: ${friendly_name}
-  comment: ${device_description}
   project:
     name: snuffy2.esphome-tesla-ble
     version: "2025.1.0"
   libraries:
     - https://github.com/snuffy2/tesla-ble.git#main
 
+safe_mode:
+
+api:
+  id: api_server
+
+wifi:
+  ap:
+    name: ${friendly_name} Captive Portal
+
+ota:
+  - platform: esphome
+
 logger:
   level: INFO
 
-api:
-  encryption:
-    key: !secret api_encryption_key
-
-ota:
-  platform: esphome
-  password: !secret ota_password
-
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
-  ap:
-    password: !secret wifi_hotspot_password
-
 captive_portal:
+
+improv_serial:

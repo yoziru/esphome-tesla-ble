@@ -1,6 +1,6 @@
 esp32:
-  board: $board
-  variant: $variant
-  flash_size: $flash_size
+  board: ${board}
+  variant: ${variant}
+  flash_size: ${flash_size}
   framework:
     type: esp-idf
