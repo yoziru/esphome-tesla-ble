@@ -1,1 +1,1 @@
-static/tesla-ble-m5stack-atoms3.yml
+<<: !include static/tesla-ble-m5stack-atoms3.yml

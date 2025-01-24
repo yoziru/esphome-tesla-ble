@@ -14,7 +14,7 @@ api:
 
 wifi:
   ap:
-    name: ${friendly_name} Captive Portal
+    ssid: ${friendly_name} Captive Portal
 
 ota:
   - platform: esphome

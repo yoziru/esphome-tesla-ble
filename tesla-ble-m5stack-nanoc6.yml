@@ -1,1 +1,1 @@
-static/tesla-ble-m5stack-nanoc6.yml
+<<: !include static/tesla-ble-m5stack-nanoc6.yml

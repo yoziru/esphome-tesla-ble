@@ -1,2 +1,4 @@
-- components: [tesla_ble_vehicle, tesla_ble_listener]
-  source: components
+- source:
+      type: local
+      path: components
+  components: [tesla_ble_vehicle, tesla_ble_listener]

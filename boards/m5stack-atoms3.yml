@@ -13,15 +13,15 @@ output:
       - if:
           condition:
             lambda: return (state);
-        then:
-          - light.turn_on:
-              id: led
-              brightness: 70%
-              red: 100%
-              green: 0%
-              blue: 0%
-        else:
-          - light.turn_off: led
+          then:
+            - light.turn_on:
+                id: led
+                brightness: 70%
+                red: 100%
+                green: 0%
+                blue: 0%
+          else:
+            - light.turn_off: led
 
 light:
   # Enable status LED

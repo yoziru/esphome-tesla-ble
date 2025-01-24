@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: Checking ${{ matrix.file }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - tesla-ble-esp32-generic.yml
+          - tesla-ble-m5stack-atoms3.yml
+          - tesla-ble-m5stack-nanoc6.yml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+      - name: Setup python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: 3.x
+          cache: 'pip'
+      - name: Install ESPHome
+        run: pip install esphome
+      - name: Check ESPHome config
+        run: esphome -v config ${{ matrix.file }}
