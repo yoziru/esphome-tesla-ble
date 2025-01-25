@@ -63,7 +63,7 @@ jobs:
           cp -R static/* output/
           cp -R firmwares/*/* output/
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v2.0.0
+        uses: actions/upload-pages-artifact@v3.0.1
         with:
           path: output
 
@@ -83,4 +83,4 @@ jobs:
         uses: actions/configure-pages@v5.0.0
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1.2.9
+        uses: actions/deploy-pages@v4.0.5
