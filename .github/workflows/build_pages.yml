@@ -23,12 +23,10 @@ jobs:
 
   build:
     name: Build Manifest & Compile Firmwares
-    uses: esphome/workflows/.github/workflows/publish.yml@main
+    uses: esphome/workflows/.github/workflows/build.yml@main
     with:
       # Filenames of the config (required):
       files: tesla-ble-esp32-generic.yml, tesla-ble-m5stack-atoms3.yml, tesla-ble-m5stack-nanoc6.yml
-      # Project name:
-      name: Tesla-BLE
       # Version of ESPHome to build with (default: latest)
       # esphome-version: latest
       # Summary of the release
