@@ -41,24 +41,26 @@ jobs:
       # Combine all files into a single manifest under this name
       combined-name: tesla-ble
 
-  consolidate:
-    name: Consolidate firmwares
+  combine:
+    name: Combine firmwares & pages
     runs-on: ubuntu-latest
     needs: build
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4.2.0
+        uses: actions/checkout@v4.2.2
       - name: Download built firmwares
         uses: actions/download-artifact@v4.1.8
         with:
           path: firmwares
-      - name: List files
+      - name: List all files
         run: ls -Ralh .
       - name: Copy files
         run: |-
           mkdir output
           cp -R static/* output/
           cp -R firmwares/*/* output/
+      - name: List output files
+        run: ls -Ralh output/
       - name: Upload GitHub Pages artifact
         if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
         uses: actions/upload-pages-artifact@v3.0.1
@@ -68,7 +70,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@v4.6.0
         with:
-          name: tesla-ble
+          name: tesla-ble-final
           path: output
           if-no-files-found: error
 
@@ -76,7 +78,7 @@ jobs:
     if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    needs: consolidate
+    needs: combine
     permissions:
       pages: write
       id-token: write
