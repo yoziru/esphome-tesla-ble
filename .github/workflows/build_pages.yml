@@ -1,4 +1,4 @@
-name: Build
+name: Build Firmware and Pages
 
 on:
   workflow_dispatch:
