@@ -3,7 +3,6 @@ substitutions:
   variant: esp32c6
   flash_size: 4MB
   espidf_version: "5.3.1"
-  platformio_version: "6.9.0"
 
 esp32:
   framework:
