@@ -2,51 +2,83 @@ name: Build Firmware and Pages
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  release:
+    types: [published, edited]
 
 jobs:
-  build:
-    name: Build ${{ matrix.firmware.name }}
+  debug:
+    name: Debug info
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        firmware:
-          - file: tesla-ble-esp32-generic.yml
-            name: Tesla BLE ESP32 Generic
-            manifest_filename: tesla-ble-esp32-generic-manifest.json
-          - file: tesla-ble-m5stack-atoms3.yml
-            name: Tesla BLE M5Stack AtomS3
-            manifest_filename: tesla-ble-m5stack-atoms3-manifest.json
-          - file: tesla-ble-m5stack-nanoc6.yml
-            name: Tesla BLE M5Stack NanoC6
-            manifest_filename: tesla-ble-m5stack-nanoc6-manifest.json
-      fail-fast: false
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4.2.0
-      - name: Build firmware
-        id: esphome-build
-        uses: esphome/build-action@v6.0.0
-        with:
-          yaml-file: ${{ matrix.firmware.file }}
-      - name: Copy firmware and manifest
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+      - name: Debug Variables
         run: |
-          mkdir output
-          mv ${{ steps.esphome-build.outputs.name }} output/
-          jq -s '{"name": "${{ matrix.firmware.name }}", "new_install_improv_wait_time": 15, "new_install_prompt_erase": true, "version": "${{ steps.esphome-build.outputs.version }}", "home_assistant_domain": "esphome", "new_install_skip_erase": false, "builds":.}' output/${{ steps.esphome-build.outputs.name }}/manifest.json > output/${{ matrix.firmware.manifest_filename }}
-      - name: List files
-        run: ls -alh output/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4.6.0
-        with:
-          name: ${{ matrix.firmware.name }}
-          path: output
+            echo "github.event_name: ${{ github.event_name }}"
+            echo "github.ref_name: ${{ github.ref_name }}"
+            echo "github.event.repository.default_branch: ${{ github.event.repository.default_branch }}"
+            echo "github.event.release.target_commitish: ${{ github.event.release.target_commitish }}"
+            echo "github.event.release.prerelease: ${{ github.event.release.prerelease }}"
+            echo "github.event.release.draft: ${{ github.event.release.draft }}"
+
+  build:
+    name: Build Manifest & Compile Firmwares
+    uses: esphome/workflows/.github/workflows/publish.yml@main
+    with:
+      # Filenames of the config (required):
+      files: tesla-ble-esp32-generic.yml, tesla-ble-m5stack-atoms3.yml, tesla-ble-m5stack-nanoc6.yml
+      # Project name:
+      name: Tesla-BLE
+      # Version of ESPHome to build with (default: latest)
+      # esphome-version: latest
+      # Summary of the release
+      # release-summary:
+      # URL to the release notes
+      # release-url:
+      # Version of the release
+      # release-version:
+      # Combine all files into a single manifest under this name
+      combined-name: tesla-ble-manifests
+
+  # build:
+  #   name: Build ${{ matrix.firmware.name }}
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       firmware:
+  #         - file: tesla-ble-esp32-generic.yml
+  #           name: Tesla BLE ESP32 Generic
+  #           manifest_filename: tesla-ble-esp32-generic-manifest.json
+  #         - file: tesla-ble-m5stack-atoms3.yml
+  #           name: Tesla BLE M5Stack AtomS3
+  #           manifest_filename: tesla-ble-m5stack-atoms3-manifest.json
+  #         - file: tesla-ble-m5stack-nanoc6.yml
+  #           name: Tesla BLE M5Stack NanoC6
+  #           manifest_filename: tesla-ble-m5stack-nanoc6-manifest.json
+  #     fail-fast: false
+  #   steps:
+  #     - name: Checkout source code
+  #       uses: actions/checkout@v4.2.0
+  #     - name: Build firmware
+  #       id: esphome-build
+  #       uses: esphome/build-action@v6.0.0
+  #       with:
+  #         yaml-file: ${{ matrix.firmware.file }}
+  #     - name: Copy firmware and manifest
+  #       run: |
+  #         mkdir output
+  #         mv ${{ steps.esphome-build.outputs.name }} output/
+  #         jq -s '{"name": "${{ matrix.firmware.name }}", "new_install_improv_wait_time": 15, "new_install_prompt_erase": true, "version": "${{ steps.esphome-build.outputs.version }}", "home_assistant_domain": "esphome", "new_install_skip_erase": false, "builds":.}' output/${{ steps.esphome-build.outputs.name }}/manifest.json > output/${{ matrix.firmware.manifest_filename }}
+  #     - name: List files
+  #       run: ls -alh output/
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4.6.0
+  #       with:
+  #         name: ${{ matrix.firmware.name }}
+  #         path: output
 
 
   consolidate:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     name: Consolidate firmwares
     runs-on: ubuntu-latest
     needs: build
@@ -57,18 +89,28 @@ jobs:
         uses: actions/download-artifact@v4.1.8
         with:
           path: firmwares
+      - name: List files
+        run: ls -Ralh .
       - name: Copy files
         run: |-
           mkdir output
           cp -R static/* output/
           cp -R firmwares/*/* output/
       - name: Upload GitHub Pages artifact
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
         uses: actions/upload-pages-artifact@v3.0.1
         with:
           path: output
+      - name: Add Zip to Action
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4.6.0
+        with:
+          name: tesla-ble
+          path: output
+          if-no-files-found: error
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
     needs: consolidate
