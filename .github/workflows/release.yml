@@ -1,0 +1,116 @@
+name: Release Process
+on:
+  workflow_dispatch:
+  release:
+    types: [published, edited]
+
+jobs:
+  debug:
+    name: Debug info
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+      - name: Debug Variables
+        run: |
+            echo "github.event_name: ${{ github.event_name }}"
+            echo "github.ref_name: ${{ github.ref_name }}"
+            echo "github.event.repository.default_branch: ${{ github.event.repository.default_branch }}"
+            echo "github.event.release.target_commitish: ${{ github.event.release.target_commitish }}"
+            echo "github.event.release.prerelease: ${{ github.event.release.prerelease }}"
+            echo "github.event.release.draft: ${{ github.event.release.draft }}"
+
+  update_version:
+    name: Update Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+      - name: Update Version in YAML files
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
+        run: |
+          find static/ -type f -name "*.yml" -exec sed -i 's/version\:\s*\".*\"/version\: \"${{ github.ref_name }}\"/g' {} +
+      - name: Commit & Push Version Changes
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false  }}
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.event.release.target_commitish }}
+          message: 'Updating to version ${{ github.ref_name }}'
+      - name: Update Release with Version Changes Commit
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false  }}
+        run: |
+          git tag -f ${{ github.ref_name }}
+          git push -f origin ${{ github.ref_name }}
+
+  build:
+    name: Build Manifest & Compile Firmwares
+    uses: esphome/workflows/.github/workflows/build.yml@main
+    needs: update_version
+    with:
+      # Filenames of the config, newline separated (required):
+      files: |
+        tesla-ble-esp32-generic.yml
+        tesla-ble-m5stack-atoms3.yml
+        tesla-ble-m5stack-nanoc6.yml
+      # Version of ESPHome to build with (default: latest)
+      # esphome-version: latest
+      # Summary of the release
+      # release-summary:
+      # URL to the release notes
+      # release-url:
+      # Version of the release
+      # release-version: latest
+      # Combine all files into a single manifest under this name
+      combined-name: tesla-ble
+
+  combine:
+    name: Combine firmwares & pages
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4.2.2
+      - name: Download built firmwares
+        uses: actions/download-artifact@v4.1.8
+        with:
+          path: firmwares
+      - name: List all files
+        run: ls -Ralh .
+      - name: Copy files
+        run: |-
+          mkdir output
+          cp -R static/* output/
+          cp -R firmwares/*/*/* output/
+      - name: List output files
+        run: ls -Ralh output/
+      - name: Upload GitHub Pages artifact
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false }}
+        uses: actions/upload-pages-artifact@v3.0.1
+        with:
+          path: output
+      - name: Add Zip to Action
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4.6.0
+        with:
+          name: tesla-ble-final
+          path: output
+          if-no-files-found: error
+
+  deploy:
+    if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false }}
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: combine
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5.0.0
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4.0.5
