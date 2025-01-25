@@ -3,7 +3,6 @@ defaults:
   name: tesla-ble
 
 packages:
-  board: !include board.yml
   common: !include common.yml
   project: !include project.yml
 
