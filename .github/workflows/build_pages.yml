@@ -37,7 +37,7 @@ jobs:
       # URL to the release notes
       # release-url:
       # Version of the release
-      release-version: latest
+      # release-version: latest
       # Combine all files into a single manifest under this name
       combined-name: tesla-ble
 
@@ -58,7 +58,7 @@ jobs:
         run: |-
           mkdir output
           cp -R static/* output/
-          cp -R firmwares/*/* output/
+          cp -R firmwares/*/*/* output/
       - name: List output files
         run: ls -Ralh output/
       - name: Upload GitHub Pages artifact
