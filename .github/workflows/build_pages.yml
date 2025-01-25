@@ -39,7 +39,7 @@ jobs:
       # Version of the release
       # release-version:
       # Combine all files into a single manifest under this name
-      combined-name: tesla-ble-manifests
+      # combined-name: tesla-ble-manifests
 
   consolidate:
     name: Consolidate firmwares
