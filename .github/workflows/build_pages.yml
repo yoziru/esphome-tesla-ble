@@ -26,7 +26,10 @@ jobs:
     uses: esphome/workflows/.github/workflows/build.yml@main
     with:
       # Filenames of the config, newline separated (required):
-      files: tesla-ble-esp32-generic.yml\ntesla-ble-m5stack-atoms3.yml\ntesla-ble-m5stack-nanoc6.yml
+      files: |
+        tesla-ble-esp32-generic.yml
+        tesla-ble-m5stack-atoms3.yml
+        tesla-ble-m5stack-nanoc6.yml
       # Version of ESPHome to build with (default: latest)
       # esphome-version: latest
       # Summary of the release
