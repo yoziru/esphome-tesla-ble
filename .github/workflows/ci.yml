@@ -27,6 +27,5 @@ jobs:
       - name: Build ESPHome firmware to verify configuration
         uses: esphome/build-action@v7.0.0
         with:
-          yaml_file: ${{ matrix.file }}
-          cache: true
+          yaml-file: ${{ matrix.file }}
           version: ${{ steps.get_esphome_version.outputs.esphome_version }}
