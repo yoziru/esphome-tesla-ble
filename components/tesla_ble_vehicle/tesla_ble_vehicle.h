@@ -18,8 +18,6 @@
 #include <vcsec.pb.h>
 #include <errors.h>
 
-#include "custom_binary_sensor.h"
-
 namespace TeslaBLE
 {
     class Client;
@@ -154,25 +152,25 @@ namespace esphome
 
             // sensors
             // Sleep state (vehicleSleepStatus)
-            void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateIsAsleep(bool asleep)
             {
                 isAsleepSensor->publish_state(asleep);
             }
             // Door lock (vehicleLockState)
-            void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateisUnlocked(bool locked)
             {
                 isUnlockedSensor->publish_state(locked);
             }
             // User presence (userPresence)
-            void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateIsUserPresent(bool present)
             {
                 isUserPresentSensor->publish_state(present);
             }
             // Charge flap (chargeFlapStatus)
-            void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s) { isChargeFlapOpenSensor = static_cast<binary_sensor::CustomBinarySensor *>(s); }
+            void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s) { isChargeFlapOpenSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateIsChargeFlapOpen(bool open)
             {
                 isChargeFlapOpenSensor->publish_state(open);
@@ -207,10 +205,10 @@ namespace esphome
             espbt::ESPBTUUID write_uuid_;
 
             // sensors
-            binary_sensor::CustomBinarySensor *isAsleepSensor;
-            binary_sensor::CustomBinarySensor *isUnlockedSensor;
-            binary_sensor::CustomBinarySensor *isUserPresentSensor;
-            binary_sensor::CustomBinarySensor *isChargeFlapOpenSensor;
+            binary_sensor::BinarySensor *isAsleepSensor;
+            binary_sensor::BinarySensor *isUnlockedSensor;
+            binary_sensor::BinarySensor *isUserPresentSensor;
+            binary_sensor::BinarySensor *isChargeFlapOpenSensor;
 
             std::vector<unsigned char> ble_read_buffer_;
 

@@ -10,18 +10,18 @@ output:
     id: status_output
     type: binary
     write_action:
-    - if:
-        condition:
-          lambda: return (state);
-        then:
-          - light.turn_on:
-              id: led
-              brightness: 70%
-              red: 100%
-              green: 0%
-              blue: 0%
-        else:
-          - light.turn_off: led
+      - if:
+          condition:
+            lambda: return (state);
+          then:
+            - light.turn_on:
+                id: led
+                brightness: 70%
+                red: 100%
+                green: 0%
+                blue: 0%
+          else:
+            - light.turn_off: led
 
 light:
   # Enable status LED
@@ -35,8 +35,6 @@ light:
     rgb_order: GRB
     pin: 35
     num_leds: 4
-    # RMT 0 channels will be occupied by IR
-    rmt_channel: 1
     chipset: ws2812
     id: led
     name: "Led"
@@ -55,4 +53,3 @@ binary_sensor:
         pullup: true
     filters:
       - delayed_off: 10ms
-
