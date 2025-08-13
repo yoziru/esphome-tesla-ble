@@ -110,6 +110,16 @@ const char *message_fault_to_string(UniversalMessage_MessageFault_E fault)
         return "ERROR_REMOTE_SERVICE_ACCESS_DISABLED";
     case UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS:
         return "ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS";
+    case UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_REQUEST_MTU_EXCEEDED:
+        return "ERROR_REQUEST_MTU_EXCEEDED";
+    case UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED:
+        return "ERROR_RESPONSE_MTU_EXCEEDED";
+    case UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_REPEATED_COUNTER:
+        return "ERROR_REPEATED_COUNTER";
+    case UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_INVALID_KEY_HANDLE:
+        return "ERROR_INVALID_KEY_HANDLE";
+    case UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_REQUIRES_RESPONSE_ENCRYPTION:
+        return "ERROR_REQUIRES_RESPONSE_ENCRYPTION";
     default:
         return "UNKNOWN_FAULT";
     }
@@ -339,6 +349,12 @@ void log_signature_data(const char *tag, const Signatures_SignatureData *sig)
         ESP_LOGD(tag, "      expires_at: %" PRIu32, sig->sig_type.HMAC_Personalized_data.expires_at);
         ESP_LOGD(tag, "      tag: %s", format_hex(sig->sig_type.HMAC_Personalized_data.tag, 16).c_str());
         break;
+    case Signatures_SignatureData_AES_GCM_Response_data_tag:
+        ESP_LOGD(tag, "    AES_GCM_Response_data: ");
+        ESP_LOGD(tag, "      nonce: %s", format_hex(sig->sig_type.AES_GCM_Response_data.nonce, 12).c_str());
+        ESP_LOGD(tag, "      counter: %" PRIu32, sig->sig_type.AES_GCM_Response_data.counter);
+        ESP_LOGD(tag, "      tag: %s", format_hex(sig->sig_type.AES_GCM_Response_data.tag, 16).c_str());
+        break;
     default:
         ESP_LOGD(tag, "    unknown sig_type");
     }
@@ -398,9 +414,25 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
     }
 
     ESP_LOGD(tag, "  which_sub_sigData: %d", msg->which_sub_sigData);
-    if (msg->which_sub_sigData == UniversalMessage_RoutableMessage_signature_data_tag)
+    switch(msg->which_sub_sigData)
     {
-        log_signature_data(tag, &msg->sub_sigData.signature_data);
+        case UniversalMessage_RoutableMessage_signature_data_tag:
+            log_signature_data(tag, &msg->sub_sigData.signature_data);
+            break;
+        default:
+            ESP_LOGD(tag, "  sub_sigData: unknown");
+    }
+
+    switch (msg->flags)
+    {
+        case UniversalMessage_Flags_FLAG_USER_COMMAND:
+            ESP_LOGD(tag, "  flags: FLAG_USER_COMMAND");
+            break;
+        case UniversalMessage_Flags_FLAG_ENCRYPT_RESPONSE:
+            ESP_LOGD(tag, "  flags: FLAG_ENCRYPT_RESPONSE");
+            break;
+        default:
+            ESP_LOGD(tag, "  flags: %" PRIu32, msg->flags);
     }
 
     if (msg->request_uuid.size > 0)
@@ -411,7 +443,6 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
     {
         ESP_LOGD(tag, "  uuid: %s", format_hex(msg->uuid.bytes, msg->uuid.size).c_str());
     }
-    ESP_LOGD(tag, "  flags: %" PRIu32, msg->flags);
 }
 
 const char *closure_state_to_string(VCSEC_ClosureState_E state)
@@ -570,9 +601,76 @@ const char *carserver_operation_status_to_string(CarServer_OperationStatus_E sta
     }
 }
 
+void logChargingState(const char *tag, const CarServer_ChargeState_ChargingState& state) {
+    const char* stateStr = "Unknown";
+    switch (state.which_type) {
+        case CarServer_ChargeState_ChargingState_Unknown_tag:
+            stateStr = "Unknown";
+            break;
+        case CarServer_ChargeState_ChargingState_Disconnected_tag:
+            stateStr = "Disconnected";
+            break;
+        case CarServer_ChargeState_ChargingState_NoPower_tag:
+            stateStr = "NoPower";
+            break;
+        case CarServer_ChargeState_ChargingState_Starting_tag:
+            stateStr = "Starting";
+            break;
+        case CarServer_ChargeState_ChargingState_Charging_tag:
+            stateStr = "Charging";
+            break;
+        case CarServer_ChargeState_ChargingState_Complete_tag:
+            stateStr = "Complete";
+            break;
+        case CarServer_ChargeState_ChargingState_Stopped_tag:
+            stateStr = "Stopped";
+            break;
+        case CarServer_ChargeState_ChargingState_Calibrating_tag:
+            stateStr = "Calibrating";
+            break;
+    }
+    ESP_LOGD(tag, "Charging State: %s", stateStr);
+}
+
+void logChargeState(const char *tag, const CarServer_ChargeState& charge_state) {
+    ESP_LOGD(tag, "=== Charge State ===");
+    
+    if (charge_state.has_charging_state) {
+        logChargingState(tag, charge_state.charging_state);
+    }
+    
+    if (charge_state.which_optional_battery_level) {
+        ESP_LOGD(tag, "Battery Level: %ld%%", charge_state.optional_battery_level.battery_level);
+    }
+    
+    if (charge_state.which_optional_battery_range) {
+        ESP_LOGD(tag, "Battery Range: %.1f", charge_state.optional_battery_range.battery_range);
+    }
+    
+    if (charge_state.which_optional_charger_power) {
+        ESP_LOGD(tag, "Charger Power: %ld", charge_state.optional_charger_power.charger_power);
+    }
+    
+    if (charge_state.which_optional_charge_rate_mph) {
+        ESP_LOGD(tag, "Charge Rate: %ld mph", charge_state.optional_charge_rate_mph.charge_rate_mph);
+    }
+    
+    if (charge_state.which_optional_minutes_to_full_charge) {
+        ESP_LOGD(tag, "Minutes to Full: %ld", charge_state.optional_minutes_to_full_charge.minutes_to_full_charge);
+    }
+}
+
 void log_carserver_response(const char *tag, const CarServer_Response *msg)
 {
+    if (!msg) {
+        ESP_LOGD(tag, "CarServerResponse: NULL");
+        return;
+    }
+
     ESP_LOGD(tag, "CarServerResponse:");
+    ESP_LOGD(tag, "  has_actionStatus: %d", msg->has_actionStatus);
+    ESP_LOGD(tag, "  which_response_msg: %d", msg->which_response_msg);
+
     if (msg->has_actionStatus)
     {
         ESP_LOGD(tag, "  ActionStatus:");
@@ -592,12 +690,89 @@ void log_carserver_response(const char *tag, const CarServer_Response *msg)
 
     switch (msg->which_response_msg)
     {
+    case CarServer_Response_vehicleData_tag:
+        ESP_LOGD(tag, "  vehicleData:");
+        // Log the raw bytes of the vehicle data
+        {
+            const uint8_t* data = (const uint8_t*)&msg->response_msg.vehicleData;
+            size_t size = sizeof(msg->response_msg.vehicleData);
+            char hex[128] = {0};
+            for (size_t i = 0; i < size && i < 16; i++) {
+                sprintf(hex + (i*2), "%02x", data[i]);
+            }
+            ESP_LOGD(tag, "    Raw data (first 16 bytes): %s", hex);
+        }
+        
+        // Add this before all your has_X checks
+        ESP_LOGD(tag, "    VehicleData size: %zu", sizeof(msg->response_msg.vehicleData));
+
+        if (msg->response_msg.vehicleData.has_charge_state) {
+            ESP_LOGD(tag, "Has Charge State: true");
+            // logChargeState(tag, msg->response_msg.vehicleData.charge_state);
+        }
+        
+        if (msg->response_msg.vehicleData.has_climate_state) {
+            ESP_LOGD(tag, "Has Climate State: true");
+            // Add climate state logging if needed
+        }
+        
+        if (msg->response_msg.vehicleData.has_drive_state) {
+            ESP_LOGD(tag, "Has Drive State: true");
+            // Add drive state logging if needed
+        }
+        
+        if (msg->response_msg.vehicleData.has_location_state) {
+            ESP_LOGD(tag, "Has Location State: true");
+            // Add location state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_closures_state) {
+            ESP_LOGD(tag, "Has Closures State: true");
+            // Add closures state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_charge_schedule_state) {
+            ESP_LOGD(tag, "Has Charge Schedule State: true");
+            // Add charge schedule state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_preconditioning_schedule_state) {
+            ESP_LOGD(tag, "Has Preconditioning Schedule State: true");
+            // Add preconditioning schedule state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_tire_pressure_state) {
+            ESP_LOGD(tag, "Has Tire Pressure State: true");
+            // Add tire pressure state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_media_state) {
+            ESP_LOGD(tag, "Has Media State: true");
+            // Add media state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_media_detail_state) {
+            ESP_LOGD(tag, "Has Media Detail State: true");
+            // Add media detail state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_software_update_state) {
+            ESP_LOGD(tag, "Has Software Update State: true");
+            // Add software update state logging if needed
+        }
+
+        if (msg->response_msg.vehicleData.has_parental_controls_state) {
+            ESP_LOGD(tag, "Has Parental Controls State: true");
+            // Add parental controls state logging if needed
+        }
+
+        break;
     case CarServer_Response_getSessionInfoResponse_tag:
-        ESP_LOGI(tag, "  getSessionInfoResponse:");
+        ESP_LOGD(tag, "  getSessionInfoResponse:");
         log_session_info(tag, &msg->response_msg.getSessionInfoResponse);
         break;
     case CarServer_Response_getNearbyChargingSites_tag:
-        ESP_LOGI(tag, "  getNearbyChargingSites:");
+        ESP_LOGD(tag, "  getNearbyChargingSites:");
         break;
     case CarServer_Response_ping_tag:
         ESP_LOGD(tag, "  ping:");

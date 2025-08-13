@@ -1218,6 +1218,33 @@ namespace esphome
           action_str);
     }
 
+    int TeslaBLEVehicle::sendCarServerGetVehicleData()
+    {
+      ESP_LOGI(TAG, "[%s] Adding command to queue", "get vehicle data");
+      command_queue_.emplace(
+          UniversalMessage_Domain_DOMAIN_INFOTAINMENT, [this]()
+          {
+        unsigned char message_buffer[UniversalMessage_RoutableMessage_size];
+        size_t message_length = 0;
+        int return_code = tesla_ble_client_->buildCarServerGetVehicleDataMessage(
+            message_buffer, &message_length);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to build message");
+          return return_code;
+        }
+
+        return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send message");
+          return return_code;
+        }
+        return 0; },
+          "get vehicle data");
+      return 0;
+    }
+
     // combined function for setting charging parameters
     int TeslaBLEVehicle::sendCarServerVehicleActionMessage(BLE_CarServer_VehicleAction action, int param)
     {

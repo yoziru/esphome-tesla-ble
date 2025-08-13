@@ -18,10 +18,19 @@ esphome:
     name: yoziru.esphome-tesla-ble
     version: "2025.8.13"
   libraries:
-    - https://github.com/yoziru/tesla-ble.git#v2.2.2
+    # - https://github.com/yoziru/tesla-ble.git#v2.2.2
+    - file:///Users/yoziru/Development/yoziru/tesla-ble # file://<absolute_path>
 
 logger:
-  level: INFO
+  level: DEBUG
+  logs:
+    wifi: INFO
+    uptime: INFO
+    esp32_ble_tracker: INFO
+    esp32_ble_client: INFO
+    esp32_ble: INFO
+    light: INFO
+    api: INFO
 
 api:
   encryption:

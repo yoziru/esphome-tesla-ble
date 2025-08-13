@@ -51,6 +51,13 @@ button:
       - lambda: id(tesla_ble_vehicle_id)->enqueueVCSECInformationRequest(true);
     entity_category: diagnostic
 
+  - platform: template
+    name: Get CarServer Vehicle Data
+    icon: mdi:database-sync
+    on_press:
+      - lambda: id(tesla_ble_vehicle_id)->sendCarServerGetVehicleData();
+    entity_category: diagnostic
+
 sensor:
   - platform: ble_client
     type: rssi
