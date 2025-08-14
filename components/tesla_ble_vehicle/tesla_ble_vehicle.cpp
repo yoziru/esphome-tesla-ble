@@ -739,7 +739,18 @@ namespace esphome
         case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
         {
           CarServer_Response carserver_response = CarServer_Response_init_default;
-          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, &carserver_response);
+          // New TeslaBLE::Client API requires signature context for potential decryption
+          Signatures_SignatureData *sig_data_ptr = &message.sub_sigData.signature_data;
+          pb_size_t which_sig = message.which_sub_sigData;
+          UniversalMessage_MessageFault_E fault = message.has_signedMessageStatus
+                                                      ? message.signedMessageStatus.signed_message_fault
+                                                      : UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_NONE;
+          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(
+              &message.payload.protobuf_message_as_bytes,
+              sig_data_ptr,
+              which_sig,
+              fault,
+              &carserver_response);
           if (return_code != 0)
           {
             ESP_LOGE(TAG, "Failed to parse incoming message");
