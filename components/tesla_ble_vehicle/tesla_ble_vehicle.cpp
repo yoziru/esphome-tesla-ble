@@ -1238,7 +1238,8 @@ namespace esphome
         unsigned char message_buffer[UniversalMessage_RoutableMessage_size];
         size_t message_length = 0;
         int return_code = tesla_ble_client_->buildCarServerGetVehicleDataMessage(
-            message_buffer, &message_length);
+            message_buffer, &message_length, CarServer_GetVehicleData_getChargeState_tag
+          );
         if (return_code != 0)
         {
           ESP_LOGE(TAG, "Failed to build message");
