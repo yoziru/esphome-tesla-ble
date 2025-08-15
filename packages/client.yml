@@ -12,6 +12,8 @@ tesla_ble_vehicle:
   id: tesla_ble_vehicle_id
   vin: $tesla_vin
   update_interval: 1min # default
+  charge_polling_interval: 10s # Poll charge data every 30 seconds while charging
+  awake_polling_interval: 5min # Poll charge data every 5 minutes while awake (but not charging)
   is_asleep:
     name: "Asleep"
   is_user_present:
@@ -20,6 +22,14 @@ tesla_ble_vehicle:
     name: "Doors"
   is_charge_flap_open:
     name: "Charge flap"
+  battery_level:
+    name: "Battery Level"
+  charging_state:
+    name: "Charging State"
+  charger_power:
+    name: "Charger Power"
+  charge_rate:
+    name: "Charge Rate"
 
 button:
   - platform: template
@@ -49,13 +59,6 @@ button:
     icon: mdi:database-sync
     on_press:
       - lambda: id(tesla_ble_vehicle_id)->enqueueVCSECInformationRequest(true);
-    entity_category: diagnostic
-
-  - platform: template
-    name: Get CarServer Vehicle Data
-    icon: mdi:database-sync
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->sendCarServerGetVehicleData();
     entity_category: diagnostic
 
 sensor:
