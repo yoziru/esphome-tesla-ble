@@ -1771,12 +1771,11 @@ int TeslaBLEVehicle::handleCarServerVehicleData(
                currently_charging ? "true" : "false");
     }
 
-    // Update charger power (convert from W to kW)
+    // Update charger power (in watts)
     if (charge_state.which_optional_charger_power) {
-      float power_kw = static_cast<float>(
-                           charge_state.optional_charger_power.charger_power) /
-                       1000.0f;
-      this->updateChargerPower(power_kw);
+      float power_w =
+          static_cast<float>(charge_state.optional_charger_power.charger_power);
+      this->updateChargerPower(power_w);
     }
 
     // Update charge rate
