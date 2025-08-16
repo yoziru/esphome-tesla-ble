@@ -1802,6 +1802,18 @@ int TeslaBLEVehicle::handleCarServerVehicleData(
           charge_state.optional_charge_current_request.charge_current_request);
     }
 
+    // Update max charging amps (from actual car state)
+    if (charge_state.which_optional_charge_current_request_max) {
+      float max_amps =
+          static_cast<float>(charge_state.optional_charge_current_request_max
+                                 .charge_current_request_max);
+      this->updateMaxChargingAmps(max_amps);
+      this->current_max_charging_amps_ = max_amps;
+      ESP_LOGD(TAG, "Max charging amps from car: %dA",
+               charge_state.optional_charge_current_request_max
+                   .charge_current_request_max);
+    }
+
     // Update charger switch state (from actual car state)
     if (charge_state.which_optional_charge_enable_request) {
       this->updateChargerSwitch(
@@ -1828,6 +1840,8 @@ int TeslaBLEVehicle::handleCarServerVehicleData(
       ESP_LOGD(TAG, "  - charge_limit_soc");
     if (charge_state.which_optional_charge_current_request)
       ESP_LOGD(TAG, "  - charge_current_request");
+    if (charge_state.which_optional_charge_current_request_max)
+      ESP_LOGD(TAG, "  - charge_current_request_max");
     if (charge_state.which_optional_charge_enable_request)
       ESP_LOGD(TAG, "  - charge_enable_request");
   }

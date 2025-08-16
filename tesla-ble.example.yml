@@ -10,7 +10,7 @@ substitutions:
   flash_size: 4MB
   ble_mac_address: "A0:B1:C2:D3:E4:F5" # vehicle BLE MAC address
   tesla_vin: "5YJ30123456789ABC" # vehicle VIN
-  charging_amps_max: "32"
+  charging_amps_max: "32" # fallback max charging amps (now dynamically updated from car)
 
 external_components: !include packages/external_components.dashboard.yml
 

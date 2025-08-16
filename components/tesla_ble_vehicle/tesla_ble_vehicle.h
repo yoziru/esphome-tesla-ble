@@ -197,6 +197,9 @@ public:
     this->chargerPowerSensor = s;
   }
   void set_sensor_charge_rate(sensor::Sensor *s) { this->chargeRateSensor = s; }
+  void set_sensor_max_charging_amps(sensor::Sensor *s) {
+    this->maxChargingAmpsSensor = s;
+  }
 
   void set_binary_sensor_charger_switch(binary_sensor::BinarySensor *s) {
     this->chargerSwitchSensor = s;
@@ -228,6 +231,11 @@ public:
       this->chargeRateSensor->publish_state(rate);
     }
   }
+  void updateMaxChargingAmps(float amps) {
+    if (this->maxChargingAmpsSensor != nullptr) {
+      this->maxChargingAmpsSensor->publish_state(amps);
+    }
+  }
 
   void updateChargeLimit(float limit) { this->current_charge_limit_ = limit; }
   void updateChargingAmps(float amps) { this->current_charging_amps_ = amps; }
@@ -235,6 +243,7 @@ public:
   // Getters for template numbers
   float getCurrentChargeLimit() { return this->current_charge_limit_; }
   float getCurrentChargingAmps() { return this->current_charging_amps_; }
+  float getCurrentMaxChargingAmps() { return this->current_max_charging_amps_; }
   void updateChargerSwitch(bool enabled) {
     if (this->chargerSwitchSensor != nullptr) {
       this->chargerSwitchSensor->publish_state(enabled);
@@ -254,6 +263,8 @@ public:
       this->chargerPowerSensor->set_has_state(has_state);
     if (this->chargeRateSensor != nullptr)
       this->chargeRateSensor->set_has_state(has_state);
+    if (this->maxChargingAmpsSensor != nullptr)
+      this->maxChargingAmpsSensor->set_has_state(has_state);
 
     if (this->chargerSwitchSensor != nullptr)
       this->chargerSwitchSensor->set_has_state(has_state);
@@ -286,6 +297,7 @@ protected:
   text_sensor::TextSensor *chargingStateSensor = nullptr;
   sensor::Sensor *chargerPowerSensor = nullptr;
   sensor::Sensor *chargeRateSensor = nullptr;
+  sensor::Sensor *maxChargingAmpsSensor = nullptr;
 
   binary_sensor::BinarySensor *chargerSwitchSensor = nullptr;
 
@@ -301,6 +313,7 @@ protected:
   // Store current values for template number access
   float current_charge_limit_ = NAN;
   float current_charging_amps_ = NAN;
+  float current_max_charging_amps_ = NAN;
 
   std::vector<unsigned char> ble_read_buffer_;
 

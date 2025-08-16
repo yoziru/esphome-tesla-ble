@@ -117,6 +117,14 @@ number:
       then:
         - lambda: |-
             int var_x = static_cast<int>(x);
+            float max_amps = id(tesla_ble_vehicle_id)->getCurrentMaxChargingAmps();
+
+            // Validate against the current max charging amps from the car
+            if (!isnan(max_amps) && var_x > max_amps) {
+              ESP_LOGW("charging_amps_control", "Requested %dA exceeds maximum available %dA from charger, clamping to maximum", var_x, (int)max_amps);
+              var_x = (int)max_amps;
+            }
+
             id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, var_x);
   - platform: template
     name: "Charging limit"
