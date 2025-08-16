@@ -1784,6 +1784,52 @@ int TeslaBLEVehicle::handleCarServerVehicleData(
       this->updateChargeRate(static_cast<float>(
           charge_state.optional_charge_rate_mph.charge_rate_mph));
     }
+
+    // Update charge limit (from actual car state)
+    if (charge_state.which_optional_charge_limit_soc) {
+      this->updateChargeLimit(static_cast<float>(
+          charge_state.optional_charge_limit_soc.charge_limit_soc));
+      ESP_LOGD(TAG, "Charge limit from car: %d%%",
+               charge_state.optional_charge_limit_soc.charge_limit_soc);
+    }
+
+    // Update charging amps (from actual car state)
+    if (charge_state.which_optional_charge_current_request) {
+      this->updateChargingAmps(static_cast<float>(
+          charge_state.optional_charge_current_request.charge_current_request));
+      ESP_LOGD(
+          TAG, "Charging amps from car: %dA",
+          charge_state.optional_charge_current_request.charge_current_request);
+    }
+
+    // Update charger switch state (from actual car state)
+    if (charge_state.which_optional_charge_enable_request) {
+      this->updateChargerSwitch(
+          charge_state.optional_charge_enable_request.charge_enable_request);
+      ESP_LOGD(TAG, "Charger switch from car: %s",
+               charge_state.optional_charge_enable_request.charge_enable_request
+                   ? "ON"
+                   : "OFF");
+    }
+
+    // Log additional available charge state fields for debugging
+    ESP_LOGD(TAG, "Charge state fields available:");
+    if (charge_state.which_optional_battery_level)
+      ESP_LOGD(TAG, "  - battery_level");
+    if (charge_state.which_optional_battery_range)
+      ESP_LOGD(TAG, "  - battery_range");
+    if (charge_state.which_optional_charger_power)
+      ESP_LOGD(TAG, "  - charger_power");
+    if (charge_state.which_optional_charge_rate_mph)
+      ESP_LOGD(TAG, "  - charge_rate_mph");
+    if (charge_state.which_optional_minutes_to_full_charge)
+      ESP_LOGD(TAG, "  - minutes_to_full_charge");
+    if (charge_state.which_optional_charge_limit_soc)
+      ESP_LOGD(TAG, "  - charge_limit_soc");
+    if (charge_state.which_optional_charge_current_request)
+      ESP_LOGD(TAG, "  - charge_current_request");
+    if (charge_state.which_optional_charge_enable_request)
+      ESP_LOGD(TAG, "  - charge_enable_request");
   }
 
   return 0;

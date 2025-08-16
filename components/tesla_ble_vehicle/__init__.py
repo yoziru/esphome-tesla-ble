@@ -33,6 +33,7 @@ CONF_BATTERY_LEVEL = "battery_level"
 CONF_CHARGING_STATE = "charging_state"
 CONF_CHARGER_POWER = "charger_power"
 CONF_CHARGE_RATE = "charge_rate"
+CONF_CHARGER_SWITCH = "charger_switch"
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -81,6 +82,9 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
                 icon="mdi:speedometer",
+            ).extend(),
+            cv.Optional(CONF_CHARGER_SWITCH): binary_sensor.binary_sensor_schema(
+                icon="mdi:power-plug",
             ).extend(),
         }
     )
@@ -138,3 +142,8 @@ async def to_code(config):
         conf = config[CONF_CHARGE_RATE]
         s = await sensor.new_sensor(conf)
         cg.add(var.set_sensor_charge_rate(s))
+
+    if CONF_CHARGER_SWITCH in config:
+        conf = config[CONF_CHARGER_SWITCH]
+        bs = await binary_sensor.new_binary_sensor(conf)
+        cg.add(var.set_binary_sensor_charger_switch(bs))

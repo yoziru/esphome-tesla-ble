@@ -31,6 +31,10 @@ tesla_ble_vehicle:
   charge_rate:
     name: "Charge Rate"
 
+  charger_switch:
+    name: "Charger Switch State"
+    id: charger_switch_state
+
 button:
   - platform: template
     id: ble_pair
@@ -73,9 +77,15 @@ sensor:
 switch:
   - platform: template
     name: "Charger switch"
-    optimistic: true
-    assumed_state: true # we can't read the state of the charger over
-    restore_mode: RESTORE_DEFAULT_OFF
+    id: charger_switch_control
+    optimistic: false
+    lambda: |-
+      // Read the actual charger switch state from the binary sensor
+      if (id(charger_switch_state).state) {
+        return true;
+      } else {
+        return false;
+      }
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 1);
     turn_off_action:
@@ -89,32 +99,42 @@ switch:
 number:
   - platform: template
     name: "Charging amps"
-    id: charging_amps
+    id: charging_amps_control
     icon: mdi:ev-station
     unit_of_measurement: "A"
     mode: slider
     min_value: 0
     max_value: $charging_amps_max
     step: 1
-    optimistic: true
-    restore_value: true
-    on_value:
+    optimistic: false # Now reads actual state from car
+    lambda: |-
+      float amps = id(tesla_ble_vehicle_id)->getCurrentChargingAmps();
+      if (isnan(amps)) {
+        return {};
+      }
+      return amps;
+    set_action:
       then:
         - lambda: |-
             int var_x = static_cast<int>(x);
             id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, var_x);
   - platform: template
     name: "Charging limit"
-    id: charging_limit
+    id: charging_limit_control
     icon: mdi:ev-station
     unit_of_measurement: "%"
     mode: slider
     min_value: 50
     max_value: 100
     step: 1
-    optimistic: true
-    restore_value: true
-    on_value:
+    optimistic: false # Now reads actual state from car
+    lambda: |-
+      float limit = id(tesla_ble_vehicle_id)->getCurrentChargeLimit();
+      if (isnan(limit)) {
+        return {};
+      }
+      return limit;
+    set_action:
       then:
         - lambda: |-
             int var_x = static_cast<int>(x);

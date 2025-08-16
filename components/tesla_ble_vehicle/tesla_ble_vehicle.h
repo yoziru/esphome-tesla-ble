@@ -197,6 +197,10 @@ public:
     this->chargerPowerSensor = s;
   }
   void set_sensor_charge_rate(sensor::Sensor *s) { this->chargeRateSensor = s; }
+
+  void set_binary_sensor_charger_switch(binary_sensor::BinarySensor *s) {
+    this->chargerSwitchSensor = s;
+  }
   void set_charge_polling_interval(uint32_t interval) {
     this->charge_polling_interval_ = interval;
   }
@@ -225,6 +229,18 @@ public:
     }
   }
 
+  void updateChargeLimit(float limit) { this->current_charge_limit_ = limit; }
+  void updateChargingAmps(float amps) { this->current_charging_amps_ = amps; }
+
+  // Getters for template numbers
+  float getCurrentChargeLimit() { return this->current_charge_limit_; }
+  float getCurrentChargingAmps() { return this->current_charging_amps_; }
+  void updateChargerSwitch(bool enabled) {
+    if (this->chargerSwitchSensor != nullptr) {
+      this->chargerSwitchSensor->publish_state(enabled);
+    }
+  }
+
   // set sensors to unknown (e.g. when vehicle is disconnected)
   void setSensors(bool has_state) {
     this->isAsleepSensor->set_has_state(has_state);
@@ -238,6 +254,9 @@ public:
       this->chargerPowerSensor->set_has_state(has_state);
     if (this->chargeRateSensor != nullptr)
       this->chargeRateSensor->set_has_state(has_state);
+
+    if (this->chargerSwitchSensor != nullptr)
+      this->chargerSwitchSensor->set_has_state(has_state);
   }
 
 protected:
@@ -268,6 +287,8 @@ protected:
   sensor::Sensor *chargerPowerSensor = nullptr;
   sensor::Sensor *chargeRateSensor = nullptr;
 
+  binary_sensor::BinarySensor *chargerSwitchSensor = nullptr;
+
   // polling configuration
   uint32_t charge_polling_interval_ = 10000; // 10 seconds default
   uint32_t awake_polling_interval_ = 300000; // 5 minutes default
@@ -276,6 +297,10 @@ protected:
   bool is_charging_ = false;
   bool was_asleep_ =
       true; // Track previous sleep state to detect wake transitions
+
+  // Store current values for template number access
+  float current_charge_limit_ = NAN;
+  float current_charging_amps_ = NAN;
 
   std::vector<unsigned char> ble_read_buffer_;
 
