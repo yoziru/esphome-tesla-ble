@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, binary_sensor, sensor, text_sensor
+from esphome.components import ble_client, binary_sensor, number, sensor, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_BATTERY,
@@ -20,8 +20,14 @@ tesla_ble_vehicle_ns = cg.esphome_ns.namespace("tesla_ble_vehicle")
 TeslaBLEVehicle = tesla_ble_vehicle_ns.class_(
     "TeslaBLEVehicle", cg.PollingComponent, ble_client.BLEClientNode
 )
+ChargingAmpsNumber = tesla_ble_vehicle_ns.class_(
+    "ChargingAmpsNumber", number.Number, cg.Component
+)
+ChargeLimitNumber = tesla_ble_vehicle_ns.class_(
+    "ChargeLimitNumber", number.Number, cg.Component
+)
 
-AUTO_LOAD = ["binary_sensor", "sensor", "text_sensor"]
+AUTO_LOAD = ["binary_sensor", "number", "sensor", "text_sensor"]
 CONF_VIN = "vin"
 CONF_IS_ASLEEP = "is_asleep"
 CONF_IS_UNLOCKED = "is_unlocked"
@@ -34,6 +40,8 @@ CONF_CHARGING_STATE = "charging_state"
 CONF_CHARGER_POWER = "charger_power"
 CONF_CHARGE_RATE = "charge_rate"
 CONF_CHARGER_SWITCH = "charger_switch"
+CONF_CHARGING_AMPS_NUMBER = "charging_amps_number"
+CONF_CHARGE_LIMIT_NUMBER = "charge_limit_number"
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -85,6 +93,16 @@ CONFIG_SCHEMA = (
             ).extend(),
             cv.Optional(CONF_CHARGER_SWITCH): binary_sensor.binary_sensor_schema(
                 icon="mdi:power-plug",
+            ).extend(),
+            cv.Optional(CONF_CHARGING_AMPS_NUMBER): number.number_schema(
+                ChargingAmpsNumber,
+                icon="mdi:ev-station",
+                unit_of_measurement="A",
+            ).extend(),
+            cv.Optional(CONF_CHARGE_LIMIT_NUMBER): number.number_schema(
+                ChargeLimitNumber,
+                icon="mdi:ev-station",
+                unit_of_measurement="%",
             ).extend(),
         }
     )
@@ -147,3 +165,15 @@ async def to_code(config):
         conf = config[CONF_CHARGER_SWITCH]
         bs = await binary_sensor.new_binary_sensor(conf)
         cg.add(var.set_binary_sensor_charger_switch(bs))
+
+    if CONF_CHARGING_AMPS_NUMBER in config:
+        conf = config[CONF_CHARGING_AMPS_NUMBER]
+        num = await number.new_number(conf, min_value=0, max_value=48, step=1)
+        cg.add(num.set_parent(var))
+        cg.add(var.set_charging_amps_number(num))
+
+    if CONF_CHARGE_LIMIT_NUMBER in config:
+        conf = config[CONF_CHARGE_LIMIT_NUMBER]
+        num = await number.new_number(conf, min_value=50, max_value=100, step=1)
+        cg.add(num.set_parent(var))
+        cg.add(var.set_charge_limit_number(num))

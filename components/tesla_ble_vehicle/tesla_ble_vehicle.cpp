@@ -1719,7 +1719,8 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event,
 
 int TeslaBLEVehicle::handleCarServerVehicleData(
     const CarServer_VehicleData &vehicleData) {
-  ESP_LOGD(TAG, "Processing vehicle data");
+  ESP_LOGI(TAG, "Processing vehicle data - has_charge_state: %s",
+           vehicleData.has_charge_state ? "true" : "false");
 
   if (vehicleData.has_charge_state) {
     const CarServer_ChargeState &charge_state = vehicleData.charge_state;
@@ -1845,7 +1846,86 @@ int TeslaBLEVehicle::handleCarServerVehicleData(
       ESP_LOGD(TAG, "  - charge_enable_request");
   }
 
+  // Sync template numbers with updated car state
+  this->syncTemplateNumbers();
+
   return 0;
+}
+
+void TeslaBLEVehicle::syncTemplateNumbers() {
+  // Only sync if we have valid data
+  if (std::isnan(this->current_charge_limit_) &&
+      std::isnan(this->current_charging_amps_)) {
+    ESP_LOGD(TAG, "No valid car data yet, skipping template number sync");
+    return;
+  }
+
+  ESP_LOGI(TAG, "Syncing template numbers with car state");
+  ESP_LOGD(
+      TAG,
+      "Current charge limit: %.0f%%, charging amps: %.0fA, max amps: %.0fA",
+      this->current_charge_limit_, this->current_charging_amps_,
+      this->current_max_charging_amps_);
+
+  // Update charging amps number max_value dynamically
+  if (this->charging_amps_number_ != nullptr &&
+      !std::isnan(this->current_max_charging_amps_)) {
+    if (this->charging_amps_number_->traits.get_max_value() !=
+        this->current_max_charging_amps_) {
+      ESP_LOGI(TAG, "Updating charging amps max_value from %.0f to %.0f",
+               this->charging_amps_number_->traits.get_max_value(),
+               this->current_max_charging_amps_);
+      this->charging_amps_number_->traits.set_max_value(
+          this->current_max_charging_amps_);
+    }
+  }
+
+  // Update template number states with current car values
+  if (this->charging_amps_number_ != nullptr &&
+      !std::isnan(this->current_charging_amps_)) {
+    this->charging_amps_number_->publish_state(this->current_charging_amps_);
+  }
+
+  if (this->charge_limit_number_ != nullptr &&
+      !std::isnan(this->current_charge_limit_)) {
+    this->charge_limit_number_->publish_state(this->current_charge_limit_);
+  }
+}
+
+// ChargingAmpsNumber implementation
+void ChargingAmpsNumber::setup() {
+  // Traits are set in Python configuration
+  // Only dynamic max_value will be updated in syncTemplateNumbers()
+}
+
+void ChargingAmpsNumber::control(float value) {
+  if (this->parent_ != nullptr) {
+    int var_x = static_cast<int>(value);
+    float max_amps = this->parent_->getCurrentMaxChargingAmps();
+
+    // Validate against the current max charging amps from the car
+    if (!std::isnan(max_amps) && var_x > max_amps) {
+      ESP_LOGW("charging_amps_number",
+               "Requested %dA exceeds maximum available %dA from charger, "
+               "clamping to maximum",
+               var_x, (int)max_amps);
+      var_x = (int)max_amps;
+    }
+
+    this->parent_->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, var_x);
+  }
+}
+
+// ChargeLimitNumber implementation
+void ChargeLimitNumber::setup() {
+  // Traits are set in Python configuration
+}
+
+void ChargeLimitNumber::control(float value) {
+  if (this->parent_ != nullptr) {
+    int var_x = static_cast<int>(value);
+    this->parent_->sendCarServerVehicleActionMessage(SET_CHARGING_LIMIT, var_x);
+  }
 }
 
 } // namespace tesla_ble_vehicle

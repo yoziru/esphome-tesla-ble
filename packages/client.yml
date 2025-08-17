@@ -30,10 +30,10 @@ tesla_ble_vehicle:
     name: "Charger Power"
   charge_rate:
     name: "Charge Rate"
-
-  charger_switch:
-    name: "Charger Switch State"
-    id: charger_switch_state
+  charging_amps_number:
+    name: "Charging amps"
+  charge_limit_number:
+    name: "Charging limit"
 
 button:
   - platform: template
@@ -80,12 +80,8 @@ switch:
     id: charger_switch_control
     optimistic: false
     lambda: |-
-      // Read the actual charger switch state from the binary sensor
-      if (id(charger_switch_state).state) {
-        return true;
-      } else {
-        return false;
-      }
+      // Read the actual charger switch state directly from the component
+      return id(tesla_ble_vehicle_id)->getCurrentChargerSwitchState();
     turn_on_action:
       - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 1);
     turn_off_action:
@@ -95,55 +91,3 @@ switch:
     ble_client_id: ble_tesla_id
     name: "BLE Connection"
     entity_category: diagnostic
-
-number:
-  - platform: template
-    name: "Charging amps"
-    id: charging_amps_control
-    icon: mdi:ev-station
-    unit_of_measurement: "A"
-    mode: slider
-    min_value: 0
-    max_value: $charging_amps_max
-    step: 1
-    optimistic: false # Now reads actual state from car
-    lambda: |-
-      float amps = id(tesla_ble_vehicle_id)->getCurrentChargingAmps();
-      if (isnan(amps)) {
-        return {};
-      }
-      return amps;
-    set_action:
-      then:
-        - lambda: |-
-            int var_x = static_cast<int>(x);
-            float max_amps = id(tesla_ble_vehicle_id)->getCurrentMaxChargingAmps();
-
-            // Validate against the current max charging amps from the car
-            if (!isnan(max_amps) && var_x > max_amps) {
-              ESP_LOGW("charging_amps_control", "Requested %dA exceeds maximum available %dA from charger, clamping to maximum", var_x, (int)max_amps);
-              var_x = (int)max_amps;
-            }
-
-            id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, var_x);
-  - platform: template
-    name: "Charging limit"
-    id: charging_limit_control
-    icon: mdi:ev-station
-    unit_of_measurement: "%"
-    mode: slider
-    min_value: 50
-    max_value: 100
-    step: 1
-    optimistic: false # Now reads actual state from car
-    lambda: |-
-      float limit = id(tesla_ble_vehicle_id)->getCurrentChargeLimit();
-      if (isnan(limit)) {
-        return {};
-      }
-      return limit;
-    set_action:
-      then:
-        - lambda: |-
-            int var_x = static_cast<int>(x);
-            id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_LIMIT, var_x);

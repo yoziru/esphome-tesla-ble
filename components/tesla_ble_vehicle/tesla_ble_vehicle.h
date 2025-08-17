@@ -10,6 +10,7 @@
 #include <esphome/components/binary_sensor/binary_sensor.h>
 #include <esphome/components/ble_client/ble_client.h>
 #include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
+#include <esphome/components/number/number.h>
 #include <esphome/components/sensor/sensor.h>
 #include <esphome/components/text_sensor/text_sensor.h>
 #include <esphome/core/component.h>
@@ -32,6 +33,31 @@ typedef enum BLE_CarServer_VehicleAction_E {
 namespace esphome {
 
 namespace tesla_ble_vehicle {
+
+// Forward declaration
+class TeslaBLEVehicle;
+
+// Charging Amps Number Component
+class ChargingAmpsNumber : public number::Number, public Component {
+public:
+  void set_parent(TeslaBLEVehicle *parent) { this->parent_ = parent; }
+  void setup() override;
+
+protected:
+  void control(float value) override;
+  TeslaBLEVehicle *parent_;
+};
+
+// Charge Limit Number Component
+class ChargeLimitNumber : public number::Number, public Component {
+public:
+  void set_parent(TeslaBLEVehicle *parent) { this->parent_ = parent; }
+  void setup() override;
+
+protected:
+  void control(float value) override;
+  TeslaBLEVehicle *parent_;
+};
 namespace espbt = esphome::esp32_ble_tracker;
 
 static const char *const TAG = "tesla_ble_vehicle";
@@ -240,11 +266,27 @@ public:
   void updateChargeLimit(float limit) { this->current_charge_limit_ = limit; }
   void updateChargingAmps(float amps) { this->current_charging_amps_ = amps; }
 
-  // Getters for template numbers
+  // Getters for template numbers and switches
   float getCurrentChargeLimit() { return this->current_charge_limit_; }
   float getCurrentChargingAmps() { return this->current_charging_amps_; }
   float getCurrentMaxChargingAmps() { return this->current_max_charging_amps_; }
+  bool getCurrentChargerSwitchState() {
+    return this->current_charger_switch_state_;
+  }
+
+  // Method to sync template numbers with current car state
+  void syncTemplateNumbers();
+
+  // Set number components
+  void set_charging_amps_number(ChargingAmpsNumber *number) {
+    this->charging_amps_number_ = number;
+  }
+  void set_charge_limit_number(ChargeLimitNumber *number) {
+    this->charge_limit_number_ = number;
+  }
+
   void updateChargerSwitch(bool enabled) {
+    this->current_charger_switch_state_ = enabled;
     if (this->chargerSwitchSensor != nullptr) {
       this->chargerSwitchSensor->publish_state(enabled);
     }
@@ -310,10 +352,15 @@ protected:
   bool was_asleep_ =
       true; // Track previous sleep state to detect wake transitions
 
-  // Store current values for template number access
+  // Store current values for template number and switch access
   float current_charge_limit_ = NAN;
   float current_charging_amps_ = NAN;
   float current_max_charging_amps_ = NAN;
+  bool current_charger_switch_state_ = false;
+
+  // References to number components
+  ChargingAmpsNumber *charging_amps_number_ = nullptr;
+  ChargeLimitNumber *charge_limit_number_ = nullptr;
 
   std::vector<unsigned char> ble_read_buffer_;
 
