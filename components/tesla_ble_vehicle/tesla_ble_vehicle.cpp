@@ -1317,18 +1317,28 @@ int TeslaBLEVehicle::sendCarServerVehicleActionMessage(
         int return_code = 0;
         ESP_LOGI(TAG, "[%s] Building message..", action_str.c_str());
         switch (action) {
-        case SET_CHARGING_SWITCH:
-          return_code = tesla_ble_client_->buildChargingSwitchMessage(
-              static_cast<bool>(param), message_buffer, &message_length);
+        case SET_CHARGING_SWITCH: {
+          bool charging_on = static_cast<bool>(param);
+          return_code = tesla_ble_client_->buildCarServerVehicleActionMessage(
+              message_buffer, &message_length,
+              CarServer_VehicleAction_chargingStartStopAction_tag,
+              &charging_on);
           break;
-        case SET_CHARGING_AMPS:
-          return_code = tesla_ble_client_->buildChargingAmpsMessage(
-              static_cast<int32_t>(param), message_buffer, &message_length);
+        }
+        case SET_CHARGING_AMPS: {
+          int32_t amps = static_cast<int32_t>(param);
+          return_code = tesla_ble_client_->buildCarServerVehicleActionMessage(
+              message_buffer, &message_length,
+              CarServer_VehicleAction_setChargingAmpsAction_tag, &amps);
           break;
-        case SET_CHARGING_LIMIT:
-          return_code = tesla_ble_client_->buildChargingSetLimitMessage(
-              static_cast<int32_t>(param), message_buffer, &message_length);
+        }
+        case SET_CHARGING_LIMIT: {
+          int32_t limit = static_cast<int32_t>(param);
+          return_code = tesla_ble_client_->buildCarServerVehicleActionMessage(
+              message_buffer, &message_length,
+              CarServer_VehicleAction_chargingSetLimitAction_tag, &limit);
           break;
+        }
         default:
           ESP_LOGE(TAG, "Invalid action: %d", static_cast<int>(action));
           return 1;
