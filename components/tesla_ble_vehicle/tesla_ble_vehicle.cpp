@@ -739,7 +739,22 @@ namespace esphome
         case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
         {
           CarServer_Response carserver_response = CarServer_Response_init_default;
-          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, &carserver_response);
+          
+          // Extract signature data and fault information from the message
+          Signatures_SignatureData* sig_data = nullptr;
+          pb_size_t sig_data_count = 0;
+          UniversalMessage_MessageFault_E fault = UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_NONE;
+          
+          if (message.which_sub_sigData == UniversalMessage_RoutableMessage_signature_data_tag) {
+            sig_data = &message.sub_sigData.signature_data;
+            sig_data_count = 1;
+          }
+          
+          if (message.has_signedMessageStatus) {
+            fault = message.signedMessageStatus.signed_message_fault;
+          }
+          
+          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, sig_data, sig_data_count, fault, &carserver_response);
           if (return_code != 0)
           {
             ESP_LOGE(TAG, "Failed to parse incoming message");
