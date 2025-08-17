@@ -12,6 +12,7 @@
 #include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
 #include <esphome/components/number/number.h>
 #include <esphome/components/sensor/sensor.h>
+#include <esphome/components/switch/switch.h>
 #include <esphome/components/text_sensor/text_sensor.h>
 #include <esphome/core/component.h>
 #include <esphome/core/log.h>
@@ -56,6 +57,17 @@ public:
 
 protected:
   void control(float value) override;
+  TeslaBLEVehicle *parent_;
+};
+
+// Charger Switch Component
+class ChargerSwitch : public switch_::Switch, public Component {
+public:
+  void set_parent(TeslaBLEVehicle *parent) { this->parent_ = parent; }
+  void setup() override;
+
+protected:
+  void write_state(bool state) override;
   TeslaBLEVehicle *parent_;
 };
 namespace espbt = esphome::esp32_ble_tracker;
@@ -277,18 +289,24 @@ public:
   // Method to sync template numbers with current car state
   void syncTemplateNumbers();
 
-  // Set number components
+  // Set number and switch components
   void set_charging_amps_number(ChargingAmpsNumber *number) {
     this->charging_amps_number_ = number;
   }
   void set_charge_limit_number(ChargeLimitNumber *number) {
     this->charge_limit_number_ = number;
   }
+  void set_charger_switch_component(ChargerSwitch *sw) {
+    this->charger_switch_component_ = sw;
+  }
 
   void updateChargerSwitch(bool enabled) {
     this->current_charger_switch_state_ = enabled;
     if (this->chargerSwitchSensor != nullptr) {
       this->chargerSwitchSensor->publish_state(enabled);
+    }
+    if (this->charger_switch_component_ != nullptr) {
+      this->charger_switch_component_->publish_state(enabled);
     }
   }
 
@@ -358,9 +376,10 @@ protected:
   float current_max_charging_amps_ = NAN;
   bool current_charger_switch_state_ = false;
 
-  // References to number components
+  // References to number and switch components
   ChargingAmpsNumber *charging_amps_number_ = nullptr;
   ChargeLimitNumber *charge_limit_number_ = nullptr;
+  ChargerSwitch *charger_switch_component_ = nullptr;
 
   std::vector<unsigned char> ble_read_buffer_;
 

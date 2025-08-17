@@ -1928,5 +1928,17 @@ void ChargeLimitNumber::control(float value) {
   }
 }
 
+// ChargerSwitch implementation
+void ChargerSwitch::setup() {
+  // No traits to set for switches
+}
+
+void ChargerSwitch::write_state(bool state) {
+  if (this->parent_ != nullptr) {
+    this->parent_->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH,
+                                                     state ? 1 : 0);
+  }
+}
+
 } // namespace tesla_ble_vehicle
 } // namespace esphome

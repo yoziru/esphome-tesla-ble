@@ -1,6 +1,13 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, binary_sensor, number, sensor, text_sensor
+from esphome.components import (
+    ble_client,
+    binary_sensor,
+    number,
+    sensor,
+    switch,
+    text_sensor,
+)
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_BATTERY,
@@ -26,8 +33,11 @@ ChargingAmpsNumber = tesla_ble_vehicle_ns.class_(
 ChargeLimitNumber = tesla_ble_vehicle_ns.class_(
     "ChargeLimitNumber", number.Number, cg.Component
 )
+ChargerSwitch = tesla_ble_vehicle_ns.class_(
+    "ChargerSwitch", switch.Switch, cg.Component
+)
 
-AUTO_LOAD = ["binary_sensor", "number", "sensor", "text_sensor"]
+AUTO_LOAD = ["binary_sensor", "number", "sensor", "switch", "text_sensor"]
 CONF_VIN = "vin"
 CONF_IS_ASLEEP = "is_asleep"
 CONF_IS_UNLOCKED = "is_unlocked"
@@ -42,6 +52,7 @@ CONF_CHARGE_RATE = "charge_rate"
 CONF_CHARGER_SWITCH = "charger_switch"
 CONF_CHARGING_AMPS_NUMBER = "charging_amps_number"
 CONF_CHARGE_LIMIT_NUMBER = "charge_limit_number"
+CONF_CHARGER_SWITCH_COMPONENT = "charger_switch_component"
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -103,6 +114,10 @@ CONFIG_SCHEMA = (
                 ChargeLimitNumber,
                 icon="mdi:ev-station",
                 unit_of_measurement="%",
+            ).extend(),
+            cv.Optional(CONF_CHARGER_SWITCH_COMPONENT): switch.switch_schema(
+                ChargerSwitch,
+                icon="mdi:power-plug",
             ).extend(),
         }
     )
@@ -177,3 +192,9 @@ async def to_code(config):
         num = await number.new_number(conf, min_value=50, max_value=100, step=1)
         cg.add(num.set_parent(var))
         cg.add(var.set_charge_limit_number(num))
+
+    if CONF_CHARGER_SWITCH_COMPONENT in config:
+        conf = config[CONF_CHARGER_SWITCH_COMPONENT]
+        sw = await switch.new_switch(conf)
+        cg.add(sw.set_parent(var))
+        cg.add(var.set_charger_switch_component(sw))

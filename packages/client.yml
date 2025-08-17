@@ -34,6 +34,8 @@ tesla_ble_vehicle:
     name: "Charging amps"
   charge_limit_number:
     name: "Charging limit"
+  charger_switch_component:
+    name: "Charger switch"
 
 button:
   - platform: template
@@ -75,18 +77,6 @@ sensor:
     entity_category: diagnostic
 
 switch:
-  - platform: template
-    name: "Charger switch"
-    id: charger_switch_control
-    optimistic: false
-    lambda: |-
-      // Read the actual charger switch state directly from the component
-      return id(tesla_ble_vehicle_id)->getCurrentChargerSwitchState();
-    turn_on_action:
-      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 1);
-    turn_off_action:
-      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 0);
-
   - platform: ble_client
     ble_client_id: ble_tesla_id
     name: "BLE Connection"
