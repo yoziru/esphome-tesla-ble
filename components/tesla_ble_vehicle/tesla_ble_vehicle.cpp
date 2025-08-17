@@ -739,7 +739,22 @@ namespace esphome
         case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
         {
           CarServer_Response carserver_response = CarServer_Response_init_default;
-          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, &carserver_response);
+          
+          // Extract signature data and fault information from the message
+          Signatures_SignatureData* sig_data = nullptr;
+          pb_size_t sig_data_count = 0;
+          UniversalMessage_MessageFault_E fault = UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_NONE;
+          
+          if (message.which_sub_sigData == UniversalMessage_RoutableMessage_signature_data_tag) {
+            sig_data = &message.sub_sigData.signature_data;
+            sig_data_count = 1;
+          }
+          
+          if (message.has_signedMessageStatus) {
+            fault = message.signedMessageStatus.signed_message_fault;
+          }
+          
+          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, sig_data, sig_data_count, fault, &carserver_response);
           if (return_code != 0)
           {
             ESP_LOGE(TAG, "Failed to parse incoming message");
@@ -1247,18 +1262,28 @@ namespace esphome
         ESP_LOGI(TAG, "[%s] Building message..", action_str.c_str());
         switch (action)
         {
-        case SET_CHARGING_SWITCH:
-          return_code = tesla_ble_client_->buildChargingSwitchMessage(
-              static_cast<bool>(param), message_buffer, &message_length);
+        case SET_CHARGING_SWITCH: {
+          bool charging_on = static_cast<bool>(param);
+          return_code = tesla_ble_client_->buildCarServerVehicleActionMessage(
+              message_buffer, &message_length,
+              CarServer_VehicleAction_chargingStartStopAction_tag,
+              &charging_on);
           break;
-        case SET_CHARGING_AMPS:
-          return_code = tesla_ble_client_->buildChargingAmpsMessage(
-              static_cast<int32_t>(param), message_buffer, &message_length);
+        }
+        case SET_CHARGING_AMPS: {
+          int32_t amps = static_cast<int32_t>(param);
+          return_code = tesla_ble_client_->buildCarServerVehicleActionMessage(
+              message_buffer, &message_length,
+              CarServer_VehicleAction_setChargingAmpsAction_tag, &amps);
           break;
-        case SET_CHARGING_LIMIT:
-          return_code = tesla_ble_client_->buildChargingSetLimitMessage(
-              static_cast<int32_t>(param), message_buffer, &message_length);
+        }
+        case SET_CHARGING_LIMIT: {
+          int32_t limit = static_cast<int32_t>(param);
+          return_code = tesla_ble_client_->buildCarServerVehicleActionMessage(
+              message_buffer, &message_length,
+              CarServer_VehicleAction_chargingSetLimitAction_tag, &limit);
           break;
+        }
         default:
           ESP_LOGE(TAG, "Invalid action: %d", static_cast<int>(action));
           return 1;
