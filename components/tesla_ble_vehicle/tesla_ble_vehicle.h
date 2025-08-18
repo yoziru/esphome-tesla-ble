@@ -1,223 +1,313 @@
 #pragma once
 
-#include <algorithm>
-#include <cstring>
-#include <iterator>
-#include <vector>
-#include <queue>
-
-#include <esp_gattc_api.h>
-#include <esphome/components/binary_sensor/binary_sensor.h>
+#include <memory>
 #include <esphome/components/ble_client/ble_client.h>
 #include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
+#include <esphome/components/binary_sensor/binary_sensor.h>
 #include <esphome/components/sensor/sensor.h>
+#include <esphome/components/text_sensor/text_sensor.h>
+#include <esphome/components/button/button.h>
+#include <esphome/components/switch/switch.h>
+#include <esphome/components/number/number.h>
 #include <esphome/core/component.h>
-#include <esphome/core/log.h>
+#include <esphome/core/automation.h>
 
-#include <universal_message.pb.h>
-#include <vcsec.pb.h>
-#include <errors.h>
+#include "message_handler.h"
+#include "command_manager.h"
+#include "ble_manager.h"
+#include "session_manager.h"
+#include "vehicle_state_manager.h"
+#include "polling_manager.h"
 
-namespace TeslaBLE
-{
-    class Client;
-}
+namespace esphome {
+namespace tesla_ble_vehicle {
 
-typedef enum BLE_CarServer_VehicleAction_E
-{
+namespace espbt = esphome::esp32_ble_tracker;
+
+static const char *const TAG = "tesla_ble_vehicle";
+
+// Tesla BLE service UUIDs
+static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";
+static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
+static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
+
+// Vehicle action types for CarServer
+typedef enum BLE_CarServer_VehicleAction_E {
     SET_CHARGING_SWITCH,
     SET_CHARGING_AMPS,
     SET_CHARGING_LIMIT
 } BLE_CarServer_VehicleAction;
 
-namespace esphome
-{
+/**
+ * @brief Main Tesla BLE Vehicle component
+ * 
+ * This is the main component that coordinates all Tesla BLE operations.
+ * It uses specialized managers for different aspects of the communication.
+ */
+class TeslaBLEVehicle : public PollingComponent, public ble_client::BLEClientNode {
+public:
+    TeslaBLEVehicle();
+    ~TeslaBLEVehicle() = default;
 
-    namespace tesla_ble_vehicle
-    {
-        namespace espbt = esphome::esp32_ble_tracker;
+    // ESPHome component lifecycle
+    void setup() override;
+    void loop() override;
+    void update() override;
+    void dump_config() override;
 
-        static const char *const TAG = "tesla_ble_vehicle";
-        static const char *nvs_key_infotainment = "tk_infotainment";
-        static const char *nvs_key_vcsec = "tk_vcsec";
+    // BLE event handling
+    void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
+                           esp_ble_gattc_cb_param_t *param) override;
 
-        static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";
-        static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
-        static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
+    // Configuration setters
+    void set_vin(const char *vin);
+    void set_role(const std::string &role);
+    void set_charging_amps_max(int amps_max);
+    
+    // Polling interval setters
+    void set_vcsec_poll_interval(uint32_t interval_ms);
+    void set_infotainment_poll_interval_awake(uint32_t interval_ms);
+    void set_infotainment_poll_interval_active(uint32_t interval_ms);
+    void set_infotainment_sleep_timeout(uint32_t interval_ms);
 
-        static const int PRIVATE_KEY_SIZE = 228;
-        static const int PUBLIC_KEY_SIZE = 65;
-        static const int MAX_BLE_MESSAGE_SIZE = 1024; // Max size of a BLE message
-        static const int RX_TIMEOUT = 1 * 1000;       // Timeout interval between receiving chunks of a message (1s)
-        static const int MAX_LATENCY = 4 * 1000;      // Max allowed error when syncing vehicle clock (4s)
-        static const int BLOCK_LENGTH = 20;           // BLE MTU is 23 bytes, so we need to split the message into chunks (20 bytes as in vehicle_command)
-        static const int MAX_RETRIES = 5;             // Max number of retries for a command
-        static const int COMMAND_TIMEOUT = 30 * 1000; // Overall timeout for a command (30s)
+    // Sensor setters (delegate to state manager)
+    void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s);
+    void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s);
+    void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s);
+    void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s);
+    void set_binary_sensor_is_charger_connected(binary_sensor::BinarySensor *s);
+    void set_battery_level_sensor(sensor::Sensor *sensor);
+    void set_charger_power_sensor(sensor::Sensor *sensor);
+    void set_charging_rate_sensor(sensor::Sensor *sensor);
+    void set_charging_state_sensor(text_sensor::TextSensor *sensor);
 
-        enum class BLECommandState
-        {
-            IDLE,
-            WAITING_FOR_VCSEC_AUTH,
-            WAITING_FOR_VCSEC_AUTH_RESPONSE,
-            WAITING_FOR_INFOTAINMENT_AUTH,
-            WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE,
-            WAITING_FOR_WAKE,
-            WAITING_FOR_WAKE_RESPONSE,
-            READY,
-            WAITING_FOR_RESPONSE,
-        };
+    // Control setters (delegate to state manager)
+    void set_charging_switch(switch_::Switch *sw);
+    void set_charging_amps_number(number::Number *number);
+    void set_charging_limit_number(number::Number *number);
 
-        struct BLECommand
-        {
-            UniversalMessage_Domain domain;
-            std::function<int()> execute;
-            std::string execute_name;
-            BLECommandState state;
-            uint32_t started_at = millis();
-            uint32_t last_tx_at = 0;
-            uint8_t retry_count = 0;
+    // Button setters
+    void set_wake_button(button::Button *button);
+    void set_pair_button(button::Button *button);
+    void set_regenerate_key_button(button::Button *button);
+    void set_force_update_button(button::Button *button);
 
-            BLECommand(UniversalMessage_Domain d, std::function<int()> e, std::string n = "")
-                : domain(d), execute(e), execute_name(n), state(BLECommandState::IDLE) {}
-        };
+    // Public vehicle actions
+    int wake_vehicle();
+    int start_pairing();
+    int regenerate_key();
+    void force_update();
 
-        struct BLETXChunk
-        {
-            std::vector<unsigned char> data;
-            esp_gatt_write_type_t write_type;
-            esp_gatt_auth_req_t auth_req;
-            uint32_t sent_at = millis();
-            uint8_t retry_count = 0;
+    // Vehicle control actions
+    int set_charging_state(bool charging);
+    int set_charging_amps(int amps);
+    int set_charging_limit(int limit);
 
-            BLETXChunk(std::vector<unsigned char> d, esp_gatt_write_type_t wt, esp_gatt_auth_req_t ar)
-                : data(d), write_type(wt), auth_req(ar) {}
-        };
+    // Data request actions
+    void request_vehicle_data();
+    void request_charging_data();
 
-        struct BLERXChunk
-        {
-            std::vector<unsigned char> buffer;
-            uint32_t received_at = millis();
+    // Manager accessors (for internal use by managers)
+    MessageHandler* get_message_handler() const { return message_handler_.get(); }
+    CommandManager* get_command_manager() const { return command_manager_.get(); }
+    BLEManager* get_ble_manager() const { return ble_manager_.get(); }
+    SessionManager* get_session_manager() const { return session_manager_.get(); }
+    VehicleStateManager* get_state_manager() const { return state_manager_.get(); }
+    PollingManager* get_polling_manager() const { return polling_manager_.get(); }
 
-            BLERXChunk(std::vector<unsigned char> b)
-                : buffer(b) {}
-        };
+    // BLE connection state
+    bool is_connected() const { return node_state == espbt::ClientState::ESTABLISHED; }
+    uint16_t get_read_handle() const { return read_handle_; }
+    uint16_t get_write_handle() const { return write_handle_; }
 
-        struct BLEResponse
-        {
-            // universal message
-            UniversalMessage_RoutableMessage message;
-            uint32_t received_at = millis();
+private:
+    // Specialized managers
+    std::unique_ptr<MessageHandler> message_handler_;
+    std::unique_ptr<CommandManager> command_manager_;
+    std::unique_ptr<BLEManager> ble_manager_;
+    std::unique_ptr<SessionManager> session_manager_;
+    std::unique_ptr<VehicleStateManager> state_manager_;
+    std::unique_ptr<PollingManager> polling_manager_;
 
-            BLEResponse(UniversalMessage_RoutableMessage m)
-                : message(m) {}
-        };
+    // BLE connection details
+    uint16_t handle_{0};
+    uint16_t read_handle_{0};
+    uint16_t write_handle_{0};
+    espbt::ESPBTUUID service_uuid_;
+    espbt::ESPBTUUID read_uuid_;
+    espbt::ESPBTUUID write_uuid_;
 
-        class TeslaBLEVehicle : public PollingComponent,
-                                public ble_client::BLEClientNode
-        {
-        public:
-            TeslaBLEVehicle();
-            void setup() override;
-            void loop() override;
-            void update() override;
-            void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
-                                     esp_ble_gattc_cb_param_t *param) override;
-            void dump_config() override;
-            void set_vin(const char *vin);
-            void process_command_queue();
-            void process_response_queue();
-            void process_ble_read_queue();
-            void process_ble_write_queue();
-            void invalidateSession(UniversalMessage_Domain domain);
+    // Configuration
+    std::string vin_;
+    std::string role_{"DRIVER"};
+    
+    // Polling intervals (in milliseconds) - stored for late initialization
+    uint32_t vcsec_poll_interval_{10000};                     // 10s default
+    uint32_t infotainment_poll_interval_awake_{30000};        // 30s default 
+    uint32_t infotainment_poll_interval_active_{10000};       // 10s default
+    uint32_t infotainment_sleep_timeout_{660000};             // 11 minutes (660s) default
 
-            void regenerateKey();
-            int startPair(void);
-            int nvs_save_session_info(const Signatures_SessionInfo &session_info, const UniversalMessage_Domain domain);
-            int nvs_load_session_info(Signatures_SessionInfo *session_info, const UniversalMessage_Domain domain);
-            int nvs_initialize_private_key();
+    // Temporary storage for sensors before state_manager_ is initialized
+    binary_sensor::BinarySensor* pending_asleep_sensor_{nullptr};
+    binary_sensor::BinarySensor* pending_unlocked_sensor_{nullptr};
+    binary_sensor::BinarySensor* pending_user_present_sensor_{nullptr};
+    binary_sensor::BinarySensor* pending_charge_flap_sensor_{nullptr};
+    binary_sensor::BinarySensor* pending_charger_sensor_{nullptr};
+    sensor::Sensor* pending_battery_level_sensor_{nullptr};
+    sensor::Sensor* pending_charger_power_sensor_{nullptr};
+    sensor::Sensor* pending_charging_rate_sensor_{nullptr};
+    text_sensor::TextSensor* pending_charging_state_sensor_{nullptr};
+    switch_::Switch* pending_charging_switch_{nullptr};
+    number::Number* pending_charging_amps_number_{nullptr};
+    number::Number* pending_charging_limit_number_{nullptr};
 
-            int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
-            int handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus);
+    // Initialization methods
+    void initialize_managers();
+    void setup_button_callbacks();
+    void initialize_ble_uuids();
+    void configure_pending_sensors();
 
-            int wakeVehicle(void);
-            int sendVCSECActionMessage(VCSEC_RKEAction_E action);
-            int sendCarServerVehicleActionMessage(BLE_CarServer_VehicleAction action, int param);
+    // Connection event handlers
+    void handle_connection_established();
+    void handle_connection_lost();
 
-            int sendSessionInfoRequest(UniversalMessage_Domain domain);
-            int sendVCSECInformationRequest(void);
-            void enqueueVCSECInformationRequest(bool force = false);
+    friend class MessageHandler;
+    friend class CommandManager;
+    friend class BLEManager;
+    friend class SessionManager;
+    friend class VehicleStateManager;
+    friend class PollingManager;
+};
 
-            int writeBLE(const unsigned char *message_buffer, size_t message_length,
-                         esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
+// Custom button classes (simplified)
+class TeslaWakeButton : public button::Button {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    void press_action() override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
 
-            // sensors
-            // Sleep state (vehicleSleepStatus)
-            void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = static_cast<binary_sensor::BinarySensor *>(s); }
-            void updateIsAsleep(bool asleep)
-            {
-                isAsleepSensor->publish_state(asleep);
-            }
-            // Door lock (vehicleLockState)
-            void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = static_cast<binary_sensor::BinarySensor *>(s); }
-            void updateisUnlocked(bool locked)
-            {
-                isUnlockedSensor->publish_state(locked);
-            }
-            // User presence (userPresence)
-            void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = static_cast<binary_sensor::BinarySensor *>(s); }
-            void updateIsUserPresent(bool present)
-            {
-                isUserPresentSensor->publish_state(present);
-            }
-            // Charge flap (chargeFlapStatus)
-            void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s) { isChargeFlapOpenSensor = static_cast<binary_sensor::BinarySensor *>(s); }
-            void updateIsChargeFlapOpen(bool open)
-            {
-                isChargeFlapOpenSensor->publish_state(open);
-            }
-            void setChargeFlapHasState(bool has_state)
-            {
-                isChargeFlapOpenSensor->set_has_state(has_state);
-            }
+class TeslaPairButton : public button::Button {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    void press_action() override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
 
-            // set sensors to unknown (e.g. when vehicle is disconnected)
-            void setSensors(bool has_state)
-            {
-                isAsleepSensor->set_has_state(has_state);
-                isUnlockedSensor->set_has_state(has_state);
-                isUserPresentSensor->set_has_state(has_state);
-            }
+class TeslaRegenerateKeyButton : public button::Button {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    void press_action() override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
 
-        protected:
-            std::queue<BLERXChunk> ble_read_queue_;
-            std::queue<BLEResponse> response_queue_;
-            std::queue<BLETXChunk> ble_write_queue_;
-            std::queue<BLECommand> command_queue_;
+class TeslaForceUpdateButton : public button::Button {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    void press_action() override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
 
-            TeslaBLE::Client *tesla_ble_client_;
-            uint32_t storage_handle_;
-            uint16_t handle_;
-            uint16_t read_handle_{0};
-            uint16_t write_handle_{0};
+class TeslaChargingSwitch : public switch_::Switch {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    void write_state(bool state) override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
 
-            espbt::ESPBTUUID service_uuid_;
-            espbt::ESPBTUUID read_uuid_;
-            espbt::ESPBTUUID write_uuid_;
+class TeslaChargingAmpsNumber : public number::Number {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+    void update_max_value(int32_t new_max);
+protected:
+    void control(float value) override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
 
-            // sensors
-            binary_sensor::BinarySensor *isAsleepSensor;
-            binary_sensor::BinarySensor *isUnlockedSensor;
-            binary_sensor::BinarySensor *isUserPresentSensor;
-            binary_sensor::BinarySensor *isChargeFlapOpenSensor;
+class TeslaChargingLimitNumber : public number::Number {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    void control(float value) override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
 
-            std::vector<unsigned char> ble_read_buffer_;
+// Action classes for automation (unchanged for compatibility)
+template<typename... Ts> class WakeAction : public Action<Ts...> {
+public:
+    WakeAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+    void play(Ts... x) override { parent_->wake_vehicle(); }
+protected:
+    TeslaBLEVehicle *parent_;
+};
 
-            void initializeFlash();
-            void openNVSHandle();
-            void initializePrivateKey();
-            void loadSessionInfo();
-            void loadDomainSessionInfo(UniversalMessage_Domain domain);
-        };
+template<typename... Ts> class PairAction : public Action<Ts...> {
+public:
+    PairAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+    void play(Ts... x) override { parent_->start_pairing(); }
+protected:
+    TeslaBLEVehicle *parent_;
+};
 
-    } // namespace tesla_ble_vehicle
+template<typename... Ts> class RegenerateKeyAction : public Action<Ts...> {
+public:
+    RegenerateKeyAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+    void play(Ts... x) override { parent_->regenerate_key(); }
+protected:
+    TeslaBLEVehicle *parent_;
+};
+
+template<typename... Ts> class ForceUpdateAction : public Action<Ts...> {
+public:
+    ForceUpdateAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+    void play(Ts... x) override { parent_->force_update(); }
+protected:
+    TeslaBLEVehicle *parent_;
+};
+
+template<typename... Ts> class SetChargingAction : public Action<Ts...> {
+public:
+    SetChargingAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+    void set_state(esphome::TemplatableValue<bool, Ts...> state) { state_ = state; }
+    void play(Ts... x) override {
+        bool state = state_.value(x...);
+        parent_->set_charging_state(state);
+    }
+protected:
+    TeslaBLEVehicle *parent_;
+    esphome::TemplatableValue<bool, Ts...> state_;
+};
+
+template<typename... Ts> class SetChargingAmpsAction : public Action<Ts...> {
+public:
+    SetChargingAmpsAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+    void set_amps(esphome::TemplatableValue<int, Ts...> amps) { amps_ = amps; }
+    void play(Ts... x) override {
+        int amps = amps_.value(x...);
+        parent_->set_charging_amps(amps);
+    }
+protected:
+    TeslaBLEVehicle *parent_;
+    esphome::TemplatableValue<int, Ts...> amps_;
+};
+
+template<typename... Ts> class SetChargingLimitAction : public Action<Ts...> {
+public:
+    SetChargingLimitAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+    void set_limit(esphome::TemplatableValue<int, Ts...> limit) { limit_ = limit; }
+    void play(Ts... x) override {
+        int limit = limit_.value(x...);
+        parent_->set_charging_limit(limit);
+    }
+protected:
+    TeslaBLEVehicle *parent_;
+    esphome::TemplatableValue<int, Ts...> limit_;
+};
+
+} // namespace tesla_ble_vehicle
 } // namespace esphome

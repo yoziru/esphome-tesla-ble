@@ -2,55 +2,32 @@ substitutions:
   ble_mac_address: !secret ble_mac_address
   tesla_vin: !secret tesla_vin
   charging_amps_max: "32"
+  # Polling interval defaults (can be overridden in main config)
+  vcsec_poll_interval: "10"
+  infotainment_poll_interval_awake: "30" 
+  infotainment_poll_interval_active: "10"
+  infotainment_sleep_timeout: "660"  # 11 minutes
 
 ble_client:
   - mac_address: $ble_mac_address
     id: ble_tesla_id
 
+# Tesla BLE Vehicle - automatically creates all entities based on role
 tesla_ble_vehicle:
   ble_client_id: ble_tesla_id
   id: tesla_ble_vehicle_id
   vin: $tesla_vin
-  update_interval: 1min # default
-  is_asleep:
-    name: "Asleep"
-  is_user_present:
-    name: "User presence"
-  is_unlocked:
-    name: "Doors"
-  is_charge_flap_open:
-    name: "Charge flap"
+  # update_interval is automatically set to match vcsec_poll_interval
+  charging_amps_max: $charging_amps_max
+  role: DRIVER  # Options: DRIVER (all controls) or CHARGING_MANAGER (charging + basic controls only)
+  
+  # Polling intervals (in seconds) - adjust based on your battery life vs responsiveness needs
+  vcsec_poll_interval: $vcsec_poll_interval        # Vehicle status polling (also sets ESPHome update_interval)
+  infotainment_poll_interval_awake: $infotainment_poll_interval_awake    # Data polling when awake but not active
+  infotainment_poll_interval_active: $infotainment_poll_interval_active # Data polling when charging/unlocked/user present (more responsive)
+  infotainment_sleep_timeout: $infotainment_sleep_timeout  # How long to poll before allowing sleep
 
-button:
-  - platform: template
-    id: ble_pair
-    name: Pair BLE key
-    icon: mdi:key-wireless
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->startPair();
-    entity_category: diagnostic
-
-  - platform: template
-    name: Wake up
-    icon: mdi:sleep-off
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->wakeVehicle();
-
-  - platform: template
-    name: Regenerate key
-    icon: mdi:key-change
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->regenerateKey();
-    entity_category: diagnostic
-    disabled_by_default: true
-
-  - platform: template
-    name: Force data update
-    icon: mdi:database-sync
-    on_press:
-      - lambda: id(tesla_ble_vehicle_id)->enqueueVCSECInformationRequest(true);
-    entity_category: diagnostic
-
+# BLE sensors from the standard ble_client platform
 sensor:
   - platform: ble_client
     type: rssi
@@ -61,51 +38,7 @@ sensor:
     entity_category: diagnostic
 
 switch:
-  - platform: template
-    name: "Charger switch"
-    optimistic: true
-    assumed_state: true # we can't read the state of the charger over
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 1);
-    turn_off_action:
-      - lambda: id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, 0);
-
   - platform: ble_client
     ble_client_id: ble_tesla_id
     name: "BLE Connection"
     entity_category: diagnostic
-
-number:
-  - platform: template
-    name: "Charging amps"
-    id: charging_amps
-    icon: mdi:ev-station
-    unit_of_measurement: "A"
-    mode: slider
-    min_value: 0
-    max_value: $charging_amps_max
-    step: 1
-    optimistic: true
-    restore_value: true
-    on_value:
-      then:
-        - lambda: |-
-            int var_x = static_cast<int>(x);
-            id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, var_x);
-  - platform: template
-    name: "Charging limit"
-    id: charging_limit
-    icon: mdi:ev-station
-    unit_of_measurement: "%"
-    mode: slider
-    min_value: 50
-    max_value: 100
-    step: 1
-    optimistic: true
-    restore_value: true
-    on_value:
-      then:
-        - lambda: |-
-            int var_x = static_cast<int>(x);
-            id(tesla_ble_vehicle_id)->sendCarServerVehicleActionMessage(SET_CHARGING_LIMIT, var_x);
