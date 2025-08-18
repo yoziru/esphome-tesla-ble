@@ -142,6 +142,7 @@ async def to_code(config):
         CONF_ICON: "mdi:sleep-off",
         CONF_DISABLED_BY_DEFAULT: False,
     })
+    cg.add(wake_button.set_parent(var))
     cg.add(var.set_wake_button(wake_button))
 
     pair_button = await button.new_button({
@@ -151,6 +152,7 @@ async def to_code(config):
         CONF_DISABLED_BY_DEFAULT: False,
         CONF_ENTITY_CATEGORY: cg.EntityCategory.ENTITY_CATEGORY_DIAGNOSTIC,
     })
+    cg.add(pair_button.set_parent(var))
     cg.add(var.set_pair_button(pair_button))
 
     regenerate_key_button = await button.new_button({
@@ -160,6 +162,7 @@ async def to_code(config):
         CONF_DISABLED_BY_DEFAULT: True,
         CONF_ENTITY_CATEGORY: cg.EntityCategory.ENTITY_CATEGORY_DIAGNOSTIC,
     })
+    cg.add(regenerate_key_button.set_parent(var))
     cg.add(var.set_regenerate_key_button(regenerate_key_button))
 
     force_update_button = await button.new_button({
@@ -169,6 +172,7 @@ async def to_code(config):
         CONF_DISABLED_BY_DEFAULT: False,
         CONF_ENTITY_CATEGORY: cg.EntityCategory.ENTITY_CATEGORY_DIAGNOSTIC,
     })
+    cg.add(force_update_button.set_parent(var))
     cg.add(var.set_force_update_button(force_update_button))
 
     ## Switches

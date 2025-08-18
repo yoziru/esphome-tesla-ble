@@ -1,0 +1,353 @@
+#include "vehicle_state_manager.h"
+#include "tesla_ble_vehicle.h"
+#include <esphome/core/helpers.h>
+#include <cmath>
+
+namespace esphome {
+namespace tesla_ble_vehicle {
+
+VehicleStateManager::VehicleStateManager(TeslaBLEVehicle* parent)
+    : parent_(parent), is_charging_(false), charging_amps_max_(32) {}
+
+void VehicleStateManager::update_vehicle_status(const VCSEC_VehicleStatus& status) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Updating vehicle status");
+    
+    update_sleep_status(status.vehicleSleepStatus);
+    update_lock_status(status.vehicleLockState);
+    update_user_presence(status.userPresence);
+    
+    // Update charge flap if present (from closure statuses)
+    if (status.has_closureStatuses && charge_flap_sensor_) {
+        bool flap_open = (status.closureStatuses.chargePort == VCSEC_ClosureState_E_CLOSURESTATE_OPEN);
+        update_charge_flap_open(flap_open);
+    }
+}
+
+void VehicleStateManager::update_sleep_status(VCSEC_VehicleSleepStatus_E status) {
+    bool asleep = convert_sleep_status(status);
+    if (!std::isnan(asleep)) {
+        update_asleep(asleep);
+    } else {
+        set_sensor_available(asleep_sensor_, false);
+    }
+}
+
+void VehicleStateManager::update_lock_status(VCSEC_VehicleLockState_E status) {
+    bool unlocked = convert_lock_status(status);
+    if (!std::isnan(unlocked)) {
+        update_unlocked(unlocked);
+    } else {
+        set_sensor_available(unlocked_sensor_, false);
+    }
+}
+
+void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
+    bool present = convert_user_presence(presence);
+    if (!std::isnan(present)) {
+        update_user_present(present);
+    } else {
+        set_sensor_available(user_present_sensor_, false);
+    }
+}
+
+void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charge_state) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Updating charge state");
+    
+    // Update charging status
+    if (charge_state.has_charging_state) {
+        bool was_charging = is_charging_;
+        is_charging_ = (charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag);
+        
+        if (was_charging != is_charging_) {
+            ESP_LOGI(STATE_MANAGER_TAG, "Charging state changed: %s", is_charging_ ? "ON" : "OFF");
+            publish_sensor_state(charging_switch_, is_charging_);
+        }
+    }
+    
+    // Update charging amps (from charger actual current)
+    if (charge_state.which_optional_charger_actual_current && charging_amps_number_) {
+        float amps = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
+        update_charging_amps(amps);
+    }
+    
+    // Update charge limit - update both sensor (read-only) and number (user-controllable)
+    if (charge_state.which_optional_charge_limit_soc) {
+        float limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
+        
+        // Update the read-only sensor (always update)
+        if (charging_limit_sensor_) {
+            publish_sensor_state(charging_limit_sensor_, limit);
+        }
+        
+        // Update the user-controllable number component (with command delay protection)
+        if (charging_limit_number_) {
+            // Check if we should delay this update due to recent user command
+            if (should_delay_infotainment_request()) {
+                ESP_LOGD(STATE_MANAGER_TAG, "Delaying charging limit update (%.0f%%) due to recent command", limit);
+            } else {
+                ESP_LOGD(STATE_MANAGER_TAG, "Updating charging limit number to %.0f%%", limit);
+                publish_sensor_state(charging_limit_number_, limit);
+            }
+        }
+    }
+    
+    // Update max charging amps if available
+    if (charge_state.which_optional_charge_current_request_max) {
+        int32_t new_max = charge_state.optional_charge_current_request_max.charge_current_request_max;
+        ESP_LOGD(STATE_MANAGER_TAG, "Received max charging amps from vehicle: %d A (current stored: %d A)", new_max, charging_amps_max_);
+        
+        // Skip update if new_max is 0 or invalid - likely not ready or invalid value from vehicle
+        if (new_max <= 0) {
+            ESP_LOGV(STATE_MANAGER_TAG, "Skipping max charging amps update - invalid value from vehicle: %d A", new_max);
+        } else if (new_max != charging_amps_max_) {
+            update_charging_amps_max(new_max);
+        } else {
+            ESP_LOGV(STATE_MANAGER_TAG, "Max charging amps unchanged: %d A", new_max);
+        }
+    } else {
+        ESP_LOGV(STATE_MANAGER_TAG, "No max charging amps data in charge state");
+    }
+    
+    // Update charge flap status if available
+    if (charge_state.which_optional_charge_port_door_open) {
+        update_charge_flap_open(charge_state.optional_charge_port_door_open.charge_port_door_open);
+    }
+}
+
+void VehicleStateManager::update_climate_state(const CarServer_ClimateState& climate_state) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Updating climate state");
+    // Future implementation for climate sensors
+}
+
+void VehicleStateManager::update_drive_state(const CarServer_DriveState& drive_state) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Updating drive state");
+    // Future implementation for drive sensors
+}
+
+// Direct state update methods
+void VehicleStateManager::update_asleep(bool asleep) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle sleep state: %s (sensor=%p)", asleep ? "ASLEEP" : "AWAKE", asleep_sensor_);
+    if (asleep_sensor_) {
+        publish_sensor_state(asleep_sensor_, asleep);
+    } else {
+        ESP_LOGW(STATE_MANAGER_TAG, "Asleep sensor is null - cannot publish state");
+    }
+    
+    // Notify polling manager of state change
+    if (parent_->get_polling_manager()) {
+        parent_->get_polling_manager()->update_vehicle_state(!asleep, is_charging_, is_unlocked());
+    }
+}
+
+void VehicleStateManager::update_unlocked(bool unlocked) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle lock state: %s (sensor=%p)", unlocked ? "UNLOCKED" : "LOCKED", unlocked_sensor_);
+    if (unlocked_sensor_) {
+        publish_sensor_state(unlocked_sensor_, unlocked);
+    } else {
+        ESP_LOGW(STATE_MANAGER_TAG, "Unlocked sensor is null - cannot publish state");
+    }
+    
+    // Notify polling manager of state change
+    if (parent_->get_polling_manager()) {
+        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, unlocked);
+    }
+}
+
+void VehicleStateManager::update_user_present(bool present) {
+    ESP_LOGD(STATE_MANAGER_TAG, "User presence: %s (sensor=%p)", present ? "PRESENT" : "NOT_PRESENT", user_present_sensor_);
+    if (user_present_sensor_) {
+        publish_sensor_state(user_present_sensor_, present);
+    } else {
+        ESP_LOGW(STATE_MANAGER_TAG, "User present sensor is null - cannot publish state");
+    }
+}
+
+void VehicleStateManager::update_charge_flap_open(bool open) {
+    ESP_LOGV(STATE_MANAGER_TAG, "Charge flap: %s", open ? "OPEN" : "CLOSED");
+    publish_sensor_state(charge_flap_sensor_, open);
+}
+
+void VehicleStateManager::update_charging_amps(float amps) {
+    ESP_LOGV(STATE_MANAGER_TAG, "Charging amps from vehicle: %.1f A", amps);
+    
+    // Always update the sensor (read-only display)
+    publish_sensor_state(charging_amps_sensor_, amps);
+    
+    // Always update the number component too (since we're using delay-based approach)
+    publish_sensor_state(charging_amps_number_, amps);
+}
+
+// Connection state management
+void VehicleStateManager::set_sensors_available(bool available) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Setting sensors available: %s", available ? "true" : "false");
+    
+    set_sensor_available(asleep_sensor_, available);
+    set_sensor_available(unlocked_sensor_, available);
+    set_sensor_available(user_present_sensor_, available);
+    set_sensor_available(charge_flap_sensor_, available);
+    set_sensor_available(charging_amps_sensor_, available);
+    
+    // For controls, set availability but don't change state
+    if (charging_switch_) {
+        // Switch availability is managed differently
+    }
+    if (charging_amps_number_) {
+        // Number availability is managed differently  
+    }
+    if (charging_limit_number_) {
+        // Number availability is managed differently
+    }
+}
+
+void VehicleStateManager::reset_all_states() {
+    ESP_LOGD(STATE_MANAGER_TAG, "Resetting all vehicle states");
+    
+    is_charging_ = false;
+    
+    // Reset all sensors to unavailable
+    set_sensors_available(false);
+}
+
+// State queries
+bool VehicleStateManager::is_asleep() const {
+    return asleep_sensor_ ? asleep_sensor_->state : true; // Default to asleep if unknown
+}
+
+bool VehicleStateManager::is_unlocked() const {
+    return unlocked_sensor_ ? unlocked_sensor_->state : false; // Default to locked if unknown
+}
+
+bool VehicleStateManager::is_user_present() const {
+    return user_present_sensor_ ? user_present_sensor_->state : false;
+}
+
+bool VehicleStateManager::is_charge_flap_open() const {
+    return charge_flap_sensor_ ? charge_flap_sensor_->state : false;
+}
+
+float VehicleStateManager::get_charging_amps() const {
+    return charging_amps_sensor_ ? charging_amps_sensor_->state : 0.0f;
+}
+
+// Dynamic limits
+void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
+    // Additional safety check - should not happen since callers validate, but be defensive
+    if (new_max <= 0) {
+        ESP_LOGW(STATE_MANAGER_TAG, "Invalid max charging amps value: %d A - ignoring update", new_max);
+        return;
+    }
+    
+    int32_t old_max = charging_amps_max_;
+    
+    // Update stored value
+    charging_amps_max_ = new_max;
+    
+    // Update the number component's maximum value if it exists
+    if (charging_amps_number_ && old_max != new_max) {
+        auto old_trait_max = charging_amps_number_->traits.get_max_value();
+        
+        // Cast to our specific type for proper update_max_value method
+        // This is safe since we control how charging_amps_number_ is set
+        auto tesla_charging_amps = static_cast<TeslaChargingAmpsNumber*>(charging_amps_number_);
+        tesla_charging_amps->update_max_value(new_max);
+        
+        ESP_LOGD(STATE_MANAGER_TAG, "Number traits max updated from %.0f to %d A", old_trait_max, new_max);
+    } else {
+        ESP_LOGW(STATE_MANAGER_TAG, "Charging amps number component not available - cannot update max value");
+    }
+}
+
+// Private helper methods
+void VehicleStateManager::publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state) {
+    if (sensor != nullptr) {
+        sensor->publish_state(state);
+    }
+}
+
+void VehicleStateManager::publish_sensor_state(sensor::Sensor* sensor, float state) {
+    if (sensor != nullptr) {
+        sensor->publish_state(state);
+    }
+}
+
+void VehicleStateManager::publish_sensor_state(switch_::Switch* switch_comp, bool state) {
+    if (switch_comp != nullptr) {
+        switch_comp->publish_state(state);
+    }
+}
+
+void VehicleStateManager::publish_sensor_state(number::Number* number_comp, float state) {
+    if (number_comp != nullptr) {
+        number_comp->publish_state(state);
+    }
+}
+
+void VehicleStateManager::set_sensor_available(binary_sensor::BinarySensor* sensor, bool available) {
+    if (sensor != nullptr) {
+        sensor->set_has_state(available);
+    }
+}
+
+void VehicleStateManager::set_sensor_available(sensor::Sensor* sensor, bool available) {
+    if (sensor != nullptr) {
+        sensor->set_has_state(available);
+    }
+}
+
+// State conversion helpers
+bool VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status) {
+    switch (status) {
+        case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
+            return false; // Not asleep
+        case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
+            return true;  // Asleep
+        case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
+        default:
+            return NAN;   // Unknown state
+    }
+}
+
+bool VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
+    switch (status) {
+        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED:
+        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED:
+            return true;  // Unlocked
+        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_LOCKED:
+        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED:
+            return false; // Locked
+        default:
+            return NAN;   // Unknown state
+    }
+}
+
+bool VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
+    switch (presence) {
+        case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT:
+            return true;  // Present
+        case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_NOT_PRESENT:
+            return false; // Not present
+        case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_UNKNOWN:
+        default:
+            return NAN;   // Unknown state
+    }
+}
+
+// Command tracking for INFOTAINMENT request delay
+void VehicleStateManager::track_command_issued() {
+    last_command_time_ = millis();
+    ESP_LOGD(STATE_MANAGER_TAG, "Command issued - will delay INFOTAINMENT requests for %dms", COMMAND_DELAY_TIME);
+}
+
+bool VehicleStateManager::should_delay_infotainment_request() const {
+    uint32_t now = millis();
+    uint32_t time_since_command = now - last_command_time_;
+    
+    bool should_delay = time_since_command < COMMAND_DELAY_TIME;
+    if (should_delay) {
+        ESP_LOGV(STATE_MANAGER_TAG, "Delaying INFOTAINMENT request (%dms since last command)", time_since_command);
+    }
+    return should_delay;
+}
+
+} // namespace tesla_ble_vehicle
+} // namespace esphome

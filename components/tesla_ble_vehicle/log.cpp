@@ -405,6 +405,7 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
         break;
     default:
         ESP_LOGD(tag, "  payload: unknown");
+        break;
     }
 
     ESP_LOGD(tag, "  has_signedMessageStatus: %s", msg->has_signedMessageStatus ? "true" : "false");
@@ -421,6 +422,7 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
             break;
         default:
             ESP_LOGD(tag, "  sub_sigData: unknown");
+            break;
     }
 
     switch (msg->flags)
@@ -433,6 +435,7 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
             break;
         default:
             ESP_LOGD(tag, "  flags: %" PRIu32, msg->flags);
+            break;
     }
 
     if (msg->request_uuid.size > 0)
@@ -443,6 +446,7 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
     {
         ESP_LOGD(tag, "  uuid: %s", format_hex(msg->uuid.bytes, msg->uuid.size).c_str());
     }
+    ESP_LOGD(tag, "[Done logging routable message]");
 }
 
 const char *closure_state_to_string(VCSEC_ClosureState_E state)
@@ -684,6 +688,7 @@ void log_carserver_response(const char *tag, const CarServer_Response *msg)
                 break;
             default:
                 ESP_LOGD(tag, "    unknown reason");
+                break;
             }
         }
     }
