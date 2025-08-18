@@ -60,7 +60,9 @@ namespace esphome
         LOG_NUMBER("  ", "Charging Limit Number", this->chargingLimitNumber);
       }
     }
-    TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{}), role_("DRIVER"), charging_amps_max_(32)
+    TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{}), role_("DRIVER"), charging_amps_max_(32),
+      last_vcsec_poll_(0), last_infotainment_poll_(0), last_connection_time_(0),
+      is_charging_(false), just_connected_(false)
     {
       ESP_LOGCONFIG(TAG, "Constructing Tesla BLE Vehicle component");
     }
@@ -88,7 +90,10 @@ namespace esphome
         this->regenerateKeyButton->add_on_press_callback([this]() { this->regenerateKey(); });
       }
       if (this->forceUpdateButton != nullptr) {
-        this->forceUpdateButton->add_on_press_callback([this]() { this->enqueueVCSECInformationRequest(true); });
+        this->forceUpdateButton->add_on_press_callback([this]() { 
+          this->enqueueVCSECInformationRequest(true); 
+          this->enqueueChargingDataRequest();
+        });
       }
 
       // Setup switch callbacks
@@ -692,27 +697,12 @@ namespace esphome
 
                 case BLECommandState::WAITING_FOR_RESPONSE:
                   if (strcmp(current_command.execute_name.c_str(), "wake vehicle") == 0 ||
-                      strcmp(current_command.execute_name.c_str(), "data update") == 0)
+                      strcmp(current_command.execute_name.c_str(), "data update") == 0 ||
+                      strcmp(current_command.execute_name.c_str(), "data update | after wake") == 0)
                   {
                     ESP_LOGI(TAG, "[%s] Received vehicle status, command completed",
                              current_command.execute_name.c_str());
                     command_queue_.pop();
-                  }
-                  else if (strcmp(current_command.execute_name.c_str(), "data update | forced") == 0)
-                  {
-                    switch (vcsec_message.sub_message.vehicleStatus.vehicleSleepStatus)
-                    {
-                    case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
-                      ESP_LOGI(TAG, "[%s] Received vehicle status, command completed",
-                               current_command.execute_name.c_str());
-                      command_queue_.pop();
-                      break;
-                    default:
-                      ESP_LOGD(TAG, "[%s] Received vehicle status, infotainment is not awake",
-                               current_command.execute_name.c_str());
-                      invalidateSession(UniversalMessage_Domain_DOMAIN_INFOTAINMENT);
-                      current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
-                    }
                   }
                   break;
                 default:
@@ -803,6 +793,11 @@ namespace esphome
 
         case UniversalMessage_Domain_DOMAIN_INFOTAINMENT:
         {
+          ESP_LOGD(TAG, "Received CarServer response, trying to parse.. (queue size: %d)", command_queue_.size());
+          if (!command_queue_.empty()) {
+            ESP_LOGD(TAG, "Current command: %s, state: %d", command_queue_.front().execute_name.c_str(), static_cast<int>(command_queue_.front().state));
+          }
+          
           CarServer_Response carserver_response = CarServer_Response_init_default;
           
           // Extract signature data and fault information from the message
@@ -821,14 +816,29 @@ namespace esphome
           if (fault != UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_NONE) {
             ESP_LOGW(TAG, "Message fault detected: %s", message_fault_to_string(fault));
           }
+          
+          ESP_LOGD(TAG, "Starting parsePayloadCarServerResponse...");
+          ESP_LOGD(TAG, "Payload size: %d bytes", message.payload.protobuf_message_as_bytes.size);
+          
           int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, sig_data, message.which_sub_sigData, fault, &carserver_response);
+          ESP_LOGD(TAG, "parsePayloadCarServerResponse completed with return_code: %d", return_code);
+          
           if (return_code != 0)
           {
-            ESP_LOGE(TAG, "Failed to parse incoming message");
+            ESP_LOGE(TAG, "Failed to parse incoming message with return_code: %d", return_code);
+            // Clean up the command queue if parsing fails
+            if (!command_queue_.empty()) {
+              ESP_LOGW(TAG, "Removing failed command: %s", command_queue_.front().execute_name.c_str());
+              command_queue_.pop();
+            }
             return;
           }
-          ESP_LOGD(TAG, "Parsed CarServer.Response");
+          ESP_LOGD(TAG, "Parsed CarServer.Response successfully");
           log_carserver_response(TAG, &carserver_response);
+          
+          // Handle the response data for smart polling
+          handleCarServerResponse(carserver_response);
+          
           if (carserver_response.has_actionStatus && !command_queue_.empty())
           {
             BLECommand &current_command = command_queue_.front();
@@ -844,16 +854,19 @@ namespace esphome
                 }
                 break;
               case CarServer_OperationStatus_E_OPERATIONSTATUS_ERROR:
-                // if charging switch is turned on and reason = "is_charging" it's OK
-                // if charging switch is turned of and reason = "is_not_charging" it's OK
+                // Some ERROR responses are actually OK:
+                // - "is_charging" / "is_not_charging" - indicates current charging state
+                // - "already_set" - indicates the requested state is already active
                 if (carserver_response.actionStatus.has_result_reason)
                 {
                   switch (carserver_response.actionStatus.result_reason.which_reason)
                   {
                   case CarServer_ResultReason_plain_text_tag:
-                    if (strcmp(carserver_response.actionStatus.result_reason.reason.plain_text, "is_charging") == 0 || strcmp(carserver_response.actionStatus.result_reason.reason.plain_text, "is_not_charging") == 0)
+                    if (strcmp(carserver_response.actionStatus.result_reason.reason.plain_text, "is_charging") == 0 || 
+                        strcmp(carserver_response.actionStatus.result_reason.reason.plain_text, "is_not_charging") == 0 ||
+                        strcmp(carserver_response.actionStatus.result_reason.reason.plain_text, "already_set") == 0)
                     {
-                      ESP_LOGD(TAG, "[%s] Received charging status: %s",
+                      ESP_LOGD(TAG, "[%s] Received status: %s",
                                current_command.execute_name.c_str(),
                                carserver_response.actionStatus.result_reason.reason.plain_text);
                       if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
@@ -861,6 +874,16 @@ namespace esphome
                         ESP_LOGI(TAG, "[%s] Received CarServer OK message, command completed",
                                  current_command.execute_name.c_str());
                         command_queue_.pop();
+                      }
+                    }
+                    else
+                    {
+                      ESP_LOGW(TAG, "[%s] Received CarServer ERROR with reason: %s, retrying command..",
+                               current_command.execute_name.c_str(),
+                               carserver_response.actionStatus.result_reason.reason.plain_text);
+                      if (current_command.state == BLECommandState::WAITING_FOR_RESPONSE)
+                      {
+                        current_command.state = BLECommandState::READY;
                       }
                     }
                     break;
@@ -929,12 +952,46 @@ namespace esphome
     void TeslaBLEVehicle::update()
     {
       ESP_LOGD(TAG, "Updating Tesla BLE Vehicle component..");
-      if (this->node_state == espbt::ClientState::ESTABLISHED)
+      
+      if (this->node_state != espbt::ClientState::ESTABLISHED)
       {
-        ESP_LOGD(TAG, "Querying vehicle status update..");
-        enqueueVCSECInformationRequest();
+        ESP_LOGD(TAG, "BLE not connected, skipping update");
         return;
       }
+
+      uint32_t now = millis();
+      
+      // Handle initial connection - always poll immediately
+      if (just_connected_)
+      {
+        ESP_LOGI(TAG, "Just connected - performing initial VCSEC poll");
+        ESP_LOGD(TAG, "If vehicle is awake, infotainment data will be polled automatically");
+        enqueueVCSECInformationRequest();
+        last_vcsec_poll_ = now;
+        last_connection_time_ = now;
+        just_connected_ = false;
+        return;
+      }
+
+      // Determine what to poll based on smart polling logic
+      bool should_poll_vcsec = shouldPollVCSEC();
+      bool should_poll_infotainment = shouldPollInfotainment();
+
+      if (should_poll_vcsec)
+      {
+        ESP_LOGD(TAG, "Performing VCSEC status poll");
+        enqueueVCSECInformationRequest();
+        last_vcsec_poll_ = now;
+      }
+
+      if (should_poll_infotainment)
+      {
+        ESP_LOGD(TAG, "Performing INFOTAINMENT data poll");
+        enqueueChargingDataRequest(); // Get charging data from CarServer
+        last_infotainment_poll_ = now;
+      }
+
+      updatePollingState();
     }
 
     int TeslaBLEVehicle::nvs_save_session_info(const Signatures_SessionInfo &session_info, const UniversalMessage_Domain domain)
@@ -1109,11 +1166,19 @@ namespace esphome
       
       // Update the number component's maximum value if it exists
       if (chargingAmpsNumber != nullptr) {
-        // Try to cast to our custom class to update max value
-        TeslaChargingAmpsNumber* custom_amps = static_cast<TeslaChargingAmpsNumber*>(chargingAmpsNumber);
-        if (custom_amps != nullptr) {
-          custom_amps->update_max_value(new_max);
-          ESP_LOGI(TAG, "Charging amps max updated to %.0f A in UI", new_max);
+        // Update the traits directly - all Number components have traits
+        auto old_max = chargingAmpsNumber->traits.get_max_value();
+        chargingAmpsNumber->traits.set_max_value(new_max);
+        
+        ESP_LOGI(TAG, "Charging amps max updated from %.0f to %.0f A", old_max, new_max);
+        
+        // Check if current state exceeds new maximum and clamp it
+        if (chargingAmpsNumber->has_state() && chargingAmpsNumber->state > new_max) {
+          ESP_LOGW(TAG, "Current charging amps (%.0f) exceeds new maximum (%.0f), clamping to maximum", 
+                   chargingAmpsNumber->state, new_max);
+          // Use internal publish to avoid triggering control()
+          chargingAmpsNumber->state = new_max;
+          chargingAmpsNumber->publish_state(new_max);
         }
       }
     }
@@ -1323,17 +1388,30 @@ namespace esphome
       return 0;
     }
 
-    void TeslaBLEVehicle::enqueueVCSECInformationRequest(bool force)
+    void TeslaBLEVehicle::enqueueVCSECInformationRequest(bool force_wake)
     {
       ESP_LOGD(TAG, "Enqueueing VCSECInformationRequest");
-      std::string action_str = "data update";
-      if (force)
+      
+      if (force_wake && this->isAsleepSensor->state == true)
       {
-        action_str = "data update | forced";
+        ESP_LOGD(TAG, "Force wake requested and vehicle is asleep, waking vehicle first");
+        // First wake the vehicle
+        command_queue_.emplace(
+            UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, [this]()
+            {
+          int return_code = this->sendVCSECActionMessage(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE);
+          if (return_code != 0)
+          {
+            ESP_LOGE(TAG, "Failed to send wake command");
+            return return_code;
+          }
+          return 0; },
+            "wake vehicle");
       }
-
+      
+      // Then send the VCSEC information request
       command_queue_.emplace(
-          force ? UniversalMessage_Domain_DOMAIN_INFOTAINMENT : UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, [this]()
+          UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, [this]()
           {
         int return_code = this->sendVCSECInformationRequest();
         if (return_code != 0)
@@ -1342,8 +1420,77 @@ namespace esphome
           return return_code;
         }
         return 0; },
-          action_str);
+          force_wake ? "data update | after wake" : "data update");
     }
+
+    void TeslaBLEVehicle::enqueueCarServerDataRequest(int32_t which_vehicle_data)
+    {
+      // Determine the data type name for logging
+      std::string data_type_name;
+      switch (which_vehicle_data)
+      {
+      case CarServer_GetVehicleData_getChargeState_tag:
+        data_type_name = "charging data";
+        break;
+      case CarServer_GetVehicleData_getClimateState_tag:
+        data_type_name = "climate data";
+        break;
+      case CarServer_GetVehicleData_getDriveState_tag:
+        data_type_name = "drive data";
+        break;
+      case CarServer_GetVehicleData_getLocationState_tag:
+        data_type_name = "location data";
+        break;
+      case CarServer_GetVehicleData_getClosuresState_tag:
+        data_type_name = "closures data";
+        break;
+      default:
+        data_type_name = "vehicle data (tag " + std::to_string(which_vehicle_data) + ")";
+        break;
+      }
+      
+      ESP_LOGD(TAG, "Enqueueing CarServer data request for %s", data_type_name.c_str());
+      
+      // Request vehicle data from CarServer
+      command_queue_.emplace(
+          UniversalMessage_Domain_DOMAIN_INFOTAINMENT, [this, which_vehicle_data, data_type_name]()
+          {
+        unsigned char message_buffer[UniversalMessage_RoutableMessage_size];
+        size_t message_length = 0;
+        
+        ESP_LOGD(TAG, "Building CarServer GetVehicleData message for %s", data_type_name.c_str());
+        int return_code = tesla_ble_client_->buildCarServerGetVehicleDataMessage(
+            message_buffer, &message_length, 
+            which_vehicle_data);
+        
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to build CarServer GetVehicleData message for %s", data_type_name.c_str());
+          return return_code;
+        }
+        
+        return_code = writeBLE(message_buffer, message_length, ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+        if (return_code != 0)
+        {
+          ESP_LOGE(TAG, "Failed to send CarServer GetVehicleData message for %s", data_type_name.c_str());
+          return return_code;
+        }
+        
+        ESP_LOGD(TAG, "CarServer GetVehicleData message sent successfully for %s", data_type_name.c_str());
+        return 0; },
+          "get " + data_type_name);
+    }
+
+    void TeslaBLEVehicle::enqueueChargingDataRequest()
+    {
+      enqueueCarServerDataRequest(CarServer_GetVehicleData_getChargeState_tag);
+    }
+
+    // TODO: Add convenience functions for other data types
+    // void TeslaBLEVehicle::enqueueClimateDataRequest()
+    // {
+    //   enqueueCarServerDataRequest(CarServer_GetVehicleData_getClimateState_tag);
+    // }
 
     // combined function for setting charging parameters
     int TeslaBLEVehicle::sendCarServerVehicleActionMessage(BLE_CarServer_VehicleAction action, int param)
@@ -1603,7 +1750,220 @@ namespace esphome
         }
       }
 
+      // Check if this is initial connection and car is awake - if so, immediately poll infotainment
+      uint32_t now = millis();
+      if (vehicleStatus.vehicleSleepStatus == VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE && 
+          last_connection_time_ > 0 && (now - last_connection_time_) < 10000) // Within 10 seconds of connection
+      {
+        ESP_LOGI(TAG, "Vehicle is awake on initial connection - polling infotainment data");
+        enqueueChargingDataRequest();
+        last_infotainment_poll_ = now;
+      }
+
       return 0;
+    }
+
+    void TeslaBLEVehicle::handleCarServerResponse(const CarServer_Response &carserver_response)
+    {
+      ESP_LOGD(TAG, "Handling CarServer response (response type: %d)", carserver_response.which_response_msg);
+      
+      // Check if we have vehicle data response
+      if (carserver_response.which_response_msg == CarServer_Response_vehicleData_tag)
+      {
+        ESP_LOGI(TAG, "Received vehicle data response - processing data");
+        
+        // Process the vehicle data
+        processVehicleData(carserver_response.response_msg.vehicleData);
+        
+        // Mark that we've received the data for command completion
+        if (!command_queue_.empty())
+        {
+          BLECommand &current_command = command_queue_.front();
+          if (current_command.domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT && 
+              current_command.execute_name.find("get ") == 0) // Commands starting with "get "
+          {
+            ESP_LOGI(TAG, "[%s] Successfully received vehicle data", current_command.execute_name.c_str());
+            command_queue_.pop();
+          }
+        }
+      }
+      else
+      {
+        ESP_LOGD(TAG, "CarServer response is not vehicle data (type: %d)", carserver_response.which_response_msg);
+      }
+    }
+
+    void TeslaBLEVehicle::processVehicleData(const CarServer_VehicleData &vehicle_data)
+    {
+      ESP_LOGD(TAG, "Processing vehicle data...");
+      
+      // Process charge state data
+      if (vehicle_data.has_charge_state)
+      {
+        ESP_LOGI(TAG, "Processing charge state data");
+        const CarServer_ChargeState &charge_state = vehicle_data.charge_state;
+        
+        // Update charging state
+        if (charge_state.has_charging_state)
+        {
+          bool is_charging = false;
+          bool is_actively_charging = false;
+          
+          // Check the charging state type
+          switch (charge_state.charging_state.which_type)
+          {
+          case CarServer_ChargeState_ChargingState_Charging_tag:
+            is_charging = true;
+            is_actively_charging = true;
+            ESP_LOGD(TAG, "Vehicle is actively charging");
+            break;
+          case CarServer_ChargeState_ChargingState_Starting_tag:
+            is_charging = true;
+            ESP_LOGD(TAG, "Vehicle charging is starting");
+            break;
+          case CarServer_ChargeState_ChargingState_Complete_tag:
+            ESP_LOGD(TAG, "Vehicle charging is complete");
+            break;
+          case CarServer_ChargeState_ChargingState_Stopped_tag:
+            ESP_LOGD(TAG, "Vehicle charging is stopped");
+            break;
+          case CarServer_ChargeState_ChargingState_Disconnected_tag:
+            ESP_LOGD(TAG, "Vehicle charger is disconnected");
+            break;
+          case CarServer_ChargeState_ChargingState_NoPower_tag:
+            ESP_LOGD(TAG, "Vehicle charger has no power");
+            break;
+          default:
+            ESP_LOGD(TAG, "Vehicle charging state unknown");
+            break;
+          }
+          
+          // Update our internal charging state for smart polling
+          bool was_charging = is_charging_;
+          is_charging_ = is_actively_charging;
+          
+          if (!was_charging && is_charging_)
+          {
+            ESP_LOGI(TAG, "Charging started - enabling fast polling");
+          }
+          else if (was_charging && !is_charging_)
+          {
+            ESP_LOGI(TAG, "Charging stopped - returning to normal polling");
+          }
+          
+          // Update charging switch state
+          if (chargingSwitch != nullptr)
+          {
+            chargingSwitch->publish_state(is_charging);
+          }
+        }
+        
+        // Update battery level
+        if (charge_state.which_optional_battery_level && charge_state.optional_battery_level.battery_level > 0)
+        {
+          int battery_level = charge_state.optional_battery_level.battery_level;
+          ESP_LOGI(TAG, "Battery level: %d%%", battery_level);
+        }
+        
+        // Update charge limit if available
+        if (charge_state.which_optional_charge_limit_soc && chargingLimitNumber != nullptr)
+        {
+          float charge_limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
+          ESP_LOGD(TAG, "Charge limit: %.0f%%", charge_limit);
+          // Directly update the internal state without triggering control()
+          chargingLimitNumber->state = charge_limit;
+        }
+        
+        // Update charging amps if available
+        if (charge_state.which_optional_charging_amps && chargingAmpsNumber != nullptr)
+        {
+          float charge_amps = static_cast<float>(charge_state.optional_charging_amps.charging_amps);
+          ESP_LOGD(TAG, "Charging amps: %.0f A", charge_amps);
+          // Directly update the internal state without triggering control()
+          chargingAmpsNumber->state = charge_amps;
+        }
+        
+        // Update maximum charging amps (for UI limits) if available
+        if (charge_state.which_optional_charge_current_request_max)
+        {
+          float max_amps = static_cast<float>(charge_state.optional_charge_current_request_max.charge_current_request_max);
+          ESP_LOGD(TAG, "Max charging amps available: %.0f A", max_amps);
+          update_charging_amps_max(max_amps);
+        }
+        
+        // Log additional charging information if available
+        if (charge_state.which_optional_charge_rate_mph)
+        {
+          ESP_LOGD(TAG, "Charge rate: %d miles/hour", charge_state.optional_charge_rate_mph.charge_rate_mph);
+        }
+        
+        if (charge_state.which_optional_minutes_to_full_charge && charge_state.optional_minutes_to_full_charge.minutes_to_full_charge > 0)
+        {
+          ESP_LOGD(TAG, "Minutes to full charge: %d", charge_state.optional_minutes_to_full_charge.minutes_to_full_charge);
+        }
+        
+        if (charge_state.which_optional_charger_power)
+        {
+          ESP_LOGD(TAG, "Charger power: %d kW", charge_state.optional_charger_power.charger_power);
+        }
+      }
+      
+      // Process climate state data if present
+      if (vehicle_data.has_climate_state)
+      {
+        ESP_LOGI(TAG, "Processing climate state data");
+        const CarServer_ClimateState &climate_state = vehicle_data.climate_state;
+        
+        if (climate_state.which_optional_inside_temp_celsius)
+        {
+          ESP_LOGD(TAG, "Inside temperature: %.1f°C", climate_state.optional_inside_temp_celsius.inside_temp_celsius);
+        }
+        
+        if (climate_state.which_optional_outside_temp_celsius)
+        {
+          ESP_LOGD(TAG, "Outside temperature: %.1f°C", climate_state.optional_outside_temp_celsius.outside_temp_celsius);
+        }
+        
+        if (climate_state.which_optional_is_climate_on)
+        {
+          ESP_LOGD(TAG, "Climate control: %s", climate_state.optional_is_climate_on.is_climate_on ? "on" : "off");
+        }
+      }
+      
+      // Process drive state data if present
+      if (vehicle_data.has_drive_state)
+      {
+        ESP_LOGI(TAG, "Processing drive state data");
+        const CarServer_DriveState &drive_state = vehicle_data.drive_state;
+        
+        if (drive_state.has_shift_state)
+        {
+          ESP_LOGD(TAG, "Shift state available");
+          // Could log specific shift state if needed
+        }
+        
+        if (drive_state.which_optional_speed)
+        {
+          ESP_LOGD(TAG, "Vehicle speed: %.1f", drive_state.optional_speed.speed);
+        }
+      }
+      
+      // Process location state data if present
+      if (vehicle_data.has_location_state)
+      {
+        ESP_LOGI(TAG, "Processing location state data");
+        // Location data processing could be added here if needed
+        // (be mindful of privacy considerations)
+      }
+      
+      // Process closures state data if present
+      if (vehicle_data.has_closures_state)
+      {
+        ESP_LOGI(TAG, "Processing closures state data");
+        // Additional closure state processing beyond what VCSEC provides
+      }
+      
+      ESP_LOGD(TAG, "Vehicle data processing completed");
     }
 
     void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -1649,6 +2009,13 @@ namespace esphome
       {
         ESP_LOGW(TAG, "BLE connection closed!");
         this->node_state = espbt::ClientState::IDLE;
+
+        // Reset polling state
+        just_connected_ = false;
+        is_charging_ = false;
+        last_vcsec_poll_ = 0;
+        last_infotainment_poll_ = 0;
+        last_connection_time_ = 0;
 
         // set binary sensors to unknown
         this->setSensors(false);
@@ -1736,6 +2103,9 @@ namespace esphome
           break;
         }
         this->node_state = espbt::ClientState::ESTABLISHED;
+        
+        // Set flag for smart polling - we just connected
+        just_connected_ = true;
 
         unsigned char private_key_buffer[PRIVATE_KEY_SIZE];
         size_t private_key_length = 0;
@@ -1801,6 +2171,97 @@ namespace esphome
       }
     }
 
+    // Smart polling helper methods
+    bool TeslaBLEVehicle::shouldPollVCSEC()
+    {
+      uint32_t now = millis();
+      
+      // Always poll VCSEC at the regular interval - it's safe and doesn't wake the car
+      if (now - last_vcsec_poll_ >= VCSEC_POLL_INTERVAL)
+      {
+        return true;
+      }
+      
+      return false;
+    }
+
+    bool TeslaBLEVehicle::shouldPollInfotainment()
+    {
+      uint32_t now = millis();
+      
+      // Don't poll infotainment if vehicle is asleep
+      if (isAsleepSensor != nullptr && isAsleepSensor->state == true)
+      {
+        ESP_LOGV(TAG, "Vehicle is asleep, skipping infotainment poll");
+        return false;
+      }
+      
+      // Determine if we should use fast polling
+      bool use_fast_polling = false;
+      std::string fast_poll_reason = "";
+      
+      // Fast poll if charging
+      if (is_charging_)
+      {
+        use_fast_polling = true;
+        fast_poll_reason = "charging";
+      }
+      // Fast poll if unlocked
+      else if (isUnlockedSensor != nullptr && isUnlockedSensor->state == true)
+      {
+        use_fast_polling = true;
+        fast_poll_reason = "unlocked";
+      }
+      // Fast poll if user present
+      else if (isUserPresentSensor != nullptr && isUserPresentSensor->state == true)
+      {
+        use_fast_polling = true;
+        fast_poll_reason = "user present";
+      }
+      
+      if (use_fast_polling)
+      {
+        uint32_t fast_interval = INFOTAINMENT_POLL_CHARGING; // Use same interval for charging/unlocked
+        if (now - last_infotainment_poll_ >= fast_interval)
+        {
+          ESP_LOGD(TAG, "Fast polling active (%s, interval=%dms)", 
+                   fast_poll_reason.c_str(), fast_interval);
+          return true;
+        }
+      }
+      else
+      {
+        // Normal polling when awake
+        if (now - last_infotainment_poll_ >= INFOTAINMENT_POLL_AWAKE)
+        {
+          ESP_LOGD(TAG, "Normal infotainment polling");
+          return true;
+        }
+      }
+      
+      return false;
+    }
+
+    void TeslaBLEVehicle::updatePollingState()
+    {
+      // Update charging state - we'll enhance this when we get CarServer data
+      // For now, assume charging if charge flap is open and we're awake
+      bool was_charging = is_charging_;
+      if (isChargeFlapOpenSensor != nullptr && isAsleepSensor != nullptr)
+      {
+        is_charging_ = isChargeFlapOpenSensor->state && !isAsleepSensor->state;
+        
+        if (!was_charging && is_charging_)
+        {
+          ESP_LOGI(TAG, "Charging started - enabling fast polling");
+        }
+        else if (was_charging && !is_charging_)
+        {
+          ESP_LOGI(TAG, "Charging stopped - returning to normal polling");
+        }
+      }
+    }
+
     // Button implementations
     void TeslaWakeButton::press_action() {
       if (parent_ != nullptr) {
@@ -1837,14 +2298,29 @@ namespace esphome
     // Number implementations
     void TeslaChargingAmpsNumber::control(float value) {
       if (parent_ != nullptr) {
+        // Enforce dynamic maximum from vehicle
+        float max_allowed = static_cast<float>(parent_->get_charging_amps_max());
+        if (value > max_allowed) {
+          ESP_LOGW("tesla_ble_vehicle", "Requested charging amps (%.0f) exceeds vehicle maximum (%.0f), clamping to maximum", value, max_allowed);
+          value = max_allowed;
+        }
+        
         parent_->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, (int)value);
         this->publish_state(value);
       }
     }
 
     void TeslaChargingAmpsNumber::update_max_value(float new_max) {
+      auto old_max = this->traits.get_max_value();
       this->traits.set_max_value(new_max);
-      ESP_LOGD("tesla_ble_vehicle", "Updated charging amps max value to %.0f A", new_max);
+      
+      ESP_LOGD("tesla_ble_vehicle", "Updated charging amps max value from %.0f to %.0f A", old_max, new_max);
+      
+      // If current state exceeds new maximum, clamp it
+      if (this->has_state() && this->state > new_max) {
+        ESP_LOGW("tesla_ble_vehicle", "Current charging amps (%.0f) exceeds new maximum (%.0f), updating to maximum", this->state, new_max);
+        this->publish_state(new_max);
+      }
     }
 
     void TeslaChargingLimitNumber::control(float value) {

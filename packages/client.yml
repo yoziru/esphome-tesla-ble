@@ -12,7 +12,7 @@ tesla_ble_vehicle:
   ble_client_id: ble_tesla_id
   id: tesla_ble_vehicle_id
   vin: $tesla_vin
-  update_interval: 1min
+  update_interval: 30s
   charging_amps_max: $charging_amps_max
   role: DRIVER  # Options: DRIVER (all controls) or CHARGING_MANAGER (charging + basic controls only)
 

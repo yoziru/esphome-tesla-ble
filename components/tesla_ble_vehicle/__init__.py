@@ -81,7 +81,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_ROLE, default="DRIVER"): cv.enum(TESLA_ROLES, upper=True),
         },
     )
-    .extend(cv.polling_component_schema("1min"))
+    .extend(cv.polling_component_schema("30s"))
     .extend(ble_client.BLE_CLIENT_SCHEMA)
 )
 

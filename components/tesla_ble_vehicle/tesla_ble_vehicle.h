@@ -214,6 +214,8 @@ namespace esphome
 
             int handleSessionInfoUpdate(UniversalMessage_RoutableMessage message, UniversalMessage_Domain domain);
             int handleVCSECVehicleStatus(VCSEC_VehicleStatus vehicleStatus);
+            void handleCarServerResponse(const CarServer_Response &carserver_response);
+            void processVehicleData(const CarServer_VehicleData &vehicle_data);
 
             int wakeVehicle(void);
             int sendVCSECActionMessage(VCSEC_RKEAction_E action);
@@ -222,6 +224,13 @@ namespace esphome
             int sendSessionInfoRequest(UniversalMessage_Domain domain);
             int sendVCSECInformationRequest(void);
             void enqueueVCSECInformationRequest(bool force = false);
+            void enqueueCarServerDataRequest(int32_t which_vehicle_data);
+            void enqueueChargingDataRequest(); // Convenience function for charging data
+            
+            // Smart polling methods
+            bool shouldPollVCSEC();
+            bool shouldPollInfotainment();
+            void updatePollingState();
 
             int writeBLE(const unsigned char *message_buffer, size_t message_length,
                          esp_gatt_write_type_t write_type, esp_gatt_auth_req_t auth_req);
@@ -301,6 +310,7 @@ namespace esphome
             
             // Dynamic max limit updates
             void update_charging_amps_max(float new_max);
+            int get_charging_amps_max() const { return charging_amps_max_; }
 
         protected:
             std::queue<BLERXChunk> ble_read_queue_;
@@ -343,6 +353,18 @@ namespace esphome
             // configuration values
             std::string role_;
             int charging_amps_max_;
+
+            // Smart polling state tracking
+            uint32_t last_vcsec_poll_ = 0;
+            uint32_t last_infotainment_poll_ = 0;
+            uint32_t last_connection_time_ = 0;
+            bool is_charging_ = false;
+            bool just_connected_ = false;
+            
+            // Polling intervals (in milliseconds)
+            static const uint32_t VCSEC_POLL_INTERVAL = 10000;        // 10s - safe for asleep vehicle
+            static const uint32_t INFOTAINMENT_POLL_AWAKE = 30000;    // 30s - when awake but not charging/unlocked  
+            static const uint32_t INFOTAINMENT_POLL_CHARGING = 10000; // 10s - when charging or unlocked
 
             std::vector<unsigned char> ble_read_buffer_;
 
