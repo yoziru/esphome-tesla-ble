@@ -22,6 +22,31 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
   - [x] Charging flap open / closed (only when vehicle is awake)
   - [x] BLE signal strength
 
+## Configuration
+
+### Polling Intervals
+
+The component supports configurable polling intervals to balance responsiveness and battery life:
+
+```yaml
+tesla_ble_vehicle:
+  # ... other configuration ...
+  
+  # Polling intervals (in seconds)
+  vcsec_poll_interval: 10                      # Vehicle status polling (default: 10s, range: 5-300s)
+  infotainment_poll_interval_awake: 30         # Data polling when awake (default: 30s, range: 10-600s)
+  infotainment_poll_interval_active: 10        # Data polling when active (default: 10s, range: 5-120s)
+  infotainment_sleep_timeout: 660              # Wake window duration (default: 11min, range: 1-60min)
+```
+
+**Polling Types:**
+- **VCSEC**: Basic vehicle status (sleep/awake, locked/unlocked, user presence) - safe to poll when asleep
+- **Infotainment Awake**: Detailed data (battery, charging state) when awake but not active
+- **Infotainment Active**: Frequent updates when charging, unlocked, or user present
+
+**Smart Wake Management:**
+The system respects Tesla's sleep behavior by polling infotainment data only during an 11-minute wake window, then allowing the vehicle to sleep. Active states (charging/unlocked/user present) override this timeout for continuous monitoring.
+
 ## Usage
 
 > For ESPHome dashboard, see [`tesla-ble-example.yml`](./tesla-ble.example.yml)

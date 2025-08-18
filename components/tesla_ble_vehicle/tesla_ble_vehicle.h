@@ -63,6 +63,12 @@ public:
     void set_vin(const char *vin);
     void set_role(const std::string &role);
     void set_charging_amps_max(int amps_max);
+    
+    // Polling interval setters
+    void set_vcsec_poll_interval(uint32_t interval_ms);
+    void set_infotainment_poll_interval_awake(uint32_t interval_ms);
+    void set_infotainment_poll_interval_active(uint32_t interval_ms);
+    void set_infotainment_sleep_timeout(uint32_t interval_ms);
 
     // Sensor setters (delegate to state manager)
     void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s);
@@ -134,6 +140,12 @@ private:
     // Configuration
     std::string vin_;
     std::string role_{"DRIVER"};
+    
+    // Polling intervals (in milliseconds) - stored for late initialization
+    uint32_t vcsec_poll_interval_{10000};                     // 10s default
+    uint32_t infotainment_poll_interval_awake_{30000};        // 30s default 
+    uint32_t infotainment_poll_interval_active_{10000};       // 10s default
+    uint32_t infotainment_sleep_timeout_{660000};             // 11 minutes (660s) default
 
     // Temporary storage for sensors before state_manager_ is initialized
     binary_sensor::BinarySensor* pending_asleep_sensor_{nullptr};

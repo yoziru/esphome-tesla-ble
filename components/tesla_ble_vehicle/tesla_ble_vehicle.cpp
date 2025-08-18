@@ -46,6 +46,12 @@ void TeslaBLEVehicle::initialize_managers() {
     state_manager_ = std::make_unique<VehicleStateManager>(this);
     polling_manager_ = std::make_unique<PollingManager>(this);
     
+    // Configure polling intervals
+    polling_manager_->set_vcsec_poll_interval(vcsec_poll_interval_);
+    polling_manager_->set_infotainment_poll_interval_awake(infotainment_poll_interval_awake_);
+    polling_manager_->set_infotainment_poll_interval_active(infotainment_poll_interval_active_);
+    polling_manager_->set_infotainment_sleep_timeout(infotainment_sleep_timeout_);
+    
     ESP_LOGD(TAG, "All managers initialized");
 }
 
@@ -159,7 +165,13 @@ void TeslaBLEVehicle::dump_config() {
     ESP_LOGCONFIG(TAG, "Tesla BLE Vehicle:");
     ESP_LOGCONFIG(TAG, "  VIN: %s", vin_.empty() ? "Not set" : vin_.c_str());
     ESP_LOGCONFIG(TAG, "  Role: %s", role_.c_str());
-    ESP_LOGCONFIG(TAG, "  Max Charging Amps: %d", state_manager_->get_charging_amps_max());
+    ESP_LOGCONFIG(TAG, "  Max Charging Amps: %d", state_manager_ ? state_manager_->get_charging_amps_max() : 32);
+    
+    // Show polling intervals
+    ESP_LOGCONFIG(TAG, "  Polling Intervals:");
+    ESP_LOGCONFIG(TAG, "    VCSEC: %u ms", vcsec_poll_interval_);
+    ESP_LOGCONFIG(TAG, "    Infotainment (awake): %u ms", infotainment_poll_interval_awake_);
+    ESP_LOGCONFIG(TAG, "    Infotainment (active): %u ms", infotainment_poll_interval_active_);
     
     // Let state manager dump sensor config
     ESP_LOGCONFIG(TAG, "  Sensors configured:");
@@ -190,6 +202,39 @@ void TeslaBLEVehicle::set_charging_amps_max(int amps_max) {
     
     if (state_manager_) {
         state_manager_->set_charging_amps_max(amps_max);
+    }
+}
+
+// Polling interval setters
+void TeslaBLEVehicle::set_vcsec_poll_interval(uint32_t interval_ms) {
+    ESP_LOGD(TAG, "Setting VCSEC poll interval: %u ms", interval_ms);
+    vcsec_poll_interval_ = interval_ms;
+    if (polling_manager_) {
+        polling_manager_->set_vcsec_poll_interval(interval_ms);
+    }
+}
+
+void TeslaBLEVehicle::set_infotainment_poll_interval_awake(uint32_t interval_ms) {
+    ESP_LOGD(TAG, "Setting infotainment poll interval awake: %u ms", interval_ms);
+    infotainment_poll_interval_awake_ = interval_ms;
+    if (polling_manager_) {
+        polling_manager_->set_infotainment_poll_interval_awake(interval_ms);
+    }
+}
+
+void TeslaBLEVehicle::set_infotainment_poll_interval_active(uint32_t interval_ms) {
+    ESP_LOGD(TAG, "Setting infotainment poll interval active: %u ms", interval_ms);
+    infotainment_poll_interval_active_ = interval_ms;
+    if (polling_manager_) {
+        polling_manager_->set_infotainment_poll_interval_active(interval_ms);
+    }
+}
+
+void TeslaBLEVehicle::set_infotainment_sleep_timeout(uint32_t interval_ms) {
+    ESP_LOGD(TAG, "Setting infotainment sleep timeout: %u ms", interval_ms);
+    infotainment_sleep_timeout_ = interval_ms;
+    if (polling_manager_) {
+        polling_manager_->set_infotainment_sleep_timeout(interval_ms);
     }
 }
 

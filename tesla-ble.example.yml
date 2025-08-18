@@ -11,6 +11,14 @@ substitutions:
   ble_mac_address: "A0:B1:C2:D3:E4:F5" # vehicle BLE MAC address
   tesla_vin: "5YJ30123456789ABC" # vehicle VIN
   charging_amps_max: "32"
+  
+  # Polling intervals (in seconds) - customize based on your needs
+  # Lower values = more responsive but higher battery drain
+  # Higher values = less battery drain but slower updates
+  vcsec_poll_interval: "10"                    # Vehicle status (range: 5-300s, default: 10s)
+  infotainment_poll_interval_awake: "30"       # Data when awake (range: 10-600s, default: 30s) 
+  infotainment_poll_interval_active: "10"      # Data when active (range: 5-120s, default: 10s)
+  infotainment_sleep_timeout: "660"            # Sleep timeout (range: 60-3600s, default: 11min)
 
 external_components: !include packages/external_components.dashboard.yml
 

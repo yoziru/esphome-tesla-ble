@@ -2,14 +2,15 @@
 #include "tesla_ble_vehicle.h"
 #include <client.h>
 #include "log.h"
+#include <vector>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
 
 PollingManager::PollingManager(TeslaBLEVehicle* parent)
     : parent_(parent), last_vcsec_poll_(0), last_infotainment_poll_(0),
-      connection_time_(0), just_connected_(false), is_awake_(false),
-      is_charging_(false), is_unlocked_(false) {}
+      connection_time_(0), just_connected_(false), was_awake_(false),
+      was_charging_(false), was_unlocked_(false), was_user_present_(false) {}
 
 void PollingManager::update() {
     if (!parent_->is_connected()) {
@@ -36,19 +37,16 @@ void PollingManager::update() {
         return;
     }
 
-    // Determine what to poll based on smart polling logic
-    bool should_poll_vcsec_now = should_poll_vcsec();
+    // Always poll VCSEC since ESPHome update_interval matches vcsec_poll_interval
+    log_polling_decision("VCSEC status poll", "Regular interval (ESPHome update)");
+    request_vcsec_poll();
+    last_vcsec_poll_ = now;
+
+    // Check if we should poll infotainment based on smart polling logic
     bool should_poll_infotainment_now = should_poll_infotainment();
 
-    ESP_LOGV(POLLING_MANAGER_TAG, "Polling check: VCSEC=%s, Infotainment=%s", 
-             should_poll_vcsec_now ? "yes" : "no", 
+    ESP_LOGV(POLLING_MANAGER_TAG, "Infotainment polling check: %s", 
              should_poll_infotainment_now ? "yes" : "no");
-
-    if (should_poll_vcsec_now) {
-        log_polling_decision("VCSEC status poll", "Regular interval");
-        request_vcsec_poll();
-        last_vcsec_poll_ = now;
-    }
 
     if (should_poll_infotainment_now) {
         std::string reason = get_fast_poll_reason();
@@ -61,13 +59,16 @@ void PollingManager::update() {
 void PollingManager::handle_connection_established() {
     ESP_LOGI(POLLING_MANAGER_TAG, "BLE connection established - setting just_connected flag");
     
-    connection_time_ = millis();
+    uint32_t now = millis();
+    connection_time_ = now;
+    wake_time_ = now;  // Assume vehicle is waking up when we connect
     just_connected_ = true;
     
     // Reset state cache
-    is_awake_ = false;
-    is_charging_ = false;
-    is_unlocked_ = false;
+    was_awake_ = false;
+    was_charging_ = false;
+    was_unlocked_ = false;
+    was_user_present_ = false;
     
     // Reset polling timestamps
     last_vcsec_poll_ = 0;
@@ -83,37 +84,42 @@ void PollingManager::handle_connection_lost() {
     connection_time_ = 0;
     
     // Reset state cache
-    is_awake_ = false;
-    is_charging_ = false;
-    is_unlocked_ = false;
+    was_awake_ = false;
+    was_charging_ = false;
+    was_unlocked_ = false;
+    was_user_present_ = false;
     
     // Reset polling timestamps
     last_vcsec_poll_ = 0;
     last_infotainment_poll_ = 0;
 }
 
-void PollingManager::update_vehicle_state(bool is_awake, bool is_charging, bool is_unlocked) {
-    bool state_changed = (is_awake_ != is_awake) || 
-                        (is_charging_ != is_charging) || 
-                        (is_unlocked_ != is_unlocked);
+void PollingManager::update_vehicle_state(bool is_awake, bool is_charging, bool is_unlocked, bool is_user_present) {
+    bool state_changed = (was_awake_ != is_awake) || 
+                        (was_charging_ != is_charging) || 
+                        (was_unlocked_ != is_unlocked) ||
+                        (was_user_present_ != is_user_present);
     
     if (state_changed) {
-        ESP_LOGD(POLLING_MANAGER_TAG, "Vehicle state changed: awake=%s, charging=%s, unlocked=%s",
+        ESP_LOGD(POLLING_MANAGER_TAG, "Vehicle state changed: awake=%s, charging=%s, unlocked=%s, user_present=%s",
                  is_awake ? "true" : "false",
                  is_charging ? "true" : "false", 
-                 is_unlocked ? "true" : "false");
+                 is_unlocked ? "true" : "false",
+                 is_user_present ? "true" : "false");
         
-        // If vehicle just woke up, poll infotainment immediately (bypass time interval check)
-        if (!is_awake_ && is_awake) {
-            ESP_LOGI(POLLING_MANAGER_TAG, "Vehicle just woke up - requesting immediate infotainment poll");
+        // If vehicle just woke up, track wake time and poll infotainment immediately
+        if (!was_awake_ && is_awake) {
+            wake_time_ = millis();
+            ESP_LOGI(POLLING_MANAGER_TAG, "Vehicle just woke up - tracking wake time and requesting immediate infotainment poll");
             request_infotainment_poll(true);  // true = bypass delay
             last_infotainment_poll_ = millis();
         }
     }
     
-    is_awake_ = is_awake;
-    is_charging_ = is_charging;
-    is_unlocked_ = is_unlocked;
+    was_awake_ = is_awake;
+    was_charging_ = is_charging;
+    was_unlocked_ = is_unlocked;
+    was_user_present_ = is_user_present;
 }
 
 void PollingManager::force_immediate_poll() {
@@ -126,40 +132,44 @@ void PollingManager::force_immediate_poll() {
     last_vcsec_poll_ = now;
     
     // Force infotainment poll if awake
-    if (is_awake_) {
+    if (was_awake_) {
         request_infotainment_poll();
         last_infotainment_poll_ = now;
     }
-}
-
-bool PollingManager::should_poll_vcsec() {
-    uint32_t now = millis();
-    uint32_t time_since_last = now - last_vcsec_poll_;
-    
-    ESP_LOGV(POLLING_MANAGER_TAG, "VCSEC poll check: time_since_last=%u ms, interval=%u ms", 
-             time_since_last, VCSEC_POLL_INTERVAL);
-    
-    // Always poll VCSEC at the regular interval - it's safe and doesn't wake the car
-    if (time_since_last >= VCSEC_POLL_INTERVAL) {
-        ESP_LOGD(POLLING_MANAGER_TAG, "VCSEC poll needed (%u ms since last)", time_since_last);
-        return true;
-    }
-    
-    return false;
 }
 
 bool PollingManager::should_poll_infotainment() {
     uint32_t now = millis();
     
     // Don't poll infotainment if vehicle is asleep
-    if (!is_awake_) {
+    if (!was_awake_) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle asleep, skipping infotainment poll");
         return false;
     }
-    
-    uint32_t poll_interval = get_infotainment_poll_interval();
-    
-    if (now - last_infotainment_poll_ >= poll_interval) {
+
+    // If charging, always poll at active interval regardless of wake time
+    if (was_charging_) {
+        uint32_t time_since_last = now - last_infotainment_poll_;
+        if (time_since_last >= infotainment_poll_interval_active_) {
+            ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle charging, polling at active interval");
+            return true;
+        }
+        return false;
+    }
+
+    // If not charging, check if we're within the wake window
+    uint32_t time_since_wake = now - wake_time_;
+    if (time_since_wake >= infotainment_sleep_timeout_) {
+        ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle awake for %u ms (>%u ms), allowing sleep - skipping infotainment poll", 
+                 time_since_wake, infotainment_sleep_timeout_);
+        return false;
+    }
+
+    // We're within the wake window, poll at awake interval
+    uint32_t time_since_last = now - last_infotainment_poll_;
+    if (time_since_last >= infotainment_poll_interval_awake_) {
+        ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle awake for %u ms (<%u ms), polling at awake interval", 
+                 time_since_wake, infotainment_sleep_timeout_);
         return true;
     }
     
@@ -168,26 +178,37 @@ bool PollingManager::should_poll_infotainment() {
 
 uint32_t PollingManager::get_infotainment_poll_interval() {
     if (should_use_fast_polling()) {
-        return INFOTAINMENT_POLL_CHARGING;
+        return infotainment_poll_interval_active_;
     } else {
-        return INFOTAINMENT_POLL_AWAKE;
+        return infotainment_poll_interval_awake_;
     }
 }
 
 bool PollingManager::should_use_fast_polling() {
-    // Fast poll if charging or unlocked (user might be actively using the vehicle)
-    return is_charging_ || is_unlocked_;
+    // Fast poll if charging, unlocked, or user is present (user might be actively using the vehicle)
+    return was_charging_ || was_unlocked_ || was_user_present_;
 }
 
 std::string PollingManager::get_fast_poll_reason() {
-    if (is_charging_ && is_unlocked_) {
-        return "charging and unlocked";
-    } else if (is_charging_) {
-        return "charging";
-    } else if (is_unlocked_) {
-        return "unlocked";
-    } else {
+    std::vector<std::string> reasons;
+    if (was_charging_) reasons.push_back("charging");
+    if (was_unlocked_) reasons.push_back("unlocked");
+    if (was_user_present_) reasons.push_back("user present");
+    
+    if (reasons.empty()) {
         return "vehicle awake";
+    } else if (reasons.size() == 1) {
+        return reasons[0];
+    } else {
+        std::string result = reasons[0];
+        for (size_t i = 1; i < reasons.size(); ++i) {
+            if (i == reasons.size() - 1) {
+                result += " and " + reasons[i];
+            } else {
+                result += ", " + reasons[i];
+            }
+        }
+        return result;
     }
 }
 

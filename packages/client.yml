@@ -2,6 +2,11 @@ substitutions:
   ble_mac_address: !secret ble_mac_address
   tesla_vin: !secret tesla_vin
   charging_amps_max: "32"
+  # Polling interval defaults (can be overridden in main config)
+  vcsec_poll_interval: "10"
+  infotainment_poll_interval_awake: "30" 
+  infotainment_poll_interval_active: "10"
+  infotainment_sleep_timeout: "660"  # 11 minutes
 
 ble_client:
   - mac_address: $ble_mac_address
@@ -12,9 +17,15 @@ tesla_ble_vehicle:
   ble_client_id: ble_tesla_id
   id: tesla_ble_vehicle_id
   vin: $tesla_vin
-  update_interval: 30s
+  # update_interval is automatically set to match vcsec_poll_interval
   charging_amps_max: $charging_amps_max
   role: DRIVER  # Options: DRIVER (all controls) or CHARGING_MANAGER (charging + basic controls only)
+  
+  # Polling intervals (in seconds) - adjust based on your battery life vs responsiveness needs
+  vcsec_poll_interval: $vcsec_poll_interval        # Vehicle status polling (also sets ESPHome update_interval)
+  infotainment_poll_interval_awake: $infotainment_poll_interval_awake    # Data polling when awake but not active
+  infotainment_poll_interval_active: $infotainment_poll_interval_active # Data polling when charging/unlocked/user present (more responsive)
+  infotainment_sleep_timeout: $infotainment_sleep_timeout  # How long to poll before allowing sleep
 
 # BLE sensors from the standard ble_client platform
 sensor:

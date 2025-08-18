@@ -52,6 +52,12 @@ CONF_VIN = "vin"
 CONF_CHARGING_AMPS_MAX = "charging_amps_max"
 CONF_ROLE = "role"
 
+# Polling configuration constants
+CONF_VCSEC_POLL_INTERVAL = "vcsec_poll_interval"
+CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE = "infotainment_poll_interval_awake" 
+CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE = "infotainment_poll_interval_active"
+CONF_INFOTAINMENT_SLEEP_TIMEOUT = "infotainment_sleep_timeout"
+
 # Configuration constants - no need for custom classes since we use standard ESPHome components
 CONF_SLEEP = "sleep"
 
@@ -68,9 +74,14 @@ CONFIG_SCHEMA = (
             cv.Required(CONF_VIN): cv.string,
             cv.Optional(CONF_CHARGING_AMPS_MAX, default=32): cv.int_range(min=1, max=48),
             cv.Optional(CONF_ROLE, default="DRIVER"): cv.enum(TESLA_ROLES, upper=True),
+            # Polling intervals (in seconds)
+            cv.Optional(CONF_VCSEC_POLL_INTERVAL, default=10): cv.int_range(min=5, max=300),
+            cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE, default=30): cv.int_range(min=10, max=600), 
+            cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE, default=10): cv.int_range(min=5, max=120),
+            cv.Optional(CONF_INFOTAINMENT_SLEEP_TIMEOUT, default=660): cv.int_range(min=60, max=3600),  # 11 minutes default
         },
     )
-    .extend(cv.polling_component_schema("30s"))
+    .extend(cv.polling_component_schema("10s"))  # Default matches VCSEC polling interval
     .extend(ble_client.BLE_CLIENT_SCHEMA)
 )
 
@@ -83,10 +94,25 @@ async def to_code(config):
     
     role = config[CONF_ROLE]
     charging_amps_max = config[CONF_CHARGING_AMPS_MAX]
+    vcsec_interval_seconds = config[CONF_VCSEC_POLL_INTERVAL]
+    
+    # Set the ESPHome update interval to match VCSEC polling interval
+    cg.add(var.set_update_interval(vcsec_interval_seconds * 1000))  # Convert to milliseconds
     
     # Set role and charging configuration
     cg.add(var.set_role(TESLA_ROLES[role]))
     cg.add(var.set_charging_amps_max(charging_amps_max))
+    
+    # Set polling intervals (convert from seconds to milliseconds)
+    vcsec_interval_ms = vcsec_interval_seconds * 1000
+    infotainment_awake_ms = config[CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE] * 1000
+    infotainment_active_ms = config[CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE] * 1000
+    infotainment_sleep_timeout_ms = config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000
+    
+    cg.add(var.set_vcsec_poll_interval(vcsec_interval_ms))
+    cg.add(var.set_infotainment_poll_interval_awake(infotainment_awake_ms))
+    cg.add(var.set_infotainment_poll_interval_active(infotainment_active_ms))
+    cg.add(var.set_infotainment_sleep_timeout(infotainment_sleep_timeout_ms))
     
     # Create built-in entities
     ## Binary sensors

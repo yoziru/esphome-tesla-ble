@@ -160,7 +160,7 @@ void VehicleStateManager::update_asleep(bool asleep) {
     
     // Notify polling manager of state change
     if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!asleep, is_charging_, is_unlocked());
+        parent_->get_polling_manager()->update_vehicle_state(!asleep, is_charging_, is_unlocked(), is_user_present_);
     }
 }
 
@@ -174,7 +174,7 @@ void VehicleStateManager::update_unlocked(bool unlocked) {
     
     // Notify polling manager of state change
     if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, unlocked);
+        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, unlocked, is_user_present_);
     }
 }
 
@@ -184,6 +184,13 @@ void VehicleStateManager::update_user_present(bool present) {
         publish_sensor_state(user_present_sensor_, present);
     } else {
         ESP_LOGW(STATE_MANAGER_TAG, "User present sensor is null - cannot publish state");
+    }
+    
+    is_user_present_ = present;
+    
+    // Notify polling manager of state change
+    if (parent_->get_polling_manager()) {
+        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, is_unlocked(), is_user_present_);
     }
 }
 

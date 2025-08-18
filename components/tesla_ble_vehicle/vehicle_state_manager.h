@@ -109,6 +109,7 @@ private:
     
     // Internal state tracking
     bool is_charging_{false};
+    bool is_user_present_{false};
     int charging_amps_max_{32};
     
     // Command delay tracking - prevents stale data from overwriting fresh user commands
