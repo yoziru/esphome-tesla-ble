@@ -82,11 +82,29 @@ void TeslaBLEVehicle::configure_pending_sensors() {
             ESP_LOGD(TAG, "Configuring charge flap sensor");
             state_manager_->set_charge_flap_sensor(pending_charge_flap_sensor_);
         }
+        if (pending_charger_sensor_) {
+            ESP_LOGD(TAG, "Configuring charger sensor");
+            state_manager_->set_charger_sensor(pending_charger_sensor_);
+        }
         
         // Configure regular sensors
-        if (pending_charging_amps_sensor_) {
-            ESP_LOGD(TAG, "Configuring charging amps sensor");
-            state_manager_->set_charging_amps_sensor(pending_charging_amps_sensor_);
+        if (pending_battery_level_sensor_) {
+            ESP_LOGD(TAG, "Configuring battery level sensor");
+            state_manager_->set_battery_level_sensor(pending_battery_level_sensor_);
+        }
+        if (pending_charger_power_sensor_) {
+            ESP_LOGD(TAG, "Configuring charger power sensor");
+            state_manager_->set_charger_power_sensor(pending_charger_power_sensor_);
+        }
+        if (pending_charging_rate_sensor_) {
+            ESP_LOGD(TAG, "Configuring charging rate sensor");
+            state_manager_->set_charging_rate_sensor(pending_charging_rate_sensor_);
+        }
+        
+        // Configure text sensors
+        if (pending_charging_state_sensor_) {
+            ESP_LOGD(TAG, "Configuring charging state sensor");
+            state_manager_->set_charging_state_sensor(pending_charging_state_sensor_);
         }
         
         // Configure controls
@@ -196,9 +214,29 @@ void TeslaBLEVehicle::set_binary_sensor_is_charge_flap_open(binary_sensor::Binar
     if (state_manager_) state_manager_->set_charge_flap_sensor(s);
 }
 
-void TeslaBLEVehicle::set_charging_amps_sensor(sensor::Sensor *sensor) {
-    pending_charging_amps_sensor_ = sensor;
-    if (state_manager_) state_manager_->set_charging_amps_sensor(sensor);
+void TeslaBLEVehicle::set_binary_sensor_is_charger_connected(binary_sensor::BinarySensor *s) {
+    pending_charger_sensor_ = s;
+    if (state_manager_) state_manager_->set_charger_sensor(s);
+}
+
+void TeslaBLEVehicle::set_battery_level_sensor(sensor::Sensor *sensor) {
+    pending_battery_level_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_battery_level_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_charger_power_sensor(sensor::Sensor *sensor) {
+    pending_charger_power_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_charger_power_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_charging_rate_sensor(sensor::Sensor *sensor) {
+    pending_charging_rate_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_charging_rate_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_charging_state_sensor(text_sensor::TextSensor *sensor) {
+    pending_charging_state_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_charging_state_sensor(sensor);
 }
 
 // Control setters (delegate to state manager)
@@ -576,6 +614,10 @@ void TeslaBLEVehicle::handle_connection_established() {
     
     if (polling_manager_) {
         polling_manager_->handle_connection_established();
+        
+        // Trigger immediate poll instead of waiting for next update cycle
+        ESP_LOGI(TAG, "Triggering immediate initial poll");
+        this->update();
     } else {
         ESP_LOGW(TAG, "Polling manager not available during connection establishment");
     }

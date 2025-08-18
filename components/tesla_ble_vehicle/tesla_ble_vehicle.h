@@ -5,6 +5,7 @@
 #include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
 #include <esphome/components/binary_sensor/binary_sensor.h>
 #include <esphome/components/sensor/sensor.h>
+#include <esphome/components/text_sensor/text_sensor.h>
 #include <esphome/components/button/button.h>
 #include <esphome/components/switch/switch.h>
 #include <esphome/components/number/number.h>
@@ -68,7 +69,11 @@ public:
     void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s);
     void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s);
     void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s);
-    void set_charging_amps_sensor(sensor::Sensor *sensor);
+    void set_binary_sensor_is_charger_connected(binary_sensor::BinarySensor *s);
+    void set_battery_level_sensor(sensor::Sensor *sensor);
+    void set_charger_power_sensor(sensor::Sensor *sensor);
+    void set_charging_rate_sensor(sensor::Sensor *sensor);
+    void set_charging_state_sensor(text_sensor::TextSensor *sensor);
 
     // Control setters (delegate to state manager)
     void set_charging_switch(switch_::Switch *sw);
@@ -135,7 +140,11 @@ private:
     binary_sensor::BinarySensor* pending_unlocked_sensor_{nullptr};
     binary_sensor::BinarySensor* pending_user_present_sensor_{nullptr};
     binary_sensor::BinarySensor* pending_charge_flap_sensor_{nullptr};
-    sensor::Sensor* pending_charging_amps_sensor_{nullptr};
+    binary_sensor::BinarySensor* pending_charger_sensor_{nullptr};
+    sensor::Sensor* pending_battery_level_sensor_{nullptr};
+    sensor::Sensor* pending_charger_power_sensor_{nullptr};
+    sensor::Sensor* pending_charging_rate_sensor_{nullptr};
+    text_sensor::TextSensor* pending_charging_state_sensor_{nullptr};
     switch_::Switch* pending_charging_switch_{nullptr};
     number::Number* pending_charging_amps_number_{nullptr};
     number::Number* pending_charging_limit_number_{nullptr};

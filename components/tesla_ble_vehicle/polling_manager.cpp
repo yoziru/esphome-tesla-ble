@@ -73,10 +73,7 @@ void PollingManager::handle_connection_established() {
     last_vcsec_poll_ = 0;
     last_infotainment_poll_ = 0;
     
-    ESP_LOGD(POLLING_MANAGER_TAG, "Connection setup complete - will trigger poll on next update cycle");
-    
-    // Don't trigger immediate poll here - the BLE state might not be fully ready
-    // Let the next update() call handle it when just_connected_ is true
+    ESP_LOGD(POLLING_MANAGER_TAG, "Connection setup complete - ready for immediate poll");
 }
 
 void PollingManager::handle_connection_lost() {

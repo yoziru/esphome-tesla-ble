@@ -53,7 +53,7 @@ void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
 void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charge_state) {
     ESP_LOGD(STATE_MANAGER_TAG, "Updating charge state");
     
-    // Update charging status
+    // Update charging status and charging state text
     if (charge_state.has_charging_state) {
         bool was_charging = is_charging_;
         is_charging_ = (charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag);
@@ -62,8 +62,38 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
             ESP_LOGI(STATE_MANAGER_TAG, "Charging state changed: %s", is_charging_ ? "ON" : "OFF");
             publish_sensor_state(charging_switch_, is_charging_);
         }
+        
+        // Update charging state text sensor
+        if (charging_state_sensor_) {
+            std::string state_text = get_charging_state_text(charge_state.charging_state);
+            publish_sensor_state(charging_state_sensor_, state_text);
+        }
+        
+        // Update charger connected binary sensor based on charging state
+        if (charger_sensor_) {
+            bool charger_connected = is_charger_connected_from_state(charge_state.charging_state);
+            publish_sensor_state(charger_sensor_, charger_connected);
+        }
     }
     
+    // Update battery level
+    if (charge_state.which_optional_battery_level && battery_level_sensor_) {
+        float battery_level = static_cast<float>(charge_state.optional_battery_level.battery_level);
+        publish_sensor_state(battery_level_sensor_, battery_level);
+    }
+    
+    // Update charger power (convert from watts to kilowatts)
+    if (charge_state.which_optional_charger_power && charger_power_sensor_) {
+        float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
+        publish_sensor_state(charger_power_sensor_, power_kw);
+    }
+    
+    // Update charging rate
+    if (charge_state.which_optional_charge_rate_mph && charging_rate_sensor_) {
+        float rate_mph = static_cast<float>(charge_state.optional_charge_rate_mph.charge_rate_mph);
+        publish_sensor_state(charging_rate_sensor_, rate_mph);
+    }
+
     // Update charging amps (from charger actual current)
     if (charge_state.which_optional_charger_actual_current && charging_amps_number_) {
         float amps = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
@@ -73,11 +103,6 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charge limit - update both sensor (read-only) and number (user-controllable)
     if (charge_state.which_optional_charge_limit_soc) {
         float limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
-        
-        // Update the read-only sensor (always update)
-        if (charging_limit_sensor_) {
-            publish_sensor_state(charging_limit_sensor_, limit);
-        }
         
         // Update the user-controllable number component (with command delay protection)
         if (charging_limit_number_) {
@@ -170,10 +195,7 @@ void VehicleStateManager::update_charge_flap_open(bool open) {
 void VehicleStateManager::update_charging_amps(float amps) {
     ESP_LOGV(STATE_MANAGER_TAG, "Charging amps from vehicle: %.1f A", amps);
     
-    // Always update the sensor (read-only display)
-    publish_sensor_state(charging_amps_sensor_, amps);
-    
-    // Always update the number component too (since we're using delay-based approach)
+    // Always update the number component (since we're using delay-based approach)
     publish_sensor_state(charging_amps_number_, amps);
 }
 
@@ -185,7 +207,6 @@ void VehicleStateManager::set_sensors_available(bool available) {
     set_sensor_available(unlocked_sensor_, available);
     set_sensor_available(user_present_sensor_, available);
     set_sensor_available(charge_flap_sensor_, available);
-    set_sensor_available(charging_amps_sensor_, available);
     
     // For controls, set availability but don't change state
     if (charging_switch_) {
@@ -226,7 +247,7 @@ bool VehicleStateManager::is_charge_flap_open() const {
 }
 
 float VehicleStateManager::get_charging_amps() const {
-    return charging_amps_sensor_ ? charging_amps_sensor_->state : 0.0f;
+    return charging_amps_number_ ? charging_amps_number_->state : 0.0f;
 }
 
 // Dynamic limits
@@ -330,6 +351,57 @@ bool VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
         default:
             return NAN;   // Unknown state
     }
+}
+
+void VehicleStateManager::publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state) {
+    if (sensor != nullptr) {
+        sensor->publish_state(state);
+    }
+}
+
+std::string VehicleStateManager::get_charging_state_text(const CarServer_ChargeState_ChargingState& state) {
+    switch (state.which_type) {
+        case CarServer_ChargeState_ChargingState_Unknown_tag:
+            return "Unknown";
+        case CarServer_ChargeState_ChargingState_Disconnected_tag:
+            return "Disconnected";
+        case CarServer_ChargeState_ChargingState_NoPower_tag:
+            return "No Power";
+        case CarServer_ChargeState_ChargingState_Starting_tag:
+            return "Starting";
+        case CarServer_ChargeState_ChargingState_Charging_tag:
+            return "Charging";
+        case CarServer_ChargeState_ChargingState_Complete_tag:
+            return "Complete";
+        case CarServer_ChargeState_ChargingState_Stopped_tag:
+            return "Stopped";
+        case CarServer_ChargeState_ChargingState_Calibrating_tag:
+            return "Calibrating";
+        default:
+            return "Unknown";
+    }
+}
+
+bool VehicleStateManager::is_charger_connected_from_state(const CarServer_ChargeState_ChargingState& state) {
+    // Charger is considered connected for all states except Disconnected and Unknown
+    switch (state.which_type) {
+        case CarServer_ChargeState_ChargingState_Disconnected_tag:
+        case CarServer_ChargeState_ChargingState_Unknown_tag:
+            return false;
+        case CarServer_ChargeState_ChargingState_NoPower_tag:
+        case CarServer_ChargeState_ChargingState_Starting_tag:
+        case CarServer_ChargeState_ChargingState_Charging_tag:
+        case CarServer_ChargeState_ChargingState_Complete_tag:
+        case CarServer_ChargeState_ChargingState_Stopped_tag:
+        case CarServer_ChargeState_ChargingState_Calibrating_tag:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void VehicleStateManager::update_charger_connected(bool connected) {
+    publish_sensor_state(charger_sensor_, connected);
 }
 
 // Command tracking for INFOTAINMENT request delay

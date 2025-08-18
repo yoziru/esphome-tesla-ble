@@ -1,35 +1,24 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, binary_sensor, button, switch, number
+from esphome.components import ble_client, binary_sensor, button, switch, number, sensor, text_sensor
 from esphome.const import (
     CONF_DEVICE_CLASS,
     CONF_DISABLED_BY_DEFAULT,
     CONF_ENTITY_CATEGORY,
+    CONF_FORCE_UPDATE,
     CONF_ICON,
     CONF_ID,
-    CONF_MAX_VALUE,
-    CONF_MIN_VALUE,
     CONF_MODE,
     CONF_NAME,
-    CONF_OPTIMISTIC,
-    CONF_RESTORE_VALUE,
-    CONF_STEP,
-    CONF_UNIT_OF_MEASUREMENT,
     CONF_RESTORE_MODE,
-    ENTITY_CATEGORY_DIAGNOSTIC,
-    ENTITY_CATEGORY_CONFIG,
-    DEVICE_CLASS_DOOR,
-    DEVICE_CLASS_LOCK,
-    DEVICE_CLASS_OCCUPANCY,
-    DEVICE_CLASS_PRESENCE,
+    CONF_UNIT_OF_MEASUREMENT,
 )
 from esphome import automation
-from esphome.core import coroutine_with_priority
 
 
 CODEOWNERS = ["@yoziru"]
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["binary_sensor", "button", "switch", "number"]
+AUTO_LOAD = ["binary_sensor", "button", "switch", "number", "sensor", "text_sensor"]
 
 tesla_ble_vehicle_ns = cg.esphome_ns.namespace("tesla_ble_vehicle")
 TeslaBLEVehicle = tesla_ble_vehicle_ns.class_(
@@ -134,6 +123,57 @@ async def to_code(config):
         CONF_DEVICE_CLASS: binary_sensor.DEVICE_CLASS_DOOR,
     })
     cg.add(var.set_binary_sensor_is_charge_flap_open(charge_flap_sensor))
+
+    charger_sensor = await binary_sensor.new_binary_sensor({
+        CONF_ID: cv.declare_id(binary_sensor.BinarySensor)("tesla_charger_sensor"),
+        CONF_NAME: "Charger",
+        CONF_ICON: "mdi:power-plug",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_DEVICE_CLASS: binary_sensor.DEVICE_CLASS_PLUG,
+    })
+    cg.add(var.set_binary_sensor_is_charger_connected(charger_sensor))
+
+    ## Sensors
+    battery_level_sensor = await sensor.new_sensor({
+        CONF_ID: cv.declare_id(sensor.Sensor)("tesla_battery_level_sensor"),
+        CONF_NAME: "Battery",
+        CONF_ICON: "mdi:battery",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+        CONF_UNIT_OF_MEASUREMENT: "%",
+    })
+    cg.add(var.set_battery_level_sensor(battery_level_sensor))
+
+    charger_power_sensor = await sensor.new_sensor({
+        CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charger_power_sensor"),
+        CONF_NAME: "Charger Power",
+        CONF_ICON: "mdi:flash",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+        CONF_UNIT_OF_MEASUREMENT: "kW",
+    })
+    cg.add(var.set_charger_power_sensor(charger_power_sensor))
+
+    charging_rate_sensor = await sensor.new_sensor({
+        CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charging_rate_sensor"),
+        CONF_NAME: "Charging Rate",
+        CONF_ICON: "mdi:speedometer",
+        CONF_DEVICE_CLASS: sensor.DEVICE_CLASS_SPEED,
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+        CONF_UNIT_OF_MEASUREMENT: "mph",
+    })
+    cg.add(var.set_charging_rate_sensor(charging_rate_sensor))
+
+    ## Text sensors  
+    charging_state_sensor = await text_sensor.new_text_sensor({
+        CONF_ID: cv.declare_id(text_sensor.TextSensor)("tesla_charging_state_sensor"),
+        CONF_NAME: "Charging",
+        CONF_ICON: "mdi:ev-station",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+    })
+    cg.add(var.set_charging_state_sensor(charging_state_sensor))
 
     ## Buttons
     wake_button = await button.new_button({

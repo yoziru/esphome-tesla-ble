@@ -3,6 +3,7 @@
 #include <esphome/core/log.h>
 #include <esphome/components/binary_sensor/binary_sensor.h>
 #include <esphome/components/sensor/sensor.h>
+#include <esphome/components/text_sensor/text_sensor.h>
 #include <esphome/components/switch/switch.h>
 #include <esphome/components/number/number.h>
 #include <car_server.pb.h>
@@ -32,8 +33,11 @@ public:
     void set_unlocked_sensor(binary_sensor::BinarySensor* sensor) { unlocked_sensor_ = sensor; }
     void set_user_present_sensor(binary_sensor::BinarySensor* sensor) { user_present_sensor_ = sensor; }
     void set_charge_flap_sensor(binary_sensor::BinarySensor* sensor) { charge_flap_sensor_ = sensor; }
-    void set_charging_amps_sensor(sensor::Sensor* sensor) { charging_amps_sensor_ = sensor; }
-    void set_charging_limit_sensor(sensor::Sensor* sensor) { charging_limit_sensor_ = sensor; }
+    void set_charger_sensor(binary_sensor::BinarySensor* sensor) { charger_sensor_ = sensor; }
+    void set_battery_level_sensor(sensor::Sensor* sensor) { battery_level_sensor_ = sensor; }
+    void set_charger_power_sensor(sensor::Sensor* sensor) { charger_power_sensor_ = sensor; }
+    void set_charging_rate_sensor(sensor::Sensor* sensor) { charging_rate_sensor_ = sensor; }
+    void set_charging_state_sensor(text_sensor::TextSensor* sensor) { charging_state_sensor_ = sensor; }
     
     // Control setters
     void set_charging_switch(switch_::Switch* sw) { charging_switch_ = sw; }
@@ -57,6 +61,7 @@ public:
     void update_user_present(bool present);
     void update_charge_flap_open(bool open);
     void update_charging_amps(float amps);
+    void update_charger_connected(bool connected);
     
     // Connection state management
     void set_sensors_available(bool available);
@@ -87,10 +92,15 @@ private:
     binary_sensor::BinarySensor* unlocked_sensor_{nullptr};
     binary_sensor::BinarySensor* user_present_sensor_{nullptr};
     binary_sensor::BinarySensor* charge_flap_sensor_{nullptr};
+    binary_sensor::BinarySensor* charger_sensor_{nullptr};
     
     // Sensors
-    sensor::Sensor* charging_amps_sensor_{nullptr};
-    sensor::Sensor* charging_limit_sensor_{nullptr};
+    sensor::Sensor* battery_level_sensor_{nullptr};
+    sensor::Sensor* charger_power_sensor_{nullptr};
+    sensor::Sensor* charging_rate_sensor_{nullptr};
+    
+    // Text sensors
+    text_sensor::TextSensor* charging_state_sensor_{nullptr};
     
     // Controls
     switch_::Switch* charging_switch_{nullptr};
@@ -111,6 +121,7 @@ private:
     void publish_sensor_state(sensor::Sensor* sensor, float state);
     void publish_sensor_state(switch_::Switch* switch_comp, bool state);
     void publish_sensor_state(number::Number* number_comp, float state);
+    void publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state);
     void set_sensor_available(binary_sensor::BinarySensor* sensor, bool available);
     void set_sensor_available(sensor::Sensor* sensor, bool available);
     
@@ -118,6 +129,8 @@ private:
     bool convert_sleep_status(VCSEC_VehicleSleepStatus_E status);
     bool convert_lock_status(VCSEC_VehicleLockState_E status);
     bool convert_user_presence(VCSEC_UserPresence_E presence);
+    std::string get_charging_state_text(const CarServer_ChargeState_ChargingState& state);
+    bool is_charger_connected_from_state(const CarServer_ChargeState_ChargingState& state);
 };
 
 } // namespace tesla_ble_vehicle
