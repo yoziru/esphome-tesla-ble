@@ -39,7 +39,6 @@ struct BLERXChunk {
 class BLEManager {
 public:
     static constexpr int BLOCK_LENGTH = 20;           // BLE chunk size
-    static constexpr int MAX_BLE_MESSAGE_SIZE = 1024; // Max message size
     static constexpr int RX_TIMEOUT = 1000;           // 1s timeout between chunks
     
     explicit BLEManager(TeslaBLEVehicle* parent);

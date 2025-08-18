@@ -57,6 +57,9 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
         bool was_charging = is_charging_;
+        
+        // Determine if vehicle is actively charging based on state type
+        // Starting state is considered charging since it's transitioning to charge
         bool new_charging_state = (
             charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag ||
             charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Starting_tag
@@ -70,6 +73,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         is_charging_ = new_charging_state;
         
         // Always sync charging switch with vehicle state, but respect command delay
+        // This prevents race conditions where user commands are overwritten by stale vehicle data
         if (charging_switch_ && (!charging_switch_->has_state() || charging_switch_->state != is_charging_)) {
             if (should_delay_infotainment_request()) {
                 ESP_LOGD(STATE_MANAGER_TAG, "Delaying charging switch sync due to recent command (vehicle: %s, switch: %s)", 
@@ -100,16 +104,30 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update battery level
+    // Update battery level with validation
     if (charge_state.which_optional_battery_level && battery_level_sensor_) {
         float battery_level = static_cast<float>(charge_state.optional_battery_level.battery_level);
-        publish_sensor_state(battery_level_sensor_, battery_level);
+        
+        // Validate battery level is within reasonable bounds [0-100]
+        if (battery_level >= 0.0f && battery_level <= 100.0f) {
+            ESP_LOGD(STATE_MANAGER_TAG, "Updating battery level to %.1f%%", battery_level);
+            publish_sensor_state(battery_level_sensor_, battery_level);
+        } else {
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid battery level received: %.1f%% (expected 0-100)", battery_level);
+        }
     }
     
-    // Update charger power (convert from watts to kilowatts)
+    // Update charger power with validation (convert from watts to kilowatts)
     if (charge_state.which_optional_charger_power && charger_power_sensor_) {
         float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
-        publish_sensor_state(charger_power_sensor_, power_kw);
+        
+        // Validate power is non-negative (Tesla max is ~250kW at Superchargers)
+        if (power_kw >= 0.0f && power_kw <= 300.0f) {
+            ESP_LOGD(STATE_MANAGER_TAG, "Updating charger power to %.1fkW", power_kw);
+            publish_sensor_state(charger_power_sensor_, power_kw);
+        } else {
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger power received: %.1fkW (expected 0-300)", power_kw);
+        }
     }
     
     // Update charging rate

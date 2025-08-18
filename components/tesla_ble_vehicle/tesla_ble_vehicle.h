@@ -12,6 +12,7 @@
 #include <esphome/core/component.h>
 #include <esphome/core/automation.h>
 
+#include "common.h"
 #include "message_handler.h"
 #include "command_manager.h"
 #include "ble_manager.h"

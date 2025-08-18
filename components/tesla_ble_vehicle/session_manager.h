@@ -6,6 +6,7 @@
 #include <esphome/core/log.h>
 #include <universal_message.pb.h>
 #include <signatures.pb.h>
+#include "common.h"
 
 namespace TeslaBLE {
     class Client;
