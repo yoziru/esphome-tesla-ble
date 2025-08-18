@@ -26,9 +26,41 @@ namespace esphome
     void TeslaBLEVehicle::dump_config()
     {
       ESP_LOGCONFIG(TAG, "Tesla BLE Vehicle:");
-      LOG_BINARY_SENSOR("  ", "Asleep Sensor", this->isAsleepSensor);
+      if (this->isAsleepSensor != nullptr) {
+        LOG_BINARY_SENSOR("  ", "Asleep Sensor", this->isAsleepSensor);
+      }
+      if (this->isUnlockedSensor != nullptr) {
+        LOG_BINARY_SENSOR("  ", "Unlocked Sensor", this->isUnlockedSensor);
+      }
+      if (this->isUserPresentSensor != nullptr) {
+        LOG_BINARY_SENSOR("  ", "User Present Sensor", this->isUserPresentSensor);
+      }
+      if (this->isChargeFlapOpenSensor != nullptr) {
+        LOG_BINARY_SENSOR("  ", "Charge Flap Sensor", this->isChargeFlapOpenSensor);
+      }
+      if (this->wakeButton != nullptr) {
+        LOG_BUTTON("  ", "Wake Button", this->wakeButton);
+      }
+      if (this->pairButton != nullptr) {
+        LOG_BUTTON("  ", "Pair Button", this->pairButton);
+      }
+      if (this->regenerateKeyButton != nullptr) {
+        LOG_BUTTON("  ", "Regenerate Key Button", this->regenerateKeyButton);
+      }
+      if (this->forceUpdateButton != nullptr) {
+        LOG_BUTTON("  ", "Force Update Button", this->forceUpdateButton);
+      }
+      if (this->chargingSwitch != nullptr) {
+        LOG_SWITCH("  ", "Charging Switch", this->chargingSwitch);
+      }
+      if (this->chargingAmpsNumber != nullptr) {
+        LOG_NUMBER("  ", "Charging Amps Number", this->chargingAmpsNumber);
+      }
+      if (this->chargingLimitNumber != nullptr) {
+        LOG_NUMBER("  ", "Charging Limit Number", this->chargingLimitNumber);
+      }
     }
-    TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{})
+    TeslaBLEVehicle::TeslaBLEVehicle() : tesla_ble_client_(new TeslaBLE::Client{}), role_("DRIVER"), charging_amps_max_(32)
     {
       ESP_LOGCONFIG(TAG, "Constructing Tesla BLE Vehicle component");
     }
@@ -44,6 +76,39 @@ namespace esphome
       this->openNVSHandle();
       this->initializePrivateKey();
       this->loadSessionInfo();
+
+      // Setup button callbacks
+      if (this->wakeButton != nullptr) {
+        this->wakeButton->add_on_press_callback([this]() { this->wakeVehicle(); });
+      }
+      if (this->pairButton != nullptr) {
+        this->pairButton->add_on_press_callback([this]() { this->startPair(); });
+      }
+      if (this->regenerateKeyButton != nullptr) {
+        this->regenerateKeyButton->add_on_press_callback([this]() { this->regenerateKey(); });
+      }
+      if (this->forceUpdateButton != nullptr) {
+        this->forceUpdateButton->add_on_press_callback([this]() { this->enqueueVCSECInformationRequest(true); });
+      }
+
+      // Setup switch callbacks
+      if (this->chargingSwitch != nullptr) {
+        this->chargingSwitch->add_on_state_callback([this](bool state) { 
+          this->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, state ? 1 : 0); 
+        });
+      }
+
+      // Setup number callbacks
+      if (this->chargingAmpsNumber != nullptr) {
+        this->chargingAmpsNumber->add_on_state_callback([this](float value) { 
+          this->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, (int)value); 
+        });
+      }
+      if (this->chargingLimitNumber != nullptr) {
+        this->chargingLimitNumber->add_on_state_callback([this](float value) { 
+          this->sendCarServerVehicleActionMessage(SET_CHARGING_LIMIT, (int)value); 
+        });
+      }
     }
 
     void TeslaBLEVehicle::initializeFlash()
@@ -742,12 +807,10 @@ namespace esphome
           
           // Extract signature data and fault information from the message
           Signatures_SignatureData* sig_data = nullptr;
-          pb_size_t sig_data_count = 0;
           UniversalMessage_MessageFault_E fault = UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_NONE;
           
           if (message.which_sub_sigData == UniversalMessage_RoutableMessage_signature_data_tag) {
             sig_data = &message.sub_sigData.signature_data;
-            sig_data_count = 1;
           }
           
           if (message.has_signedMessageStatus) {
@@ -758,8 +821,7 @@ namespace esphome
           if (fault != UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_NONE) {
             ESP_LOGW(TAG, "Message fault detected: %s", message_fault_to_string(fault));
           }
-          
-          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, sig_data, sig_data_count, fault, &carserver_response);
+          int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, sig_data, message.which_sub_sigData, fault, &carserver_response);
           if (return_code != 0)
           {
             ESP_LOGE(TAG, "Failed to parse incoming message");
@@ -1028,6 +1090,30 @@ namespace esphome
       tesla_ble_client_->setVIN(vin);
     }
 
+    void TeslaBLEVehicle::set_role(const std::string &role)
+    {
+      ESP_LOGD(TAG, "Setting role: %s", role.c_str());
+      role_ = role;
+    }
+
+    void TeslaBLEVehicle::set_charging_amps_max(int amps_max)
+    {
+      ESP_LOGD(TAG, "Setting charging amps max: %d", amps_max);
+      charging_amps_max_ = amps_max;
+    }
+
+    Keys_Role TeslaBLEVehicle::getRoleFromString(const std::string &role_str)
+    {
+      if (role_str == "Keys_Role_ROLE_DRIVER") {
+        return Keys_Role_ROLE_DRIVER;
+      } else if (role_str == "Keys_Role_ROLE_CHARGING_MANAGER") {
+        return Keys_Role_ROLE_CHARGING_MANAGER;
+      } else {
+        ESP_LOGW(TAG, "Unknown role: %s, defaulting to DRIVER", role_str.c_str());
+        return Keys_Role_ROLE_DRIVER;
+      }
+    }
+
     void TeslaBLEVehicle::regenerateKey()
     {
       ESP_LOGI(TAG, "Regenerating key");
@@ -1077,10 +1163,15 @@ namespace esphome
       ESP_LOGI(TAG, "Not authenticated yet, building whitelist message");
       unsigned char whitelist_message_buffer[VCSEC_ToVCSECMessage_size];
       size_t whitelist_message_length = 0;
+      
+      // Get the configured role
+      Keys_Role role = getRoleFromString(role_);
+      ESP_LOGI(TAG, "Using role: %s (%d)", role_.c_str(), role);
+      
       // support for wake command will be added to ROLE_CHARGING_MANAGER in a future vehicle firmware update
       // https://github.com/teslamotors/vehicle-command/issues/232#issuecomment-2181503570
       // TODO: change back to ROLE_CHARGING_MANAGER when it's supported
-      int return_code = tesla_ble_client_->buildWhiteListMessage(Keys_Role_ROLE_DRIVER, VCSEC_KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY, whitelist_message_buffer, &whitelist_message_length);
+      int return_code = tesla_ble_client_->buildWhiteListMessage(role, VCSEC_KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY, whitelist_message_buffer, &whitelist_message_length);
       if (return_code != 0)
       {
         ESP_LOGE(TAG, "Failed to build whitelist message");
@@ -1693,5 +1784,54 @@ namespace esphome
         break;
       }
     }
+
+    // Button implementations
+    void TeslaWakeButton::press_action() {
+      if (parent_ != nullptr) {
+        parent_->wakeVehicle();
+      }
+    }
+
+    void TeslaPairButton::press_action() {
+      if (parent_ != nullptr) {
+        parent_->startPair();
+      }
+    }
+
+    void TeslaRegenerateKeyButton::press_action() {
+      if (parent_ != nullptr) {
+        parent_->regenerateKey();
+      }
+    }
+
+    void TeslaForceUpdateButton::press_action() {
+      if (parent_ != nullptr) {
+        parent_->enqueueVCSECInformationRequest(true);
+      }
+    }
+
+    // Switch implementations
+    void TeslaChargingSwitch::write_state(bool state) {
+      if (parent_ != nullptr) {
+        parent_->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, state ? 1 : 0);
+        this->publish_state(state);
+      }
+    }
+
+    // Number implementations
+    void TeslaChargingAmpsNumber::control(float value) {
+      if (parent_ != nullptr) {
+        parent_->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, (int)value);
+        this->publish_state(value);
+      }
+    }
+
+    void TeslaChargingLimitNumber::control(float value) {
+      if (parent_ != nullptr) {
+        parent_->sendCarServerVehicleActionMessage(SET_CHARGING_LIMIT, (int)value);
+        this->publish_state(value);
+      }
+    }
+
   } // namespace tesla_ble_vehicle
 } // namespace esphome

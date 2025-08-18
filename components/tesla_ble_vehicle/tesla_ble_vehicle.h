@@ -11,8 +11,12 @@
 #include <esphome/components/ble_client/ble_client.h>
 #include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
 #include <esphome/components/sensor/sensor.h>
+#include <esphome/components/button/button.h>
+#include <esphome/components/switch/switch.h>
+#include <esphome/components/number/number.h>
 #include <esphome/core/component.h>
 #include <esphome/core/log.h>
+#include <esphome/core/automation.h>
 
 #include <universal_message.pb.h>
 #include <vcsec.pb.h>
@@ -112,6 +116,75 @@ namespace esphome
                 : message(m) {}
         };
 
+        // Forward declaration
+        class TeslaBLEVehicle;
+
+        // Custom button classes
+        class TeslaWakeButton : public button::Button {
+        public:
+            void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+
+        protected:
+            void press_action() override;
+            TeslaBLEVehicle *parent_{nullptr};
+        };
+
+        class TeslaPairButton : public button::Button {
+        public:
+            void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+
+        protected:
+            void press_action() override;
+            TeslaBLEVehicle *parent_{nullptr};
+        };
+
+        class TeslaRegenerateKeyButton : public button::Button {
+        public:
+            void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+
+        protected:
+            void press_action() override;
+            TeslaBLEVehicle *parent_{nullptr};
+        };
+
+        class TeslaForceUpdateButton : public button::Button {
+        public:
+            void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+
+        protected:
+            void press_action() override;
+            TeslaBLEVehicle *parent_{nullptr};
+        };
+
+        // Custom switch classes
+        class TeslaChargingSwitch : public switch_::Switch {
+        public:
+            void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+
+        protected:
+            void write_state(bool state) override;
+            TeslaBLEVehicle *parent_{nullptr};
+        };
+
+        // Custom number classes
+        class TeslaChargingAmpsNumber : public number::Number {
+        public:
+            void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+
+        protected:
+            void control(float value) override;
+            TeslaBLEVehicle *parent_{nullptr};
+        };
+
+        class TeslaChargingLimitNumber : public number::Number {
+        public:
+            void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+
+        protected:
+            void control(float value) override;
+            TeslaBLEVehicle *parent_{nullptr};
+        };
+
         class TeslaBLEVehicle : public PollingComponent,
                                 public ble_client::BLEClientNode
         {
@@ -124,6 +197,8 @@ namespace esphome
                                      esp_ble_gattc_cb_param_t *param) override;
             void dump_config() override;
             void set_vin(const char *vin);
+            void set_role(const std::string &role);
+            void set_charging_amps_max(int amps_max);
             void process_command_queue();
             void process_response_queue();
             void process_ble_read_queue();
@@ -155,38 +230,70 @@ namespace esphome
             void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s) { isAsleepSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateIsAsleep(bool asleep)
             {
-                isAsleepSensor->publish_state(asleep);
+                if (isAsleepSensor != nullptr) {
+                    isAsleepSensor->publish_state(asleep);
+                }
             }
             // Door lock (vehicleLockState)
             void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s) { isUnlockedSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateisUnlocked(bool locked)
             {
-                isUnlockedSensor->publish_state(locked);
+                if (isUnlockedSensor != nullptr) {
+                    isUnlockedSensor->publish_state(locked);
+                }
             }
             // User presence (userPresence)
             void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s) { isUserPresentSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateIsUserPresent(bool present)
             {
-                isUserPresentSensor->publish_state(present);
+                if (isUserPresentSensor != nullptr) {
+                    isUserPresentSensor->publish_state(present);
+                }
             }
             // Charge flap (chargeFlapStatus)
             void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s) { isChargeFlapOpenSensor = static_cast<binary_sensor::BinarySensor *>(s); }
             void updateIsChargeFlapOpen(bool open)
             {
-                isChargeFlapOpenSensor->publish_state(open);
+                if (isChargeFlapOpenSensor != nullptr) {
+                    isChargeFlapOpenSensor->publish_state(open);
+                }
             }
             void setChargeFlapHasState(bool has_state)
             {
-                isChargeFlapOpenSensor->set_has_state(has_state);
+                if (isChargeFlapOpenSensor != nullptr) {
+                    isChargeFlapOpenSensor->set_has_state(has_state);
+                }
             }
 
             // set sensors to unknown (e.g. when vehicle is disconnected)
             void setSensors(bool has_state)
             {
-                isAsleepSensor->set_has_state(has_state);
-                isUnlockedSensor->set_has_state(has_state);
-                isUserPresentSensor->set_has_state(has_state);
+                if (isAsleepSensor != nullptr) {
+                    isAsleepSensor->set_has_state(has_state);
+                }
+                if (isUnlockedSensor != nullptr) {
+                    isUnlockedSensor->set_has_state(has_state);
+                }
+                if (isUserPresentSensor != nullptr) {
+                    isUserPresentSensor->set_has_state(has_state);
+                }
+                if (isChargeFlapOpenSensor != nullptr) {
+                    isChargeFlapOpenSensor->set_has_state(has_state);
+                }
             }
+
+            // Button setters
+            void set_wake_button(button::Button *button) { wakeButton = button; }
+            void set_pair_button(button::Button *button) { pairButton = button; }
+            void set_regenerate_key_button(button::Button *button) { regenerateKeyButton = button; }
+            void set_force_update_button(button::Button *button) { forceUpdateButton = button; }
+
+            // Switch setters
+            void set_charging_switch(switch_::Switch *sw) { chargingSwitch = sw; }
+
+            // Number setters
+            void set_charging_amps_number(number::Number *number) { chargingAmpsNumber = number; }
+            void set_charging_limit_number(number::Number *number) { chargingLimitNumber = number; }
 
         protected:
             std::queue<BLERXChunk> ble_read_queue_;
@@ -205,10 +312,27 @@ namespace esphome
             espbt::ESPBTUUID write_uuid_;
 
             // sensors
-            binary_sensor::BinarySensor *isAsleepSensor;
-            binary_sensor::BinarySensor *isUnlockedSensor;
-            binary_sensor::BinarySensor *isUserPresentSensor;
-            binary_sensor::BinarySensor *isChargeFlapOpenSensor;
+            binary_sensor::BinarySensor *isAsleepSensor{nullptr};
+            binary_sensor::BinarySensor *isUnlockedSensor{nullptr};
+            binary_sensor::BinarySensor *isUserPresentSensor{nullptr};
+            binary_sensor::BinarySensor *isChargeFlapOpenSensor{nullptr};
+
+            // buttons
+            button::Button *wakeButton{nullptr};
+            button::Button *pairButton{nullptr};
+            button::Button *regenerateKeyButton{nullptr};
+            button::Button *forceUpdateButton{nullptr};
+
+            // switches
+            switch_::Switch *chargingSwitch{nullptr};
+
+            // numbers
+            number::Number *chargingAmpsNumber{nullptr};
+            number::Number *chargingLimitNumber{nullptr};
+
+            // configuration values
+            std::string role_;
+            int charging_amps_max_;
 
             std::vector<unsigned char> ble_read_buffer_;
 
@@ -217,6 +341,104 @@ namespace esphome
             void initializePrivateKey();
             void loadSessionInfo();
             void loadDomainSessionInfo(UniversalMessage_Domain domain);
+            Keys_Role getRoleFromString(const std::string &role_str);
+        };
+
+        // Action classes for automation
+        template<typename... Ts> class WakeAction : public Action<Ts...> {
+        public:
+            WakeAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+
+            void play(Ts... x) override {
+                this->parent_->wakeVehicle();
+            }
+
+        protected:
+            TeslaBLEVehicle *parent_;
+        };
+
+        template<typename... Ts> class PairAction : public Action<Ts...> {
+        public:
+            PairAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+
+            void play(Ts... x) override {
+                this->parent_->startPair();
+            }
+
+        protected:
+            TeslaBLEVehicle *parent_;
+        };
+
+        template<typename... Ts> class RegenerateKeyAction : public Action<Ts...> {
+        public:
+            RegenerateKeyAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+
+            void play(Ts... x) override {
+                this->parent_->regenerateKey();
+            }
+
+        protected:
+            TeslaBLEVehicle *parent_;
+        };
+
+        template<typename... Ts> class ForceUpdateAction : public Action<Ts...> {
+        public:
+            ForceUpdateAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+
+            void play(Ts... x) override {
+                this->parent_->enqueueVCSECInformationRequest(true);
+            }
+
+        protected:
+            TeslaBLEVehicle *parent_;
+        };
+
+        template<typename... Ts> class SetChargingAction : public Action<Ts...> {
+        public:
+            SetChargingAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+
+            void set_state(esphome::TemplatableValue<bool, Ts...> state) { this->state_ = state; }
+
+            void play(Ts... x) override {
+                bool state = this->state_.value(x...);
+                this->parent_->sendCarServerVehicleActionMessage(SET_CHARGING_SWITCH, state ? 1 : 0);
+            }
+
+        protected:
+            TeslaBLEVehicle *parent_;
+            esphome::TemplatableValue<bool, Ts...> state_;
+        };
+
+        template<typename... Ts> class SetChargingAmpsAction : public Action<Ts...> {
+        public:
+            SetChargingAmpsAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+
+            void set_amps(esphome::TemplatableValue<int, Ts...> amps) { this->amps_ = amps; }
+
+            void play(Ts... x) override {
+                int amps = this->amps_.value(x...);
+                this->parent_->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, amps);
+            }
+
+        protected:
+            TeslaBLEVehicle *parent_;
+            esphome::TemplatableValue<int, Ts...> amps_;
+        };
+
+        template<typename... Ts> class SetChargingLimitAction : public Action<Ts...> {
+        public:
+            SetChargingLimitAction(TeslaBLEVehicle *parent) : parent_(parent) {}
+
+            void set_limit(esphome::TemplatableValue<int, Ts...> limit) { this->limit_ = limit; }
+
+            void play(Ts... x) override {
+                int limit = this->limit_.value(x...);
+                this->parent_->sendCarServerVehicleActionMessage(SET_CHARGING_LIMIT, limit);
+            }
+
+        protected:
+            TeslaBLEVehicle *parent_;
+            esphome::TemplatableValue<int, Ts...> limit_;
         };
 
     } // namespace tesla_ble_vehicle
