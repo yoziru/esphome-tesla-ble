@@ -6,6 +6,7 @@
 #include <esphome/components/text_sensor/text_sensor.h>
 #include <esphome/components/switch/switch.h>
 #include <esphome/components/number/number.h>
+#include <optional>
 #include <car_server.pb.h>
 #include <vcsec.pb.h>
 
@@ -127,9 +128,9 @@ private:
     void set_sensor_available(sensor::Sensor* sensor, bool available);
     
     // State conversion helpers
-    bool convert_sleep_status(VCSEC_VehicleSleepStatus_E status);
-    bool convert_lock_status(VCSEC_VehicleLockState_E status);
-    bool convert_user_presence(VCSEC_UserPresence_E presence);
+    std::optional<bool> convert_sleep_status(VCSEC_VehicleSleepStatus_E status);
+    std::optional<bool> convert_lock_status(VCSEC_VehicleLockState_E status);
+    std::optional<bool> convert_user_presence(VCSEC_UserPresence_E presence);
     std::string get_charging_state_text(const CarServer_ChargeState_ChargingState& state);
     bool is_charger_connected_from_state(const CarServer_ChargeState_ChargingState& state);
 };

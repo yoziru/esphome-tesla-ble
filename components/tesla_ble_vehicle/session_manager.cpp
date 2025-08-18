@@ -266,7 +266,7 @@ bool SessionManager::request_session_info(UniversalMessage_Domain domain) {
         return false;
     }
     
-    unsigned char message_buffer[1024];
+    unsigned char message_buffer[MAX_BLE_MESSAGE_SIZE];
     size_t message_length = 0;
     
     int result = tesla_client_->buildSessionInfoRequestMessage(domain, message_buffer, &message_length);
@@ -301,7 +301,7 @@ bool SessionManager::start_pairing(const std::string& role) {
         role_enum = Keys_Role_ROLE_DRIVER;
     }
     
-    unsigned char whitelist_message_buffer[1024];
+    unsigned char whitelist_message_buffer[MAX_BLE_MESSAGE_SIZE];
     size_t whitelist_message_length = 0;
     
     int result = tesla_client_->buildWhiteListMessage(

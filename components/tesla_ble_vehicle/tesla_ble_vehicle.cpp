@@ -1,4 +1,5 @@
 #include "tesla_ble_vehicle.h"
+#include "common_impl.h"
 #include "log.h"
 #include <esphome/core/helpers.h>
 #include <client.h>
@@ -180,9 +181,20 @@ void TeslaBLEVehicle::dump_config() {
 
 // Configuration setters
 void TeslaBLEVehicle::set_vin(const char *vin) {
+    if (vin == nullptr) {
+        ESP_LOGW(TAG, "Attempted to set null VIN - ignoring");
+        return;
+    }
+    
     vin_ = std::string(vin);
+    ESP_LOGD(TAG, "VIN set to: %s", vin_.c_str());
+    
+    // Only set in client if session manager is initialized
     if (session_manager_ && session_manager_->get_client()) {
         session_manager_->get_client()->setVIN(vin);
+        ESP_LOGD(TAG, "VIN configured in Tesla client");
+    } else {
+        ESP_LOGD(TAG, "VIN stored for later configuration (session manager not ready)");
     }
 }
 
@@ -346,23 +358,11 @@ int TeslaBLEVehicle::wake_vehicle() {
     // Enqueue wake command via command manager
     command_manager_->enqueue_command(
         UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        [this]() {
-            // This would call the actual Tesla BLE client wake method
-            auto* client = session_manager_->get_client();
-            if (!client) return -1;
-            
-            // Build and send wake message
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
-            
-            int result = client->buildVCSECActionMessage(
+        BLECommandHelper::create_command(this, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECActionMessage(
                 VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
-                message_buffer, &message_length);
-            
-            if (result != 0) return result;
-            
-            return ble_manager_->write_message(message_buffer, message_length);
-        },
+                buffer, length);
+        }),
         "wake vehicle"
     );
 
@@ -423,22 +423,12 @@ int TeslaBLEVehicle::set_charging_state(bool charging) {
     
     command_manager_->enqueue_command(
         UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        [this, charging]() {
-            auto* client = session_manager_->get_client();
-            if (!client) return -1;
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
-            
-            int result = client->buildCarServerVehicleActionMessage(
-                message_buffer, &message_length,
+        BLECommandHelper::create_command(this, [charging](auto* client, auto* buffer, auto* length) {
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
                 CarServer_VehicleAction_chargingStartStopAction_tag,
                 &charging);
-            
-            if (result != 0) return result;
-            
-            return ble_manager_->write_message(message_buffer, message_length);
-        },
+        }),
         charging ? "start charging" : "stop charging"
     );
 
@@ -447,6 +437,12 @@ int TeslaBLEVehicle::set_charging_state(bool charging) {
 
 int TeslaBLEVehicle::set_charging_amps(int amps) {
     ESP_LOGI(TAG, "Set charging amps: %d", amps);
+    
+    // Basic validation
+    if (amps < 0) {
+        ESP_LOGW(TAG, "Invalid charging amps: %d (cannot be negative)", amps);
+        return -1;
+    }
     
     // Validate against max amps
     int max_amps = state_manager_->get_charging_amps_max();
@@ -462,23 +458,13 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
     
     command_manager_->enqueue_command(
         UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        [this, amps]() {
-            auto* client = session_manager_->get_client();
-            if (!client) return -1;
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
+        BLECommandHelper::create_command(this, [amps](auto* client, auto* buffer, auto* length) {
             int32_t amps_param = static_cast<int32_t>(amps);
-            
-            int result = client->buildCarServerVehicleActionMessage(
-                message_buffer, &message_length,
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
                 CarServer_VehicleAction_setChargingAmpsAction_tag,
                 &amps_param);
-            
-            if (result != 0) return result;
-            
-            return ble_manager_->write_message(message_buffer, message_length);
-        },
+        }),
         "set charging amps"
     );
 
@@ -489,8 +475,9 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
     ESP_LOGI(TAG, "Set charging limit: %d%%", limit);
     
     // Validate limit range
-    if (limit < 5 || limit > 100) {
-        ESP_LOGW(TAG, "Invalid charging limit: %d%%, must be 5-100%%", limit);
+    if (limit < MIN_CHARGING_LIMIT || limit > MAX_CHARGING_LIMIT) {
+        ESP_LOGW(TAG, "Invalid charging limit: %d%%, must be %d-%d%%", 
+                 limit, MIN_CHARGING_LIMIT, MAX_CHARGING_LIMIT);
         return -1;
     }
     
@@ -501,23 +488,13 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
     
     command_manager_->enqueue_command(
         UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        [this, limit]() {
-            auto* client = session_manager_->get_client();
-            if (!client) return -1;
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
+        BLECommandHelper::create_command(this, [limit](auto* client, auto* buffer, auto* length) {
             int32_t limit_param = static_cast<int32_t>(limit);
-            
-            int result = client->buildCarServerVehicleActionMessage(
-                message_buffer, &message_length,
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
                 CarServer_VehicleAction_chargingSetLimitAction_tag,
                 &limit_param);
-            
-            if (result != 0) return result;
-            
-            return ble_manager_->write_message(message_buffer, message_length);
-        },
+        }),
         "set charging limit"
     );
 
@@ -534,27 +511,32 @@ void TeslaBLEVehicle::request_vehicle_data() {
 }
 
 void TeslaBLEVehicle::request_charging_data() {
-    ESP_LOGD(TAG, "Charging data requested");
+    ESP_LOGD(TAG, "Requesting charging data from infotainment");
     
     command_manager_->enqueue_command(
         UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        [this]() {
-            auto* client = session_manager_->get_client();
-            if (!client) return -1;
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
-            
-            int result = client->buildCarServerGetVehicleDataMessage(
-                message_buffer, &message_length,
+        BLECommandHelper::create_command(this, [](auto* client, auto* buffer, auto* length) {
+            return client->buildCarServerGetVehicleDataMessage(
+                buffer, length,
                 CarServer_GetVehicleData_getChargeState_tag);
-            
-            if (result != 0) return result;
-            
-            return ble_manager_->write_message(message_buffer, message_length);
-        },
-        "get charging data"
+        }),
+        "request charging data"
     );
+}
+
+void TeslaBLEVehicle::update_charging_amps_max_value(int32_t new_max) {
+    // This method is called by VehicleStateManager when it needs to update max amps
+    // but doesn't have access to the Tesla-specific types
+    
+    // Find the charging amps number component - we know it's our Tesla type
+    if (pending_charging_amps_number_) {
+        // Cast to our known type - this is safe since we control the creation
+        auto* tesla_amps = static_cast<TeslaChargingAmpsNumber*>(pending_charging_amps_number_);
+        tesla_amps->update_max_value(new_max);
+        ESP_LOGD(TAG, "Updated charging amps max value to %d A", new_max);
+    } else {
+        ESP_LOGW(TAG, "Charging amps number component not available for max value update");
+    }
 }
 
 // BLE event handling
@@ -659,10 +641,8 @@ void TeslaBLEVehicle::handle_connection_established() {
     
     if (polling_manager_) {
         polling_manager_->handle_connection_established();
-        
-        // Trigger immediate poll instead of waiting for next update cycle
-        ESP_LOGI(TAG, "Triggering immediate initial poll");
-        this->update();
+        // Note: Don't call this->update() here - polling manager handles initial polls
+        ESP_LOGI(TAG, "Initial polling will be handled by polling manager on next update cycle");
     } else {
         ESP_LOGW(TAG, "Polling manager not available during connection establishment");
     }
@@ -720,10 +700,23 @@ void TeslaChargingSwitch::write_state(bool state) {
 }
 
 void TeslaChargingAmpsNumber::control(float value) {
-    if (parent_) {
-        parent_->set_charging_amps(static_cast<int>(value));
-        publish_state(value);
+    if (!parent_) {
+        ESP_LOGW(TAG, "TeslaChargingAmpsNumber: parent not set");
+        return;
     }
+    
+    // Additional bounds checking beyond what ESPHome provides
+    float min_val = this->traits.get_min_value();
+    float max_val = this->traits.get_max_value();
+    
+    if (value < min_val || value > max_val) {
+        ESP_LOGW(TAG, "Charging amps value %.1f out of bounds [%.1f, %.1f]", value, min_val, max_val);
+        return;
+    }
+    
+    ESP_LOGD(TAG, "Setting charging amps to %.0f A", value);
+    parent_->set_charging_amps(static_cast<int>(value));
+    publish_state(value);
 }
 
 void TeslaChargingAmpsNumber::update_max_value(int32_t new_max) {
@@ -757,10 +750,23 @@ void TeslaChargingAmpsNumber::update_max_value(int32_t new_max) {
 }
 
 void TeslaChargingLimitNumber::control(float value) {
-    if (parent_) {
-        parent_->set_charging_limit(static_cast<int>(value));
-        publish_state(value);
+    if (!parent_) {
+        ESP_LOGW(TAG, "TeslaChargingLimitNumber: parent not set");
+        return;
     }
+    
+    // Additional bounds checking beyond what ESPHome provides
+    float min_val = this->traits.get_min_value();
+    float max_val = this->traits.get_max_value();
+    
+    if (value < min_val || value > max_val) {
+        ESP_LOGW(TAG, "Charging limit value %.1f out of bounds [%.1f, %.1f]", value, min_val, max_val);
+        return;
+    }
+    
+    ESP_LOGD(TAG, "Setting charging limit to %.0f%%", value);
+    parent_->set_charging_limit(static_cast<int>(value));
+    publish_state(value);
 }
 
 } // namespace tesla_ble_vehicle

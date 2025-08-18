@@ -1,5 +1,6 @@
 #include "ble_manager.h"
 #include "tesla_ble_vehicle.h"
+#include "common.h"
 #include <client.h>
 #include "log.h"
 #include <esphome/core/helpers.h>
@@ -27,7 +28,7 @@ int BLEManager::write_message(const unsigned char* message_buffer, size_t messag
     }
 
     if (message_length > MAX_BLE_MESSAGE_SIZE) {
-        ESP_LOGE(BLE_MANAGER_TAG, "Message too large: %zu bytes (max: %d)", message_length, MAX_BLE_MESSAGE_SIZE);
+        ESP_LOGE(BLE_MANAGER_TAG, "Message too large: %zu bytes (max: %zu)", message_length, MAX_BLE_MESSAGE_SIZE);
         return -1;
     }
 
@@ -117,7 +118,7 @@ void BLEManager::process_read_queue() {
     // Check for buffer overflow before appending
     size_t new_size = read_buffer_.size() + chunk.buffer.size();
     if (new_size > MAX_BLE_MESSAGE_SIZE) {
-        ESP_LOGE(BLE_MANAGER_TAG, "Message size would exceed maximum (%zu > %d bytes)", 
+        ESP_LOGE(BLE_MANAGER_TAG, "Message size would exceed maximum (%zu > %zu bytes)", 
                  new_size, MAX_BLE_MESSAGE_SIZE);
         handle_read_error("Message too large");
         return;
@@ -203,7 +204,11 @@ void BLEManager::process_complete_message() {
 
 void BLEManager::clear_read_buffer() {
     read_buffer_.clear();
-    read_buffer_.shrink_to_fit();
+    // Only shrink if buffer is significantly over-allocated to reduce memory churn
+    if (read_buffer_.capacity() > MAX_BLE_MESSAGE_SIZE * 2) {
+        read_buffer_.shrink_to_fit();
+        ESP_LOGD(BLE_MANAGER_TAG, "Shrunk read buffer capacity to reduce memory usage");
+    }
 }
 
 void BLEManager::clear_queues() {

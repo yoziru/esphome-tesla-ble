@@ -1,5 +1,6 @@
 #include "polling_manager.h"
 #include "tesla_ble_vehicle.h"
+#include "common_impl.h"
 #include <client.h>
 #include "log.h"
 #include <vector>
@@ -22,17 +23,15 @@ void PollingManager::update() {
     
     uint32_t now = millis();
     
-    // Handle initial connection - always poll immediately
+    // Handle initial connection - start with VCSEC only
     if (just_connected_) {
-        ESP_LOGI(POLLING_MANAGER_TAG, "Just connected - performing initial VCSEC poll");
+        ESP_LOGI(POLLING_MANAGER_TAG, "Just connected - performing initial VCSEC poll only");
         request_vcsec_poll();
         last_vcsec_poll_ = now;
         just_connected_ = false;
         
-        // Always request infotainment poll on initial connection to populate sensors
-        ESP_LOGI(POLLING_MANAGER_TAG, "Initial connection - forcing infotainment poll to populate sensors");
-        request_infotainment_poll();
-        last_infotainment_poll_ = now;
+        // Don't immediately request infotainment poll - wait for VCSEC to establish vehicle state first
+        ESP_LOGI(POLLING_MANAGER_TAG, "Initial connection - will request infotainment poll on next cycle based on vehicle state");
         
         return;
     }
@@ -64,15 +63,8 @@ void PollingManager::handle_connection_established() {
     wake_time_ = now;  // Assume vehicle is waking up when we connect
     just_connected_ = true;
     
-    // Reset state cache
-    was_awake_ = false;
-    was_charging_ = false;
-    was_unlocked_ = false;
-    was_user_present_ = false;
-    
-    // Reset polling timestamps
-    last_vcsec_poll_ = 0;
-    last_infotainment_poll_ = 0;
+    reset_state_cache();
+    reset_polling_timestamps();
     
     ESP_LOGD(POLLING_MANAGER_TAG, "Connection setup complete - ready for immediate poll");
 }
@@ -83,15 +75,8 @@ void PollingManager::handle_connection_lost() {
     just_connected_ = false;
     connection_time_ = 0;
     
-    // Reset state cache
-    was_awake_ = false;
-    was_charging_ = false;
-    was_unlocked_ = false;
-    was_user_present_ = false;
-    
-    // Reset polling timestamps
-    last_vcsec_poll_ = 0;
-    last_infotainment_poll_ = 0;
+    reset_state_cache();
+    reset_polling_timestamps();
 }
 
 void PollingManager::update_vehicle_state(bool is_awake, bool is_charging, bool is_unlocked, bool is_user_present) {
@@ -141,6 +126,13 @@ void PollingManager::force_immediate_poll() {
 bool PollingManager::should_poll_infotainment() {
     uint32_t now = millis();
     
+    // Give a grace period after connection to let VCSEC establish vehicle state first
+    uint32_t time_since_connection = time_since(connection_time_);
+    if (connection_time_ > 0 && time_since_connection < 5000) {  // 5 second grace period
+        ESP_LOGV(POLLING_MANAGER_TAG, "Within connection grace period (%u ms), skipping infotainment poll", time_since_connection);
+        return false;
+    }
+    
     // Don't poll infotainment if vehicle is asleep
     if (!was_awake_) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle asleep, skipping infotainment poll");
@@ -149,8 +141,7 @@ bool PollingManager::should_poll_infotainment() {
 
     // If charging, always poll at active interval regardless of wake time
     if (was_charging_) {
-        uint32_t time_since_last = now - last_infotainment_poll_;
-        if (time_since_last >= infotainment_poll_interval_active_) {
+        if (has_elapsed(last_infotainment_poll_, infotainment_poll_interval_active_)) {
             ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle charging, polling at active interval");
             return true;
         }
@@ -158,7 +149,7 @@ bool PollingManager::should_poll_infotainment() {
     }
 
     // If not charging, check if we're within the wake window
-    uint32_t time_since_wake = now - wake_time_;
+    uint32_t time_since_wake = time_since(wake_time_);
     if (time_since_wake >= infotainment_sleep_timeout_) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle awake for %u ms (>%u ms), allowing sleep - skipping infotainment poll", 
                  time_since_wake, infotainment_sleep_timeout_);
@@ -166,8 +157,7 @@ bool PollingManager::should_poll_infotainment() {
     }
 
     // We're within the wake window, poll at awake interval
-    uint32_t time_since_last = now - last_infotainment_poll_;
-    if (time_since_last >= infotainment_poll_interval_awake_) {
+    if (has_elapsed(last_infotainment_poll_, infotainment_poll_interval_awake_)) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle awake for %u ms (<%u ms), polling at awake interval", 
                  time_since_wake, infotainment_sleep_timeout_);
         return true;
@@ -223,36 +213,12 @@ void PollingManager::request_vcsec_poll() {
     
     command_manager->enqueue_command(
         UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        [this]() {
-            auto* session_manager = parent_->get_session_manager();
-            auto* ble_manager = parent_->get_ble_manager();
-            
-            if (!session_manager || !ble_manager) {
-                ESP_LOGE(POLLING_MANAGER_TAG, "Required managers not available");
-                return -1;
-            }
-            
-            auto* client = session_manager->get_client();
-            if (!client) {
-                ESP_LOGE(POLLING_MANAGER_TAG, "Tesla client not available");
-                return -1;
-            }
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
-            
-            int result = client->buildVCSECInformationRequestMessage(
+        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECInformationRequestMessage(
                 VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
-                message_buffer,
-                &message_length);
-            
-            if (result != 0) {
-                ESP_LOGE(POLLING_MANAGER_TAG, "Failed to build VCSEC information request: %d", result);
-                return result;
-            }
-            
-            return ble_manager->write_message(message_buffer, message_length);
-        },
+                buffer,
+                length);
+        }),
         "VCSEC status poll"
     );
 }
@@ -277,36 +243,12 @@ void PollingManager::request_infotainment_poll(bool bypass_delay) {
     
     command_manager->enqueue_command(
         UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        [this]() {
-            auto* session_manager = parent_->get_session_manager();
-            auto* ble_manager = parent_->get_ble_manager();
-            
-            if (!session_manager || !ble_manager) {
-                ESP_LOGE(POLLING_MANAGER_TAG, "Required managers not available");
-                return -1;
-            }
-            
-            auto* client = session_manager->get_client();
-            if (!client) {
-                ESP_LOGE(POLLING_MANAGER_TAG, "Tesla client not available");
-                return -1;
-            }
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
-            
+        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
             // Request charging data
-            int result = client->buildCarServerGetVehicleDataMessage(
-                message_buffer, &message_length,
+            return client->buildCarServerGetVehicleDataMessage(
+                buffer, length,
                 CarServer_GetVehicleData_getChargeState_tag);
-            
-            if (result != 0) {
-                ESP_LOGE(POLLING_MANAGER_TAG, "Failed to build charging data request: %d", result);
-                return result;
-            }
-            
-            return ble_manager->write_message(message_buffer, message_length);
-        },
+        }),
         "infotainment data poll | charging"
     );
 }
@@ -323,66 +265,24 @@ void PollingManager::request_wake_and_poll() {
     // First wake the vehicle
     command_manager->enqueue_command(
         UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        [this]() {
-            auto* session_manager = parent_->get_session_manager();
-            auto* ble_manager = parent_->get_ble_manager();
-            
-            if (!session_manager || !ble_manager) {
-                return -1;
-            }
-            
-            auto* client = session_manager->get_client();
-            if (!client) {
-                return -1;
-            }
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
-            
-            int result = client->buildVCSECActionMessage(
+        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECActionMessage(
                 VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
-                message_buffer,
-                &message_length);
-            
-            if (result != 0) {
-                return result;
-            }
-            
-            return ble_manager->write_message(message_buffer, message_length);
-        },
+                buffer,
+                length);
+        }),
         "wake vehicle"
     );
     
     // Then request VCSEC poll to get updated status
     command_manager->enqueue_command(
         UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        [this]() {
-            auto* session_manager = parent_->get_session_manager();
-            auto* ble_manager = parent_->get_ble_manager();
-            
-            if (!session_manager || !ble_manager) {
-                return -1;
-            }
-            
-            auto* client = session_manager->get_client();
-            if (!client) {
-                return -1;
-            }
-            
-            unsigned char message_buffer[1024];
-            size_t message_length = 0;
-            
-            int result = client->buildVCSECInformationRequestMessage(
+        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECInformationRequestMessage(
                 VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
-                message_buffer,
-                &message_length);
-            
-            if (result != 0) {
-                return result;
-            }
-            
-            return ble_manager->write_message(message_buffer, message_length);
-        },
+                buffer,
+                length);
+        }),
         "data update after wake"
     );
 }
@@ -406,18 +306,41 @@ uint32_t PollingManager::time_since_last_vcsec_poll() const {
     if (last_vcsec_poll_ == 0) {
         return UINT32_MAX;
     }
-    return millis() - last_vcsec_poll_;
+    return time_since(last_vcsec_poll_);
 }
 
 uint32_t PollingManager::time_since_last_infotainment_poll() const {
     if (last_infotainment_poll_ == 0) {
         return UINT32_MAX;
     }
-    return millis() - last_infotainment_poll_;
+    return time_since(last_infotainment_poll_);
+}
+
+// Rollover-safe time calculations
+uint32_t PollingManager::time_since(uint32_t timestamp) const {
+    uint32_t now = millis();
+    // This works correctly even with millis() rollover due to unsigned arithmetic
+    return now - timestamp;
+}
+
+bool PollingManager::has_elapsed(uint32_t timestamp, uint32_t interval) const {
+    return time_since(timestamp) >= interval;
 }
 
 void PollingManager::log_polling_decision(const std::string& action, const std::string& reason) {
     ESP_LOGD(POLLING_MANAGER_TAG, "Polling decision: %s (reason: %s)", action.c_str(), reason.c_str());
+}
+
+void PollingManager::reset_state_cache() {
+    was_awake_ = false;
+    was_charging_ = false;
+    was_unlocked_ = false;
+    was_user_present_ = false;
+}
+
+void PollingManager::reset_polling_timestamps() {
+    last_vcsec_poll_ = 0;
+    last_infotainment_poll_ = 0;
 }
 
 } // namespace tesla_ble_vehicle

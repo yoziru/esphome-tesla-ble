@@ -2,6 +2,7 @@
 #include "tesla_ble_vehicle.h"
 #include <esphome/core/helpers.h>
 #include <cmath>
+#include <algorithm>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -24,27 +25,27 @@ void VehicleStateManager::update_vehicle_status(const VCSEC_VehicleStatus& statu
 }
 
 void VehicleStateManager::update_sleep_status(VCSEC_VehicleSleepStatus_E status) {
-    bool asleep = convert_sleep_status(status);
-    if (!std::isnan(asleep)) {
-        update_asleep(asleep);
+    auto asleep = convert_sleep_status(status);
+    if (asleep.has_value()) {
+        update_asleep(asleep.value());
     } else {
         set_sensor_available(asleep_sensor_, false);
     }
 }
 
 void VehicleStateManager::update_lock_status(VCSEC_VehicleLockState_E status) {
-    bool unlocked = convert_lock_status(status);
-    if (!std::isnan(unlocked)) {
-        update_unlocked(unlocked);
+    auto unlocked = convert_lock_status(status);
+    if (unlocked.has_value()) {
+        update_unlocked(unlocked.value());
     } else {
         set_sensor_available(unlocked_sensor_, false);
     }
 }
 
 void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
-    bool present = convert_user_presence(presence);
-    if (!std::isnan(present)) {
-        update_user_present(present);
+    auto present = convert_user_presence(presence);
+    if (present.has_value()) {
+        update_user_present(present.value());
     } else {
         set_sensor_available(user_present_sensor_, false);
     }
@@ -56,6 +57,9 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
         bool was_charging = is_charging_;
+        
+        // Determine if vehicle is actively charging based on state type
+        // Starting state is considered charging since it's transitioning to charge
         bool new_charging_state = (
             charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag ||
             charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Starting_tag
@@ -69,6 +73,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         is_charging_ = new_charging_state;
         
         // Always sync charging switch with vehicle state, but respect command delay
+        // This prevents race conditions where user commands are overwritten by stale vehicle data
         if (charging_switch_ && (!charging_switch_->has_state() || charging_switch_->state != is_charging_)) {
             if (should_delay_infotainment_request()) {
                 ESP_LOGD(STATE_MANAGER_TAG, "Delaying charging switch sync due to recent command (vehicle: %s, switch: %s)", 
@@ -99,16 +104,30 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update battery level
+    // Update battery level with validation
     if (charge_state.which_optional_battery_level && battery_level_sensor_) {
         float battery_level = static_cast<float>(charge_state.optional_battery_level.battery_level);
-        publish_sensor_state(battery_level_sensor_, battery_level);
+        
+        // Validate battery level is within reasonable bounds [0-100]
+        if (battery_level >= 0.0f && battery_level <= 100.0f) {
+            ESP_LOGD(STATE_MANAGER_TAG, "Updating battery level to %.1f%%", battery_level);
+            publish_sensor_state(battery_level_sensor_, battery_level);
+        } else {
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid battery level received: %.1f%% (expected 0-100)", battery_level);
+        }
     }
     
-    // Update charger power (convert from watts to kilowatts)
+    // Update charger power with validation (convert from watts to kilowatts)
     if (charge_state.which_optional_charger_power && charger_power_sensor_) {
         float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
-        publish_sensor_state(charger_power_sensor_, power_kw);
+        
+        // Validate power is non-negative (Tesla max is ~250kW at Superchargers)
+        if (power_kw >= 0.0f && power_kw <= 300.0f) {
+            ESP_LOGD(STATE_MANAGER_TAG, "Updating charger power to %.1fkW", power_kw);
+            publish_sensor_state(charger_power_sensor_, power_kw);
+        } else {
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger power received: %.1fkW (expected 0-300)", power_kw);
+        }
     }
     
     // Update charging rate
@@ -281,18 +300,19 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
     // Update stored value
     charging_amps_max_ = new_max;
     
-    // Update the number component's maximum value if it exists
+    // Update the number component's maximum value via the parent (which knows about Tesla types)
     if (charging_amps_number_ && old_max != new_max) {
         auto old_trait_max = charging_amps_number_->traits.get_max_value();
         
-        // Cast to our specific type for proper update_max_value method
-        // This is safe since we control how charging_amps_number_ is set
-        auto tesla_charging_amps = static_cast<TeslaChargingAmpsNumber*>(charging_amps_number_);
-        tesla_charging_amps->update_max_value(new_max);
-        
-        ESP_LOGD(STATE_MANAGER_TAG, "Number traits max updated from %.0f to %d A", old_trait_max, new_max);
+        // Ask the parent to update the max value since it knows about Tesla-specific types
+        if (parent_) {
+            parent_->update_charging_amps_max_value(new_max);
+            ESP_LOGD(STATE_MANAGER_TAG, "Updated max charging amps from %.0f to %d A via parent", old_trait_max, new_max);
+        } else {
+            ESP_LOGW(STATE_MANAGER_TAG, "Parent not available to update max charging amps");
+        }
     } else {
-        ESP_LOGW(STATE_MANAGER_TAG, "Charging amps number component not available - cannot update max value");
+        ESP_LOGD(STATE_MANAGER_TAG, "Max charging amps set to %d A (no component to update)", new_max);
     }
 }
 
@@ -334,7 +354,7 @@ void VehicleStateManager::set_sensor_available(sensor::Sensor* sensor, bool avai
 }
 
 // State conversion helpers
-bool VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status) {
+std::optional<bool> VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status) {
     switch (status) {
         case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
             return false; // Not asleep
@@ -342,11 +362,11 @@ bool VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status
             return true;  // Asleep
         case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
         default:
-            return NAN;   // Unknown state
+            return std::nullopt;   // Unknown state
     }
 }
 
-bool VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
+std::optional<bool> VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
     switch (status) {
         case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED:
         case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED:
@@ -355,11 +375,11 @@ bool VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
         case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED:
             return false; // Locked
         default:
-            return NAN;   // Unknown state
+            return std::nullopt;   // Unknown state
     }
 }
 
-bool VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
+std::optional<bool> VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
     switch (presence) {
         case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT:
             return true;  // Present
@@ -367,7 +387,7 @@ bool VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
             return false; // Not present
         case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_UNKNOWN:
         default:
-            return NAN;   // Unknown state
+            return std::nullopt;   // Unknown state
     }
 }
 

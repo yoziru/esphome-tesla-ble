@@ -1,5 +1,7 @@
 #include "command_manager.h"
 #include "tesla_ble_vehicle.h"
+#include "common_impl.h"
+#include <client.h>
 #include "log.h"
 
 namespace esphome {
@@ -122,7 +124,7 @@ void CommandManager::process_auth_waiting_command(BLECommand& command) {
             case BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH_RESPONSE:
                 ESP_LOGW(COMMAND_MANAGER_TAG, "[%s] Infotainment auth response timeout, retrying",
                          command.execute_name.c_str());
-                retry_command(command);
+                command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
                 break;
                 
             case BLECommandState::WAITING_FOR_WAKE:
@@ -134,7 +136,16 @@ void CommandManager::process_auth_waiting_command(BLECommand& command) {
                 if (!parent_->get_state_manager()->is_asleep()) {
                     ESP_LOGI(COMMAND_MANAGER_TAG, "[%s] Vehicle is now awake", 
                              command.execute_name.c_str());
-                    command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+                    // Determine next state based on command requirements
+                    if (command.domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT) {
+                        command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+                    } else if (command.domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY) {
+                        // VCSEC commands that went through wake should be ready now
+                        command.state = BLECommandState::READY;
+                    } else {
+                        // Broadcast commands should be ready
+                        command.state = BLECommandState::READY;
+                    }
                 } else {
                     retry_command(command);
                 }
@@ -198,11 +209,20 @@ void CommandManager::initiate_vcsec_auth(BLECommand& command) {
 }
 
 void CommandManager::initiate_infotainment_auth(BLECommand& command) {
-    // Check if vehicle is asleep - if so, need to wake it first
+    // Check if vehicle is asleep - if so, transition to wake state
     if (parent_->get_state_manager()->is_asleep()) {
-        ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Vehicle is asleep, initiating wake sequence", 
+        ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Vehicle is asleep, transitioning to wake state", 
                  command.execute_name.c_str());
-        initiate_wake_sequence(command);
+        command.state = BLECommandState::WAITING_FOR_WAKE;
+        command.last_tx_at = 0;  // Trigger immediate wake sequence
+        return;
+    }
+    
+    // Check if VCSEC auth is required first
+    if (!is_domain_authenticated(UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY)) {
+        ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] VCSEC auth required before infotainment auth", 
+                 command.execute_name.c_str());
+        command.state = BLECommandState::WAITING_FOR_VCSEC_AUTH;
         return;
     }
     
@@ -225,8 +245,14 @@ void CommandManager::initiate_infotainment_auth(BLECommand& command) {
 void CommandManager::initiate_wake_sequence(BLECommand& command) {
     ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Sending wake command", command.execute_name.c_str());
     
-    // Send the actual wake command
-    int result = parent_->wake_vehicle();
+    // Execute wake command directly to avoid recursive queue operations
+    auto wake_command = BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+        return client->buildVCSECActionMessage(
+            VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
+            buffer, length);
+    });
+    
+    int result = wake_command();
     if (result == 0) {
         command.state = BLECommandState::WAITING_FOR_WAKE_RESPONSE;
         command.last_tx_at = millis();
@@ -241,9 +267,29 @@ void CommandManager::retry_command(BLECommand& command) {
     if (command.retry_count >= MAX_RETRIES) {
         mark_command_failed("Max retries exceeded");
     } else {
-        ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Retrying command", command.execute_name.c_str());
-        command.state = BLECommandState::READY;
+        ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Retrying command (attempt %d/%d)", 
+                 command.execute_name.c_str(), command.retry_count + 1, MAX_RETRIES + 1);
+        
+        // Reset to appropriate state based on current state
+        switch (command.state) {
+            case BLECommandState::WAITING_FOR_WAKE_RESPONSE:
+                // Retry wake sequence
+                command.state = BLECommandState::WAITING_FOR_WAKE;
+                break;
+                
+            case BLECommandState::WAITING_FOR_RESPONSE:
+                // Retry command execution
+                command.state = BLECommandState::READY;
+                break;
+                
+            default:
+                // For auth states and others, restart from IDLE
+                command.state = BLECommandState::IDLE;
+                break;
+        }
+        
         command.retry_count++;
+        command.last_tx_at = 0;  // Trigger immediate processing
     }
 }
 
@@ -267,12 +313,18 @@ void CommandManager::handle_authentication_response(UniversalMessage_Domain doma
         if (domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY) {
             if (current_command.domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY) {
                 current_command.state = BLECommandState::READY;
-            } else {
+            } else if (current_command.domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT) {
+                // Continue with infotainment auth
                 current_command.state = BLECommandState::WAITING_FOR_INFOTAINMENT_AUTH;
+            } else {
+                current_command.state = BLECommandState::READY;
             }
         } else if (domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT) {
             current_command.state = BLECommandState::READY;
         }
+        
+        // Reset timing for next state
+        current_command.last_tx_at = 0;
     } else {
         ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Authentication failed for %s", 
                  current_command.execute_name.c_str(), domain_to_string(domain));
@@ -281,7 +333,10 @@ void CommandManager::handle_authentication_response(UniversalMessage_Domain doma
 }
 
 BLECommand* CommandManager::get_current_command() {
-    return command_queue_.empty() ? nullptr : &command_queue_.front();
+    if (command_queue_.empty()) {
+        return nullptr;
+    }
+    return &command_queue_.front();
 }
 
 void CommandManager::mark_command_completed() {
@@ -313,6 +368,9 @@ void CommandManager::clear_queue() {
 void CommandManager::update_command_state(BLECommandState new_state) {
     if (!command_queue_.empty()) {
         command_queue_.front().state = new_state;
+        ESP_LOGV(COMMAND_MANAGER_TAG, "Command state updated to %d", static_cast<int>(new_state));
+    } else {
+        ESP_LOGW(COMMAND_MANAGER_TAG, "Attempted to update command state but queue is empty");
     }
 }
 
