@@ -23,17 +23,15 @@ void PollingManager::update() {
     
     uint32_t now = millis();
     
-    // Handle initial connection - always poll immediately
+    // Handle initial connection - start with VCSEC only
     if (just_connected_) {
-        ESP_LOGI(POLLING_MANAGER_TAG, "Just connected - performing initial VCSEC poll");
+        ESP_LOGI(POLLING_MANAGER_TAG, "Just connected - performing initial VCSEC poll only");
         request_vcsec_poll();
         last_vcsec_poll_ = now;
         just_connected_ = false;
         
-        // Always request infotainment poll on initial connection to populate sensors
-        ESP_LOGI(POLLING_MANAGER_TAG, "Initial connection - forcing infotainment poll to populate sensors");
-        request_infotainment_poll();
-        last_infotainment_poll_ = now;
+        // Don't immediately request infotainment poll - wait for VCSEC to establish vehicle state first
+        ESP_LOGI(POLLING_MANAGER_TAG, "Initial connection - will request infotainment poll on next cycle based on vehicle state");
         
         return;
     }
@@ -127,6 +125,13 @@ void PollingManager::force_immediate_poll() {
 
 bool PollingManager::should_poll_infotainment() {
     uint32_t now = millis();
+    
+    // Give a grace period after connection to let VCSEC establish vehicle state first
+    uint32_t time_since_connection = time_since(connection_time_);
+    if (connection_time_ > 0 && time_since_connection < 5000) {  // 5 second grace period
+        ESP_LOGV(POLLING_MANAGER_TAG, "Within connection grace period (%u ms), skipping infotainment poll", time_since_connection);
+        return false;
+    }
     
     // Don't poll infotainment if vehicle is asleep
     if (!was_awake_) {

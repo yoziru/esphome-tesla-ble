@@ -641,10 +641,8 @@ void TeslaBLEVehicle::handle_connection_established() {
     
     if (polling_manager_) {
         polling_manager_->handle_connection_established();
-        
-        // Trigger immediate poll instead of waiting for next update cycle
-        ESP_LOGI(TAG, "Triggering immediate initial poll");
-        this->update();
+        // Note: Don't call this->update() here - polling manager handles initial polls
+        ESP_LOGI(TAG, "Initial polling will be handled by polling manager on next update cycle");
     } else {
         ESP_LOGW(TAG, "Polling manager not available during connection establishment");
     }

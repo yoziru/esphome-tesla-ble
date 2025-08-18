@@ -416,13 +416,23 @@ void MessageHandler::log_message_details(const UniversalMessage_RoutableMessage&
 
 void MessageHandler::update_command_state_on_response(const UniversalMessage_RoutableMessage& message) {
     auto* command_manager = parent_->get_command_manager();
-    if (command_manager && command_manager->has_pending_commands()) {
-        auto* current_command = command_manager->get_current_command();
-        if (current_command && current_command->state == BLECommandState::WAITING_FOR_RESPONSE) {
-            ESP_LOGD(MESSAGE_HANDLER_TAG, "[%s] Command response received", 
-                     current_command->execute_name.c_str());
-            command_manager->mark_command_completed();
-        }
+    if (!command_manager || !command_manager->has_pending_commands()) {
+        return;
+    }
+    
+    auto* current_command = command_manager->get_current_command();
+    if (!current_command) {
+        return;
+    }
+    
+    // Only mark command as completed if it's waiting for a response
+    if (current_command->state == BLECommandState::WAITING_FOR_RESPONSE) {
+        ESP_LOGD(MESSAGE_HANDLER_TAG, "[%s] Command response received", 
+                 current_command->execute_name.c_str());
+        command_manager->mark_command_completed();
+    } else {
+        ESP_LOGV(MESSAGE_HANDLER_TAG, "[%s] Received response but command is in state %d", 
+                 current_command->execute_name.c_str(), static_cast<int>(current_command->state));
     }
 }
 
@@ -437,9 +447,9 @@ void MessageHandler::update_command_state_on_response_with_status(const VCSEC_Ve
         return;
     }
     
-    // Handle wake command specifically
-    if (current_command->execute_name == "wake vehicle" || 
-        current_command->execute_name == "data update | after wake") {
+    // Handle wake-related commands
+    if (current_command->state == BLECommandState::WAITING_FOR_WAKE_RESPONSE || 
+        current_command->execute_name.find("wake") != std::string::npos) {
         
         // Check if vehicle is awake using multiple indicators
         bool is_awake = false;
@@ -467,11 +477,15 @@ void MessageHandler::update_command_state_on_response_with_status(const VCSEC_Ve
             ESP_LOGI(MESSAGE_HANDLER_TAG, "[%s] Vehicle is now awake (command completed in %u ms)", 
                      current_command->execute_name.c_str(), duration);
             command_manager->mark_command_completed();
+            return;
         }
-    } else if (current_command->state == BLECommandState::WAITING_FOR_RESPONSE) {
-        // For other VCSEC commands, mark as completed when we get vehicle status
+    }
+    
+    // For other VCSEC commands in WAITING_FOR_RESPONSE state
+    if (current_command->state == BLECommandState::WAITING_FOR_RESPONSE && 
+        current_command->domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY) {
         uint32_t duration = millis() - current_command->started_at;
-        ESP_LOGV(MESSAGE_HANDLER_TAG, "[%s] Command handled successfully in %u ms", 
+        ESP_LOGV(MESSAGE_HANDLER_TAG, "[%s] VCSEC command handled successfully in %u ms", 
                  current_command->execute_name.c_str(), duration);
         command_manager->mark_command_completed();
     }
