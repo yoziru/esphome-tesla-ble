@@ -1102,6 +1102,22 @@ namespace esphome
       charging_amps_max_ = amps_max;
     }
 
+    void TeslaBLEVehicle::update_charging_amps_max(float new_max)
+    {
+      ESP_LOGD(TAG, "Updating charging amps max from %d to %.0f", charging_amps_max_, new_max);
+      charging_amps_max_ = (int)new_max;
+      
+      // Update the number component's maximum value if it exists
+      if (chargingAmpsNumber != nullptr) {
+        // Try to cast to our custom class to update max value
+        TeslaChargingAmpsNumber* custom_amps = static_cast<TeslaChargingAmpsNumber*>(chargingAmpsNumber);
+        if (custom_amps != nullptr) {
+          custom_amps->update_max_value(new_max);
+          ESP_LOGI(TAG, "Charging amps max updated to %.0f A in UI", new_max);
+        }
+      }
+    }
+
     Keys_Role TeslaBLEVehicle::getRoleFromString(const std::string &role_str)
     {
       if (role_str == "Keys_Role_ROLE_DRIVER") {
@@ -1824,6 +1840,11 @@ namespace esphome
         parent_->sendCarServerVehicleActionMessage(SET_CHARGING_AMPS, (int)value);
         this->publish_state(value);
       }
+    }
+
+    void TeslaChargingAmpsNumber::update_max_value(float new_max) {
+      this->traits.set_max_value(new_max);
+      ESP_LOGD("tesla_ble_vehicle", "Updated charging amps max value to %.0f A", new_max);
     }
 
     void TeslaChargingLimitNumber::control(float value) {

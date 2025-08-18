@@ -170,6 +170,7 @@ namespace esphome
         class TeslaChargingAmpsNumber : public number::Number {
         public:
             void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+            void update_max_value(float new_max);
 
         protected:
             void control(float value) override;
@@ -294,6 +295,12 @@ namespace esphome
             // Number setters
             void set_charging_amps_number(number::Number *number) { chargingAmpsNumber = number; }
             void set_charging_limit_number(number::Number *number) { chargingLimitNumber = number; }
+            
+            // Sensor setters
+            void set_charging_amps_sensor(sensor::Sensor *sensor) { chargingAmpsSensor = sensor; }
+            
+            // Dynamic max limit updates
+            void update_charging_amps_max(float new_max);
 
         protected:
             std::queue<BLERXChunk> ble_read_queue_;
@@ -329,6 +336,9 @@ namespace esphome
             // numbers
             number::Number *chargingAmpsNumber{nullptr};
             number::Number *chargingLimitNumber{nullptr};
+            
+            // sensors
+            sensor::Sensor *chargingAmpsSensor{nullptr};
 
             // configuration values
             std::string role_;
