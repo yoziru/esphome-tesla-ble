@@ -754,6 +754,11 @@ namespace esphome
             fault = message.signedMessageStatus.signed_message_fault;
           }
           
+          // Log if there's a message fault
+          if (fault != UniversalMessage_MessageFault_E_MESSAGEFAULT_ERROR_NONE) {
+            ESP_LOGW(TAG, "Message fault detected: %s", message_fault_to_string(fault));
+          }
+          
           int return_code = tesla_ble_client_->parsePayloadCarServerResponse(&message.payload.protobuf_message_as_bytes, sig_data, sig_data_count, fault, &carserver_response);
           if (return_code != 0)
           {

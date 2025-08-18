@@ -443,7 +443,6 @@ void log_routable_message(const char *tag, const UniversalMessage_RoutableMessag
     {
         ESP_LOGD(tag, "  uuid: %s", format_hex(msg->uuid.bytes, msg->uuid.size).c_str());
     }
-    ESP_LOGD(tag, "  flags: %" PRIu32, msg->flags);
 }
 
 const char *closure_state_to_string(VCSEC_ClosureState_E state)
@@ -693,16 +692,6 @@ void log_carserver_response(const char *tag, const CarServer_Response *msg)
     {
     case CarServer_Response_vehicleData_tag:
         ESP_LOGD(tag, "  vehicleData:");
-        // Log the raw bytes of the vehicle data
-        {
-            const uint8_t* data = (const uint8_t*)&msg->response_msg.vehicleData;
-            size_t size = sizeof(msg->response_msg.vehicleData);
-            char hex[128] = {0};
-            for (size_t i = 0; i < size && i < 16; i++) {
-                sprintf(hex + (i*2), "%02x", data[i]);
-            }
-            ESP_LOGD(tag, "    Raw data (first 16 bytes): %s", hex);
-        }
         
         // Add this before all your has_X checks
         ESP_LOGD(tag, "    VehicleData size: %zu", sizeof(msg->response_msg.vehicleData));
