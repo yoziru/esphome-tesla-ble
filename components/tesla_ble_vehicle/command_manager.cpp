@@ -245,19 +245,22 @@ void CommandManager::initiate_infotainment_auth(BLECommand& command) {
 void CommandManager::initiate_wake_sequence(BLECommand& command) {
     ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Sending wake command", command.execute_name.c_str());
     
-    // Send wake command directly without going through public API to avoid double queueing
-    enqueue_command(
-        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
-            return client->buildVCSECActionMessage(
-                VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
-                buffer, length);
-        }),
-        "wake vehicle"
-    );
+    // Execute wake command directly to avoid recursive queue operations
+    auto wake_command = BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+        return client->buildVCSECActionMessage(
+            VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
+            buffer, length);
+    });
     
-    command.state = BLECommandState::WAITING_FOR_WAKE_RESPONSE;
-    command.last_tx_at = millis();
+    int result = wake_command();
+    if (result == 0) {
+        command.state = BLECommandState::WAITING_FOR_WAKE_RESPONSE;
+        command.last_tx_at = millis();
+    } else {
+        ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Failed to send wake command: %d", 
+                 command.execute_name.c_str(), result);
+        mark_command_failed("Wake command failed");
+    }
 }
 
 void CommandManager::retry_command(BLECommand& command) {
