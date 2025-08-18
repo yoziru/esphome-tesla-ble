@@ -89,6 +89,10 @@ private:
     bool should_use_fast_polling();
     std::string get_fast_poll_reason();
     void log_polling_decision(const std::string& action, const std::string& reason);
+    
+    // Rollover-safe time calculations
+    uint32_t time_since(uint32_t timestamp) const;
+    bool has_elapsed(uint32_t timestamp, uint32_t interval) const;
 };
 
 } // namespace tesla_ble_vehicle

@@ -149,8 +149,7 @@ bool PollingManager::should_poll_infotainment() {
 
     // If charging, always poll at active interval regardless of wake time
     if (was_charging_) {
-        uint32_t time_since_last = now - last_infotainment_poll_;
-        if (time_since_last >= infotainment_poll_interval_active_) {
+        if (has_elapsed(last_infotainment_poll_, infotainment_poll_interval_active_)) {
             ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle charging, polling at active interval");
             return true;
         }
@@ -158,7 +157,7 @@ bool PollingManager::should_poll_infotainment() {
     }
 
     // If not charging, check if we're within the wake window
-    uint32_t time_since_wake = now - wake_time_;
+    uint32_t time_since_wake = time_since(wake_time_);
     if (time_since_wake >= infotainment_sleep_timeout_) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle awake for %u ms (>%u ms), allowing sleep - skipping infotainment poll", 
                  time_since_wake, infotainment_sleep_timeout_);
@@ -166,8 +165,7 @@ bool PollingManager::should_poll_infotainment() {
     }
 
     // We're within the wake window, poll at awake interval
-    uint32_t time_since_last = now - last_infotainment_poll_;
-    if (time_since_last >= infotainment_poll_interval_awake_) {
+    if (has_elapsed(last_infotainment_poll_, infotainment_poll_interval_awake_)) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Vehicle awake for %u ms (<%u ms), polling at awake interval", 
                  time_since_wake, infotainment_sleep_timeout_);
         return true;
@@ -406,14 +404,25 @@ uint32_t PollingManager::time_since_last_vcsec_poll() const {
     if (last_vcsec_poll_ == 0) {
         return UINT32_MAX;
     }
-    return millis() - last_vcsec_poll_;
+    return time_since(last_vcsec_poll_);
 }
 
 uint32_t PollingManager::time_since_last_infotainment_poll() const {
     if (last_infotainment_poll_ == 0) {
         return UINT32_MAX;
     }
-    return millis() - last_infotainment_poll_;
+    return time_since(last_infotainment_poll_);
+}
+
+// Rollover-safe time calculations
+uint32_t PollingManager::time_since(uint32_t timestamp) const {
+    uint32_t now = millis();
+    // This works correctly even with millis() rollover due to unsigned arithmetic
+    return now - timestamp;
+}
+
+bool PollingManager::has_elapsed(uint32_t timestamp, uint32_t interval) const {
+    return time_since(timestamp) >= interval;
 }
 
 void PollingManager::log_polling_decision(const std::string& action, const std::string& reason) {

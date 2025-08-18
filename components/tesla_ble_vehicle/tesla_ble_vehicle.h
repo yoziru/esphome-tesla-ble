@@ -106,6 +106,9 @@ public:
     // Data request actions
     void request_vehicle_data();
     void request_charging_data();
+    
+    // Internal helper methods for state manager
+    void update_charging_amps_max_value(int32_t new_max);
 
     // Manager accessors (for internal use by managers)
     MessageHandler* get_message_handler() const { return message_handler_.get(); }

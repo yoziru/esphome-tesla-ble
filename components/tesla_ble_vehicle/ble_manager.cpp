@@ -203,7 +203,11 @@ void BLEManager::process_complete_message() {
 
 void BLEManager::clear_read_buffer() {
     read_buffer_.clear();
-    read_buffer_.shrink_to_fit();
+    // Only shrink if buffer is significantly over-allocated to reduce memory churn
+    if (read_buffer_.capacity() > MAX_BLE_MESSAGE_SIZE * 2) {
+        read_buffer_.shrink_to_fit();
+        ESP_LOGD(BLE_MANAGER_TAG, "Shrunk read buffer capacity to reduce memory usage");
+    }
 }
 
 void BLEManager::clear_queues() {

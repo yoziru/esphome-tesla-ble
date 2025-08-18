@@ -2,6 +2,7 @@
 #include "tesla_ble_vehicle.h"
 #include <esphome/core/helpers.h>
 #include <cmath>
+#include <algorithm>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -24,27 +25,27 @@ void VehicleStateManager::update_vehicle_status(const VCSEC_VehicleStatus& statu
 }
 
 void VehicleStateManager::update_sleep_status(VCSEC_VehicleSleepStatus_E status) {
-    bool asleep = convert_sleep_status(status);
-    if (!std::isnan(asleep)) {
-        update_asleep(asleep);
+    auto asleep = convert_sleep_status(status);
+    if (asleep.has_value()) {
+        update_asleep(asleep.value());
     } else {
         set_sensor_available(asleep_sensor_, false);
     }
 }
 
 void VehicleStateManager::update_lock_status(VCSEC_VehicleLockState_E status) {
-    bool unlocked = convert_lock_status(status);
-    if (!std::isnan(unlocked)) {
-        update_unlocked(unlocked);
+    auto unlocked = convert_lock_status(status);
+    if (unlocked.has_value()) {
+        update_unlocked(unlocked.value());
     } else {
         set_sensor_available(unlocked_sensor_, false);
     }
 }
 
 void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
-    bool present = convert_user_presence(presence);
-    if (!std::isnan(present)) {
-        update_user_present(present);
+    auto present = convert_user_presence(presence);
+    if (present.has_value()) {
+        update_user_present(present.value());
     } else {
         set_sensor_available(user_present_sensor_, false);
     }
@@ -281,18 +282,19 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
     // Update stored value
     charging_amps_max_ = new_max;
     
-    // Update the number component's maximum value if it exists
+    // Update the number component's maximum value via the parent (which knows about Tesla types)
     if (charging_amps_number_ && old_max != new_max) {
         auto old_trait_max = charging_amps_number_->traits.get_max_value();
         
-        // Cast to our specific type for proper update_max_value method
-        // This is safe since we control how charging_amps_number_ is set
-        auto tesla_charging_amps = static_cast<TeslaChargingAmpsNumber*>(charging_amps_number_);
-        tesla_charging_amps->update_max_value(new_max);
-        
-        ESP_LOGD(STATE_MANAGER_TAG, "Number traits max updated from %.0f to %d A", old_trait_max, new_max);
+        // Ask the parent to update the max value since it knows about Tesla-specific types
+        if (parent_) {
+            parent_->update_charging_amps_max_value(new_max);
+            ESP_LOGD(STATE_MANAGER_TAG, "Updated max charging amps from %.0f to %d A via parent", old_trait_max, new_max);
+        } else {
+            ESP_LOGW(STATE_MANAGER_TAG, "Parent not available to update max charging amps");
+        }
     } else {
-        ESP_LOGW(STATE_MANAGER_TAG, "Charging amps number component not available - cannot update max value");
+        ESP_LOGD(STATE_MANAGER_TAG, "Max charging amps set to %d A (no component to update)", new_max);
     }
 }
 
@@ -334,7 +336,7 @@ void VehicleStateManager::set_sensor_available(sensor::Sensor* sensor, bool avai
 }
 
 // State conversion helpers
-bool VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status) {
+std::optional<bool> VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status) {
     switch (status) {
         case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
             return false; // Not asleep
@@ -342,11 +344,11 @@ bool VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status
             return true;  // Asleep
         case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_UNKNOWN:
         default:
-            return NAN;   // Unknown state
+            return std::nullopt;   // Unknown state
     }
 }
 
-bool VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
+std::optional<bool> VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
     switch (status) {
         case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED:
         case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED:
@@ -355,11 +357,11 @@ bool VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
         case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED:
             return false; // Locked
         default:
-            return NAN;   // Unknown state
+            return std::nullopt;   // Unknown state
     }
 }
 
-bool VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
+std::optional<bool> VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
     switch (presence) {
         case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT:
             return true;  // Present
@@ -367,7 +369,7 @@ bool VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
             return false; // Not present
         case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_UNKNOWN:
         default:
-            return NAN;   // Unknown state
+            return std::nullopt;   // Unknown state
     }
 }
 

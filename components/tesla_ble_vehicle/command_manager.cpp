@@ -281,7 +281,10 @@ void CommandManager::handle_authentication_response(UniversalMessage_Domain doma
 }
 
 BLECommand* CommandManager::get_current_command() {
-    return command_queue_.empty() ? nullptr : &command_queue_.front();
+    if (command_queue_.empty()) {
+        return nullptr;
+    }
+    return &command_queue_.front();
 }
 
 void CommandManager::mark_command_completed() {
@@ -313,6 +316,9 @@ void CommandManager::clear_queue() {
 void CommandManager::update_command_state(BLECommandState new_state) {
     if (!command_queue_.empty()) {
         command_queue_.front().state = new_state;
+        ESP_LOGV(COMMAND_MANAGER_TAG, "Command state updated to %d", static_cast<int>(new_state));
+    } else {
+        ESP_LOGW(COMMAND_MANAGER_TAG, "Attempted to update command state but queue is empty");
     }
 }
 
