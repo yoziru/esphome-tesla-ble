@@ -56,11 +56,34 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
         bool was_charging = is_charging_;
-        is_charging_ = (charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag);
+        bool new_charging_state = (
+            charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag ||
+            charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Starting_tag
+        );
+        
+        ESP_LOGD(STATE_MANAGER_TAG, "Charging state check: was=%s, new=%s, state_type=%d", 
+                 was_charging ? "ON" : "OFF", 
+                 new_charging_state ? "ON" : "OFF",
+                 charge_state.charging_state.which_type);
+        
+        is_charging_ = new_charging_state;
+        
+        // Always sync charging switch with vehicle state, but respect command delay
+        if (charging_switch_ && (!charging_switch_->has_state() || charging_switch_->state != is_charging_)) {
+            if (should_delay_infotainment_request()) {
+                ESP_LOGD(STATE_MANAGER_TAG, "Delaying charging switch sync due to recent command (vehicle: %s, switch: %s)", 
+                         is_charging_ ? "ON" : "OFF", 
+                         charging_switch_->state ? "ON" : "OFF");
+            } else {
+                ESP_LOGD(STATE_MANAGER_TAG, "Syncing charging switch to vehicle state: %s", is_charging_ ? "ON" : "OFF");
+                publish_sensor_state(charging_switch_, is_charging_);
+            }
+        }
         
         if (was_charging != is_charging_) {
-            ESP_LOGI(STATE_MANAGER_TAG, "Charging state changed: %s", is_charging_ ? "ON" : "OFF");
-            publish_sensor_state(charging_switch_, is_charging_);
+            ESP_LOGD(STATE_MANAGER_TAG, "Charging state changed: %s", is_charging_ ? "ON" : "OFF");
+        } else {
+            ESP_LOGV(STATE_MANAGER_TAG, "Charging state unchanged: %s", is_charging_ ? "ON" : "OFF");
         }
         
         // Update charging state text sensor
@@ -151,12 +174,8 @@ void VehicleStateManager::update_drive_state(const CarServer_DriveState& drive_s
 
 // Direct state update methods
 void VehicleStateManager::update_asleep(bool asleep) {
-    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle sleep state: %s (sensor=%p)", asleep ? "ASLEEP" : "AWAKE", asleep_sensor_);
-    if (asleep_sensor_) {
-        publish_sensor_state(asleep_sensor_, asleep);
-    } else {
-        ESP_LOGW(STATE_MANAGER_TAG, "Asleep sensor is null - cannot publish state");
-    }
+    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle sleep state: %s", asleep ? "ASLEEP" : "AWAKE");
+    publish_sensor_state(asleep_sensor_, asleep);
     
     // Notify polling manager of state change
     if (parent_->get_polling_manager()) {
@@ -165,12 +184,8 @@ void VehicleStateManager::update_asleep(bool asleep) {
 }
 
 void VehicleStateManager::update_unlocked(bool unlocked) {
-    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle lock state: %s (sensor=%p)", unlocked ? "UNLOCKED" : "LOCKED", unlocked_sensor_);
-    if (unlocked_sensor_) {
-        publish_sensor_state(unlocked_sensor_, unlocked);
-    } else {
-        ESP_LOGW(STATE_MANAGER_TAG, "Unlocked sensor is null - cannot publish state");
-    }
+    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle lock state: %s", unlocked ? "UNLOCKED" : "LOCKED");
+    publish_sensor_state(unlocked_sensor_, unlocked);
     
     // Notify polling manager of state change
     if (parent_->get_polling_manager()) {
@@ -179,12 +194,8 @@ void VehicleStateManager::update_unlocked(bool unlocked) {
 }
 
 void VehicleStateManager::update_user_present(bool present) {
-    ESP_LOGD(STATE_MANAGER_TAG, "User presence: %s (sensor=%p)", present ? "PRESENT" : "NOT_PRESENT", user_present_sensor_);
-    if (user_present_sensor_) {
-        publish_sensor_state(user_present_sensor_, present);
-    } else {
-        ESP_LOGW(STATE_MANAGER_TAG, "User present sensor is null - cannot publish state");
-    }
+    ESP_LOGD(STATE_MANAGER_TAG, "User presence: %s", present ? "PRESENT" : "NOT_PRESENT");
+    publish_sensor_state(user_present_sensor_, present);
     
     is_user_present_ = present;
     
@@ -287,25 +298,25 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 
 // Private helper methods
 void VehicleStateManager::publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state) {
-    if (sensor != nullptr) {
+    if (sensor != nullptr && (!sensor->has_state() || sensor->state != state)) {
         sensor->publish_state(state);
     }
 }
 
 void VehicleStateManager::publish_sensor_state(sensor::Sensor* sensor, float state) {
-    if (sensor != nullptr) {
+    if (sensor != nullptr && (!sensor->has_state() || std::abs(sensor->state - state) > 0.001f)) {
         sensor->publish_state(state);
     }
 }
 
 void VehicleStateManager::publish_sensor_state(switch_::Switch* switch_comp, bool state) {
-    if (switch_comp != nullptr) {
+    if (switch_comp != nullptr && (!switch_comp->has_state() || switch_comp->state != state)) {
         switch_comp->publish_state(state);
     }
 }
 
 void VehicleStateManager::publish_sensor_state(number::Number* number_comp, float state) {
-    if (number_comp != nullptr) {
+    if (number_comp != nullptr && (!number_comp->has_state() || std::abs(number_comp->state - state) > 0.001f)) {
         number_comp->publish_state(state);
     }
 }
@@ -361,7 +372,7 @@ bool VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
 }
 
 void VehicleStateManager::publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state) {
-    if (sensor != nullptr) {
+    if (sensor != nullptr && (!sensor->has_state() || sensor->state != state)) {
         sensor->publish_state(state);
     }
 }
