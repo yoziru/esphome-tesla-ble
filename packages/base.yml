@@ -18,7 +18,7 @@ esphome:
     name: yoziru.esphome-tesla-ble
     version: "2025.8.17"
   libraries:
-    - https://github.com/yoziru/tesla-ble.git#v3.0.0
+    - tesla-ble=https://github.com/yoziru/tesla-ble.git#v3.0.0
 
 logger:
   level: INFO
