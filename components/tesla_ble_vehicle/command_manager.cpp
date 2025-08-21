@@ -345,6 +345,12 @@ void CommandManager::mark_command_completed() {
         uint32_t duration = millis() - command.started_at;
         ESP_LOGI(COMMAND_MANAGER_TAG, "[%s] Command completed successfully in %u ms", 
                  command.execute_name.c_str(), duration);
+
+        // If this was the initial VCSEC poll after connection, trigger deferred infotainment poll
+        if (command.domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY && parent_ && parent_->get_polling_manager()) {
+            parent_->get_polling_manager()->handle_initial_vcsec_poll_complete();
+        }
+
         command_queue_.pop();
     }
 }
