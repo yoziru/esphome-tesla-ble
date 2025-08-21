@@ -75,6 +75,24 @@ The system respects Tesla's sleep behavior by polling infotainment data only dur
     make clean
     ```
 
+### Building firmware using ESPHome dashboard
+
+If you are already running an instance of ESPHome, you can also include this repository directly by including it as a package. The main benefit here is having centralized management of all your ESPhome devices. To do this, you can use the following config for your device:
+```
+substitutions:
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  wifi_hotspot_password: !secret wifi_hotspot_password
+  ota_password: !secret ota_password
+  api_encryption_key: !secret api_encryption_key
+  ble_mac_address: !secret ble_mac_address
+  tesla_vin: !secret tesla_vin
+
+packages:
+  remote_package_shorthand: github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml@main
+```
+
+Be sure to use the correct `.dashboard.yml` file for your board. Also make sure you have the secrets defined otherwise it will not work and use defaults from this repository.
 
 ### Building and flashing ESP32 firmware
 1. Connect your ESP32 device to your computer via USB
