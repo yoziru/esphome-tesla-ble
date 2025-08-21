@@ -103,6 +103,14 @@ void TeslaBLEVehicle::configure_pending_sensors() {
             ESP_LOGD(TAG, "Configuring charger power sensor");
             state_manager_->set_charger_power_sensor(pending_charger_power_sensor_);
         }
+        if (pending_charger_voltage_sensor_) {
+            ESP_LOGD(TAG, "Configuring charger voltage sensor");
+            state_manager_->set_charger_voltage_sensor(pending_charger_voltage_sensor_);
+        }
+        if (pending_charger_current_sensor_) {
+            ESP_LOGD(TAG, "Configuring charger current sensor");
+            state_manager_->set_charger_current_sensor(pending_charger_current_sensor_);
+        }
         if (pending_charging_rate_sensor_) {
             ESP_LOGD(TAG, "Configuring charging rate sensor");
             state_manager_->set_charging_rate_sensor(pending_charging_rate_sensor_);
@@ -284,6 +292,16 @@ void TeslaBLEVehicle::set_battery_level_sensor(sensor::Sensor *sensor) {
 void TeslaBLEVehicle::set_charger_power_sensor(sensor::Sensor *sensor) {
     pending_charger_power_sensor_ = sensor;
     if (state_manager_) state_manager_->set_charger_power_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_charger_voltage_sensor(sensor::Sensor *sensor) {
+    pending_charger_voltage_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_charger_voltage_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_charger_current_sensor(sensor::Sensor *sensor) {
+    pending_charger_current_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_charger_current_sensor(sensor);
 }
 
 void TeslaBLEVehicle::set_charging_rate_sensor(sensor::Sensor *sensor) {

@@ -79,6 +79,8 @@ public:
     void set_binary_sensor_is_charger_connected(binary_sensor::BinarySensor *s);
     void set_battery_level_sensor(sensor::Sensor *sensor);
     void set_charger_power_sensor(sensor::Sensor *sensor);
+    void set_charger_voltage_sensor(sensor::Sensor *sensor);
+    void set_charger_current_sensor(sensor::Sensor *sensor);
     void set_charging_rate_sensor(sensor::Sensor *sensor);
     void set_charging_state_sensor(text_sensor::TextSensor *sensor);
 
@@ -159,6 +161,8 @@ private:
     binary_sensor::BinarySensor* pending_charger_sensor_{nullptr};
     sensor::Sensor* pending_battery_level_sensor_{nullptr};
     sensor::Sensor* pending_charger_power_sensor_{nullptr};
+    sensor::Sensor* pending_charger_voltage_sensor_{nullptr};
+    sensor::Sensor* pending_charger_current_sensor_{nullptr};
     sensor::Sensor* pending_charging_rate_sensor_{nullptr};
     text_sensor::TextSensor* pending_charging_state_sensor_{nullptr};
     switch_::Switch* pending_charging_switch_{nullptr};
