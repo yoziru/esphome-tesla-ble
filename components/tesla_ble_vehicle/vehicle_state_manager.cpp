@@ -117,16 +117,65 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update charger power with validation (convert from watts to kilowatts)
-    if (charge_state.which_optional_charger_power && charger_power_sensor_) {
-        float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
+    // Calculate charger power using voltage × current for more precision, or fall back to direct power reading
+    if (charger_power_sensor_) {
+        float calculated_power_w = 0.0f;
+        bool has_calculated_power = false;
         
-        // Validate power is non-negative (Tesla max is ~250kW at Superchargers)
-        if (power_kw >= 0.0f && power_kw <= 300.0f) {
-            ESP_LOGD(STATE_MANAGER_TAG, "Updating charger power to %.1fkW", power_kw);
-            publish_sensor_state(charger_power_sensor_, power_kw);
+        // Try to calculate power from voltage × current for better precision
+        if (charge_state.which_optional_charger_voltage && charge_state.which_optional_charger_actual_current) {
+            float voltage = static_cast<float>(charge_state.optional_charger_voltage.charger_voltage);
+            float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
+
+            // Calculate power in watts (voltage * current)
+            calculated_power_w = (voltage * current);
+            has_calculated_power = true;
+
+            ESP_LOGD(STATE_MANAGER_TAG, "Calculated charger power: %.1fV × %.1fA = %.0fW", voltage, current, calculated_power_w);
+        }
+        // Fall back to direct power reading if calculation not available
+        else if (charge_state.which_optional_charger_power) {
+            calculated_power_w = static_cast<float>(charge_state.optional_charger_power.charger_power) / 1000.0f;
+            has_calculated_power = true;
+
+            ESP_LOGD(STATE_MANAGER_TAG, "Using direct charger power reading: %.0fW", calculated_power_w);
+        }
+        
+        // Update power sensor with validation
+        if (has_calculated_power) {
+            // Validate power is non-negative (Tesla max is ~250kW at Superchargers)
+            if (calculated_power_w >= 0.0f && calculated_power_w <= 300000.0f) {
+                ESP_LOGD(STATE_MANAGER_TAG, "Updating charger power to %.3fW", calculated_power_w);
+                publish_sensor_state(charger_power_sensor_, calculated_power_w);
+            } else {
+                ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger power calculated/received: %.3fW (expected 0-300000)", calculated_power_w);
+            }
+        }
+    }
+    
+    // Update charger voltage with validation
+    if (charge_state.which_optional_charger_voltage && charger_voltage_sensor_) {
+        float voltage = static_cast<float>(charge_state.optional_charger_voltage.charger_voltage);
+        
+        // Validate voltage (typical range 100-500V for Tesla chargers)
+        if (voltage >= 0.0f && voltage <= 600.0f) {
+            ESP_LOGD(STATE_MANAGER_TAG, "Updating charger voltage to %.1fV", voltage);
+            publish_sensor_state(charger_voltage_sensor_, voltage);
         } else {
-            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger power received: %.1fkW (expected 0-300)", power_kw);
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger voltage received: %.1fV (expected 0-600)", voltage);
+        }
+    }
+    
+    // Update charger current with validation
+    if (charge_state.which_optional_charger_actual_current && charger_current_sensor_) {
+        float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
+        
+        // Validate current (typical range 0-80A for Tesla chargers)
+        if (current >= 0.0f && current <= 100.0f) {
+            ESP_LOGD(STATE_MANAGER_TAG, "Updating charger current to %.1fA", current);
+            publish_sensor_state(charger_current_sensor_, current);
+        } else {
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger current received: %.1fA (expected 0-100)", current);
         }
     }
     

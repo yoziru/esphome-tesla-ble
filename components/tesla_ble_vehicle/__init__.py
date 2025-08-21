@@ -174,11 +174,34 @@ async def to_code(config):
         CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charger_power_sensor"),
         CONF_NAME: "Charger Power",
         CONF_ICON: "mdi:flash",
+        CONF_DEVICE_CLASS: sensor.DEVICE_CLASS_POWER,
         CONF_DISABLED_BY_DEFAULT: False,
         CONF_FORCE_UPDATE: False,
-        CONF_UNIT_OF_MEASUREMENT: "kW",
+        CONF_UNIT_OF_MEASUREMENT: "W",
     })
     cg.add(var.set_charger_power_sensor(charger_power_sensor))
+
+    charger_voltage_sensor = await sensor.new_sensor({
+        CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charger_voltage_sensor"),
+        CONF_NAME: "Charger Voltage",
+        CONF_ICON: "mdi:lightning-bolt",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+        CONF_UNIT_OF_MEASUREMENT: "V",
+        CONF_DEVICE_CLASS: sensor.DEVICE_CLASS_VOLTAGE,
+    })
+    cg.add(var.set_charger_voltage_sensor(charger_voltage_sensor))
+
+    charger_current_sensor = await sensor.new_sensor({
+        CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charger_current_sensor"),
+        CONF_NAME: "Charger Current",
+        CONF_ICON: "mdi:current-ac",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+        CONF_UNIT_OF_MEASUREMENT: "A",
+        CONF_DEVICE_CLASS: sensor.DEVICE_CLASS_CURRENT,
+    })
+    cg.add(var.set_charger_current_sensor(charger_current_sensor))
 
     charging_rate_sensor = await sensor.new_sensor({
         CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charging_rate_sensor"),
