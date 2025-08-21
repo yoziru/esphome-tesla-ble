@@ -23,16 +23,13 @@ void PollingManager::update() {
     
     uint32_t now = millis();
     
-    // Handle initial connection - start with VCSEC only
+    // Handle initial connection - start with VCSEC only, defer infotainment poll
     if (just_connected_) {
-        ESP_LOGI(POLLING_MANAGER_TAG, "Just connected - performing initial VCSEC poll only");
+        ESP_LOGI(POLLING_MANAGER_TAG, "Just connected - performing initial VCSEC poll, deferring infotainment poll");
         request_vcsec_poll();
         last_vcsec_poll_ = now;
+        pending_initial_infotainment_poll_ = true;
         just_connected_ = false;
-        
-        // Don't immediately request infotainment poll - wait for VCSEC to establish vehicle state first
-        ESP_LOGI(POLLING_MANAGER_TAG, "Initial connection - will request infotainment poll on next cycle based on vehicle state");
-        
         return;
     }
 
@@ -341,6 +338,15 @@ void PollingManager::reset_state_cache() {
 void PollingManager::reset_polling_timestamps() {
     last_vcsec_poll_ = 0;
     last_infotainment_poll_ = 0;
+}
+
+void PollingManager::handle_initial_vcsec_poll_complete() {
+    if (pending_initial_infotainment_poll_) {
+        ESP_LOGI(POLLING_MANAGER_TAG, "Initial VCSEC poll complete - requesting initial infotainment poll");
+        request_infotainment_poll(true);
+        last_infotainment_poll_ = millis();
+        pending_initial_infotainment_poll_ = false;
+    }
 }
 
 } // namespace tesla_ble_vehicle

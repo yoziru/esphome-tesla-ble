@@ -91,14 +91,21 @@ private:
     bool should_use_fast_polling();
     std::string get_fast_poll_reason();
     void log_polling_decision(const std::string& action, const std::string& reason);
-    
+
     // Rollover-safe time calculations
     uint32_t time_since(uint32_t timestamp) const;
     bool has_elapsed(uint32_t timestamp, uint32_t interval) const;
-    
+
     // State management helpers
     void reset_state_cache();
     void reset_polling_timestamps();
+
+    // Defer infotainment poll until after initial VCSEC poll completes
+    bool pending_initial_infotainment_poll_{false};
+
+public:
+    // Called by CommandManager when VCSEC poll completes after initial connection
+    void handle_initial_vcsec_poll_complete();
 };
 
 } // namespace tesla_ble_vehicle
