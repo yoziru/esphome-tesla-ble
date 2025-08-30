@@ -1,0 +1,87 @@
+.DEFAULT_GOAL := help
+
+# Makefile.common - Common ESPHome Makefile for single and multi-board projects
+# Usage: In your project's Makefile, set PROJECT and optionally BOARD, then include this file.
+
+PROJECT ?= default-project
+BOARD ?=
+TARGET ?= $(if $(BOARD),$(PROJECT)-$(BOARD).yml,$(PROJECT).yml)
+BOARD_FILES ?= $(if $(BOARD),boards/$(BOARD).yml)
+ESPHOME_VERSION ?= $(shell grep '^esphome==' requirements.txt | cut -d'=' -f3)
+
+UV_CHECK = @command -v uv >/dev/null 2>&1 || { \
+  echo "[ERROR] 'uv' is not installed. Please install it with:"; \
+  echo "See https://docs.astral.sh/uv/getting-started/installation/ for help."; \
+  exit 1; \
+}
+
+# Check if 'uv' is installed
+check-uv:
+	$(UV_CHECK)
+
+# Compile the binary only if YAML sources or dependencies change
+compile: .esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin  ## Read the configuration and compile the binary.
+
+validate-config: check-uv ## Validate the configuration without building the binary
+	uvx --with pip esphome==$(ESPHOME_VERSION) config $(TARGET)
+
+# Build firmware.bin if YAML sources or dependencies change
+.esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin: $(TARGET) packages/*.yml $(BOARD_FILES) requirements.txt $(shell command -v uv 2>/dev/null)
+	$(UV_CHECK)
+	uvx --with pip esphome==$(ESPHOME_VERSION) compile $(TARGET)
+
+upload: .esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin check-uv ## Validate the configuration, create a binary, upload it, and start logs.
+	@suffix="$(HOST_SUFFIX)"; \
+	if [ -z "$$suffix" ] && [ -f .selected_suffix ]; then \
+		suffix=$$(cat .selected_suffix); \
+	fi; \
+	if [ -z "$$suffix" ]; then \
+		uvx --with pip esphome==$(ESPHOME_VERSION) run $(TARGET); \
+	else \
+		uvx --with pip esphome==$(ESPHOME_VERSION) run $(TARGET) --device $(PROJECT)$$suffix; \
+	fi
+
+logs: check-uv ## Start logs.
+	@suffix="$(HOST_SUFFIX)"; \
+	if [ -z "$$suffix" ] && [ -f .selected_suffix ]; then \
+		suffix=$$(cat .selected_suffix); \
+	fi; \
+	if [ -z "$$suffix" ]; then \
+		uvx --with pip esphome==$(ESPHOME_VERSION) logs $(TARGET); \
+	else \
+		uvx --with pip esphome==$(ESPHOME_VERSION) logs $(TARGET) --device $(PROJECT)$$suffix; \
+	fi
+
+discover: ## Discover ESPHome devices on the network
+	@PROJECT=$(PROJECT) bash -c ' \
+	echo "Scanning network for ESPHome devices..."; \
+	devices=($$(timeout 2 dns-sd -B _esphomelib._tcp local 2>/dev/null | grep "Add" | grep "$$PROJECT" | awk "{print \$$NF}" | sed "s/$$PROJECT-//" | sed "s/\.local//")); \
+	if [ $${#devices[@]} -eq 0 ]; then \
+		echo "No devices found (or dns-sd timed out)"; \
+	else \
+		selected=$${devices[0]}; \
+		echo "Using device: $$PROJECT-$$selected"; \
+		echo "-$$selected" > .selected_suffix; \
+		if [ $${#devices[@]} -gt 1 ]; then \
+			echo "Other devices found:"; \
+			for i in $${!devices[@]}; do \
+				if [ $$i -gt 0 ]; then \
+					echo "  $$PROJECT-$${devices[i]}"; \
+				fi; \
+			done; \
+		fi; \
+	fi'
+
+.PHONY: clean
+clean: ## Remove the esphome build directory
+	rm -rf .esphome .selected_suffix
+
+.PHONY: help
+help: ## Show help messages for make targets
+	@grep -E '^[a-zA-Z0-9_./-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| sed 's/[^:]*://' \
+		| sort \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}'
+
+compile_docker: $(TARGET) packages/*.yml $(BOARD_FILES) ## Compile the binary using docker
+	docker run --rm -v $(PWD):/config ghcr.io/esphome/esphome:$(ESPHOME_VERSION) compile /config/$(TARGET)
