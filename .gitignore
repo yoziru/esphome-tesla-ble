@@ -7,3 +7,4 @@ secrets.yaml
 firmware.bin.gz
 foo
 *.log
+.selected_suffix
