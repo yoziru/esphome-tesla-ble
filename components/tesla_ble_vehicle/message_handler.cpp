@@ -2,7 +2,6 @@
 #include "tesla_ble_vehicle.h"
 #include <client.h>
 #include "log.h"
-#include "log.h"
 #include <esphome/core/helpers.h>
 
 namespace esphome {
