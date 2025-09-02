@@ -125,7 +125,7 @@ bool PollingManager::should_poll_infotainment() {
     
     // Give a grace period after connection to let VCSEC establish vehicle state first
     uint32_t time_since_connection = time_since(connection_time_);
-    if (connection_time_ > 0 && time_since_connection < 5000) {  // 5 second grace period
+    if (connection_time_ > 0 && time_since_connection < CONNECTION_GRACE_PERIOD) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Within connection grace period (%u ms), skipping infotainment poll", time_since_connection);
         return false;
     }
