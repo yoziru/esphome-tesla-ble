@@ -243,8 +243,23 @@ void MessageHandler::handle_carserver_message(const UniversalMessage_RoutableMes
             }
         }
     } else {
-        // No action status, assume success for data requests
-        update_command_state_on_response(message);
+        // No action status - could be a data request response or missing status
+        // Only mark as completed if we have a pending infotainment command
+        auto* command_manager = parent_->get_command_manager();
+        if (command_manager && command_manager->has_pending_commands()) {
+            auto* current_command = command_manager->get_current_command();
+            if (current_command && current_command->domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT) {
+                ESP_LOGD(MESSAGE_HANDLER_TAG, "[%s] No action status received, assuming data request success", 
+                         current_command->execute_name.c_str());
+                command_manager->mark_command_completed();
+            } else {
+                // Not our command, just update state normally
+                update_command_state_on_response(message);
+            }
+        } else {
+            // No pending commands, just update state normally
+            update_command_state_on_response(message);
+        }
     }
 }
 
