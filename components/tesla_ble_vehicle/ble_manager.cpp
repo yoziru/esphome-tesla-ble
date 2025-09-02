@@ -168,7 +168,16 @@ int BLEManager::get_expected_message_length() {
     }
     
     // First two bytes contain the message length in big-endian format
-    return (read_buffer_[0] << 8) | read_buffer_[1];
+    int length = (read_buffer_[0] << 8) | read_buffer_[1];
+    
+    // Validate that the length is reasonable (not negative and not too large)
+    if (length < 0 || length > MAX_BLE_MESSAGE_SIZE - 2) {
+        ESP_LOGW(BLE_MANAGER_TAG, "Invalid message length: %d (must be 0-%zu)", 
+                 length, MAX_BLE_MESSAGE_SIZE - 2);
+        return -1;
+    }
+    
+    return length;
 }
 
 void BLEManager::process_complete_message() {
