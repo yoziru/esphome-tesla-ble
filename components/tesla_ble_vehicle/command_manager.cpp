@@ -17,6 +17,13 @@ CommandManager::CommandManager(TeslaBLEVehicle* parent)
 void CommandManager::enqueue_command(UniversalMessage_Domain domain, 
                                     std::function<int()> execute, 
                                     const std::string& name) {
+    // Prevent unbounded queue growth
+    if (command_queue_.size() >= MAX_QUEUE_SIZE) {
+        ESP_LOGE(COMMAND_MANAGER_TAG, "Command queue full (%zu/%zu), rejecting command: %s", 
+                 command_queue_.size(), MAX_QUEUE_SIZE, name.c_str());
+        return;
+    }
+    
     ESP_LOGD(COMMAND_MANAGER_TAG, "Enqueueing command: %s (domain: %s)", 
              name.c_str(), domain_to_string(domain));
     
@@ -64,6 +71,13 @@ void CommandManager::process_command_queue() {
                 ESP_LOGW(COMMAND_MANAGER_TAG, "[%s] Response timeout, retrying",
                          current_command.execute_name.c_str());
                 current_command.state = BLECommandState::READY;
+            }
+            // Check for overall command timeout even in WAITING_FOR_RESPONSE
+            if (now - current_command.started_at > COMMAND_TIMEOUT) {
+                ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Command timed out in WAITING_FOR_RESPONSE after %d ms",
+                         current_command.execute_name.c_str(), COMMAND_TIMEOUT);
+                mark_command_failed("Response timeout");
+                return;
             }
             break;
     }

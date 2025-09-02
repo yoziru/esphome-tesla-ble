@@ -49,6 +49,7 @@ public:
     static constexpr uint32_t COMMAND_TIMEOUT = 30 * 1000; // 30s
     static constexpr uint32_t MAX_LATENCY = 4 * 1000;      // 4s
     static constexpr uint8_t MAX_RETRIES = 5;
+    static constexpr size_t MAX_QUEUE_SIZE = 20;           // Prevent unbounded queue growth
     
     explicit CommandManager(TeslaBLEVehicle* parent);
     
