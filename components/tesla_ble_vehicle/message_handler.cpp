@@ -99,8 +99,14 @@ void MessageHandler::handle_vcsec_message(const UniversalMessage_RoutableMessage
         return;
     }
     
+    auto* client = session_manager->get_client();
+    if (!client) {
+        ESP_LOGE(MESSAGE_HANDLER_TAG, "Tesla client not available");
+        return;
+    }
+    
     VCSEC_FromVCSECMessage vcsec_message = VCSEC_FromVCSECMessage_init_default;
-    int result = session_manager->get_client()->parseFromVCSECMessage(
+    int result = client->parseFromVCSECMessage(
         const_cast<UniversalMessage_RoutableMessage_protobuf_message_as_bytes_t*>(&message.payload.protobuf_message_as_bytes), &vcsec_message);
     
     if (result != 0) {
@@ -139,7 +145,7 @@ void MessageHandler::handle_vcsec_message(const UniversalMessage_RoutableMessage
         default:
             // Probably information request with public key
             VCSEC_InformationRequest info_message = VCSEC_InformationRequest_init_default;
-            result = session_manager->get_client()->parseVCSECInformationRequest(
+            result = client->parseVCSECInformationRequest(
                 const_cast<UniversalMessage_RoutableMessage_protobuf_message_as_bytes_t*>(&message.payload.protobuf_message_as_bytes), &info_message);
             
             if (result == 0) {
@@ -159,6 +165,12 @@ void MessageHandler::handle_carserver_message(const UniversalMessage_RoutableMes
     auto* session_manager = parent_->get_session_manager();
     if (!session_manager) {
         ESP_LOGE(MESSAGE_HANDLER_TAG, "Session manager not available");
+        return;
+    }
+    
+    auto* client = session_manager->get_client();
+    if (!client) {
+        ESP_LOGE(MESSAGE_HANDLER_TAG, "Tesla client not available");
         return;
     }
     
