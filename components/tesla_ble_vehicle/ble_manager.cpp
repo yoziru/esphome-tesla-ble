@@ -118,9 +118,9 @@ void BLEManager::process_read_queue() {
     // Check for buffer overflow before appending
     size_t new_size = read_buffer_.size() + chunk.buffer.size();
     if (new_size > MAX_BLE_MESSAGE_SIZE) {
-        ESP_LOGE(BLE_MANAGER_TAG, "Message size would exceed maximum (%zu > %zu bytes)", 
+        ESP_LOGE(BLE_MANAGER_TAG, "Message size would exceed maximum (%zu > %zu bytes), discarding message", 
                  new_size, MAX_BLE_MESSAGE_SIZE);
-        handle_read_error("Message too large");
+        clear_read_buffer();  // Immediately clear buffer to prevent corruption
         return;
     }
 
