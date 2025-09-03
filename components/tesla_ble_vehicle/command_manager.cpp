@@ -308,7 +308,7 @@ void CommandManager::retry_command(BLECommand& command) {
         
         command.retry_count++;
         // Add a small delay before retry to prevent tight loops
-        command.last_tx_at = millis() - (MAX_LATENCY - 500);  // Will be ready in 500ms
+        command.last_tx_at = millis() - (MAX_LATENCY - 100);  // Will be ready in 100ms
     }
 }
 
