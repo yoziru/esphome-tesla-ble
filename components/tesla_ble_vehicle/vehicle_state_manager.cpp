@@ -499,7 +499,8 @@ void VehicleStateManager::track_command_issued() {
 
 bool VehicleStateManager::should_delay_infotainment_request() const {
     uint32_t now = millis();
-    uint32_t time_since_command = now - last_command_time_;
+    // Rollover-safe time calculation
+    uint32_t time_since_command = Utils::time_since(now, last_command_time_);
     
     bool should_delay = time_since_command < COMMAND_DELAY_TIME;
     if (should_delay) {

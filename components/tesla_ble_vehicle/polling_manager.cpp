@@ -315,9 +315,7 @@ uint32_t PollingManager::time_since_last_infotainment_poll() const {
 
 // Rollover-safe time calculations
 uint32_t PollingManager::time_since(uint32_t timestamp) const {
-    uint32_t now = millis();
-    // This works correctly even with millis() rollover due to unsigned arithmetic
-    return now - timestamp;
+    return Utils::time_since(millis(), timestamp);
 }
 
 bool PollingManager::has_elapsed(uint32_t timestamp, uint32_t interval) const {

@@ -38,10 +38,10 @@ void CommandManager::process_command_queue() {
     BLECommand& current_command = command_queue_.front();
     uint32_t now = millis();
 
-    // Check for overall command timeout
-    if (now - current_command.started_at > COMMAND_TIMEOUT) {
-        ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Command timed out after %d ms",
-                 current_command.execute_name.c_str(), COMMAND_TIMEOUT);
+    // Check for overall command timeout (rollover-safe)
+    uint32_t time_since_start = Utils::time_since(now, current_command.started_at);
+    if (time_since_start > COMMAND_TIMEOUT) {
+        LogHelper::log_command_timeout(COMMAND_MANAGER_TAG, current_command.execute_name.c_str(), COMMAND_TIMEOUT);
         mark_command_failed("Overall timeout");
         return;
     }
@@ -66,16 +66,17 @@ void CommandManager::process_command_queue() {
             break;
             
         case BLECommandState::WAITING_FOR_RESPONSE:
-            // Check for response timeout
-            if (now - current_command.last_tx_at > MAX_LATENCY) {
-                ESP_LOGW(COMMAND_MANAGER_TAG, "[%s] Response timeout, retrying",
-                         current_command.execute_name.c_str());
+            // Check for response timeout (rollover-safe)
+            uint32_t time_since_tx = Utils::time_since(now, current_command.last_tx_at);
+            if (time_since_tx > MAX_LATENCY) {
+                LogHelper::log_command_retry(COMMAND_MANAGER_TAG, current_command.execute_name.c_str(), 
+                                           current_command.retry_count + 1, MAX_RETRIES + 1, "Response timeout");
                 current_command.state = BLECommandState::READY;
             }
-            // Check for overall command timeout even in WAITING_FOR_RESPONSE
-            if (now - current_command.started_at > COMMAND_TIMEOUT) {
-                ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Command timed out in WAITING_FOR_RESPONSE after %d ms",
-                         current_command.execute_name.c_str(), COMMAND_TIMEOUT);
+            // Check for overall command timeout even in WAITING_FOR_RESPONSE (rollover-safe)
+            if (time_since_start > COMMAND_TIMEOUT) {
+                LogHelper::log_command_timeout(COMMAND_MANAGER_TAG, current_command.execute_name.c_str(), 
+                                              COMMAND_TIMEOUT, "in WAITING_FOR_RESPONSE");
                 mark_command_failed("Response timeout");
                 return;
             }
@@ -118,8 +119,9 @@ void CommandManager::process_idle_command(BLECommand& command) {
 void CommandManager::process_auth_waiting_command(BLECommand& command) {
     uint32_t now = millis();
     
-    // Check for auth timeout
-    if (now - command.last_tx_at > MAX_LATENCY) {
+    // Check for auth timeout (rollover-safe)
+    uint32_t time_since_tx = Utils::time_since(now, command.last_tx_at);
+    if (time_since_tx > MAX_LATENCY) {
         switch (command.state) {
             case BLECommandState::WAITING_FOR_VCSEC_AUTH:
                 initiate_vcsec_auth(command);
@@ -174,7 +176,9 @@ void CommandManager::process_auth_waiting_command(BLECommand& command) {
 void CommandManager::process_ready_command(BLECommand& command) {
     uint32_t now = millis();
     
-    if (now - command.last_tx_at > MAX_LATENCY) {
+    // Check if enough time has passed since last transmission (rollover-safe)
+    uint32_t time_since_tx = Utils::time_since(now, command.last_tx_at);
+    if (time_since_tx > MAX_LATENCY) {
         if (command.retry_count >= MAX_RETRIES) {
             ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Max retries exceeded", 
                      command.execute_name.c_str());
@@ -182,8 +186,8 @@ void CommandManager::process_ready_command(BLECommand& command) {
             return;
         }
         
-        ESP_LOGI(COMMAND_MANAGER_TAG, "[%s] Executing command (attempt %d/%d)", 
-                 command.execute_name.c_str(), command.retry_count + 1, MAX_RETRIES + 1);
+        LogHelper::log_command_retry(COMMAND_MANAGER_TAG, command.execute_name.c_str(), 
+                                   command.retry_count + 1, MAX_RETRIES + 1);
         
         int result = command.execute();
         command.last_tx_at = now;
