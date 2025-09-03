@@ -225,7 +225,29 @@ bool SessionManager::update_session(const Signatures_SessionInfo& session_info, 
     int result = peer->updateSession(const_cast<Signatures_SessionInfo*>(&session_info));
     if (result != 0) {
         ESP_LOGE(SESSION_MANAGER_TAG, "Failed to update session for %s: %d", domain_to_string(domain), result);
-        return false;
+        
+        // If it's a counter anti-replay error, discard stored session and force update
+        if (result == TeslaBLE::TeslaBLE_Status_E_ERROR_COUNTER_REPLAY) {
+            ESP_LOGW(SESSION_MANAGER_TAG, "Counter anti-replay detected, discarding stored session for %s", domain_to_string(domain));
+            
+            // Invalidate and erase stored session
+            invalidate_session(domain);
+            
+            // Force update peer state
+            peer->setCounter(session_info.counter);
+            peer->setEpoch(session_info.epoch);
+            peer->setTimeZero(std::time(nullptr) - session_info.clock_time);
+            peer->setIsValid(true);
+            
+            // Load Tesla key if provided
+            if (session_info.publicKey.size > 0) {
+                peer->loadTeslaKey(session_info.publicKey.bytes, session_info.publicKey.size);
+            }
+            
+            ESP_LOGI(SESSION_MANAGER_TAG, "Forced session update for %s", domain_to_string(domain));
+        } else {
+            return false;
+        }
     }
     
     // Save to NVS
