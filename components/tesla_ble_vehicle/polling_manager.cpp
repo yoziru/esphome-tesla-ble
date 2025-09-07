@@ -95,6 +95,8 @@ void PollingManager::update_vehicle_state(bool is_awake, bool is_charging, bool 
             ESP_LOGI(POLLING_MANAGER_TAG, "Vehicle just woke up - tracking wake time and requesting immediate infotainment poll");
             request_infotainment_poll(true);  // true = bypass delay
             last_infotainment_poll_ = millis();
+            // Cancel pending initial infotainment poll since we're doing it now due to wake
+            pending_initial_infotainment_poll_ = false;
         }
     }
     
