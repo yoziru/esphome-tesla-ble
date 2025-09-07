@@ -1,13 +1,41 @@
 #include "command_manager.h"
 #include "tesla_ble_vehicle.h"
-#include "common_impl.h"
 #include <client.h>
 #include "log.h"
+#include "common.h"
 
 namespace esphome {
 namespace tesla_ble_vehicle {
 
-BLECommand::BLECommand(UniversalMessage_Domain d, std::function<int()> e, std::string n)
+// Helper function to create simple commands
+template<typename BuilderFunc>
+std::function<int()> create_command(TeslaBLEVehicle* vehicle, BuilderFunc builder) {
+    return [vehicle, builder]() {
+        auto* session_manager = vehicle->get_session_manager();
+        auto* ble_manager = vehicle->get_ble_manager();
+        
+        if (!session_manager || !ble_manager) {
+            return -1;
+        }
+        
+        auto* client = session_manager->get_client();
+        if (!client) {
+            return -1;
+        }
+        
+        unsigned char message_buffer[MAX_BLE_MESSAGE_SIZE];
+        size_t message_length = sizeof(message_buffer);
+        
+        int result = builder(client, message_buffer, &message_length);
+        if (result != 0) {
+            return result;
+        }
+        
+        return ble_manager->write_message(message_buffer, message_length);
+    };
+}
+
+BLECommand::BLECommand(UniversalMessage_Domain d, std::function<int()> e, const std::string& n)
     : domain(d), execute(std::move(e)), execute_name(std::move(n)), 
       state(BLECommandState::IDLE), started_at(millis()), last_tx_at(0), retry_count(0) {}
 
@@ -189,6 +217,9 @@ void CommandManager::process_ready_command(BLECommand& command) {
         LogHelper::log_command_retry(COMMAND_MANAGER_TAG, command.execute_name.c_str(), 
                                    command.retry_count + 1, MAX_RETRIES + 1);
         
+        // Increment counter before each command execution (Tesla protocol requirement)
+        increment_counter_for_command(command, command.domain);
+        
         int result = command.execute();
         command.last_tx_at = now;
         command.retry_count++;
@@ -264,11 +295,13 @@ void CommandManager::initiate_wake_sequence(BLECommand& command) {
     ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Sending wake command", command.execute_name.c_str());
     
     // Execute wake command directly to avoid recursive queue operations
-    auto wake_command = BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+    auto wake_command = create_command(parent_, [](auto* client, auto* buffer, auto* length) {
         return client->buildVCSECActionMessage(
             VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
             buffer, length);
     });
+    
+    // Do NOT increment counter here; handled in process_ready_command
     
     int result = wake_command();
     if (result == 0) {
@@ -397,6 +430,112 @@ void CommandManager::update_command_state(BLECommandState new_state) {
     } else {
         ESP_LOGW(COMMAND_MANAGER_TAG, "Attempted to update command state but queue is empty");
     }
+}
+
+void CommandManager::increment_counter_for_command(BLECommand& command, UniversalMessage_Domain domain) {
+    ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Incrementing counter for domain %s", 
+             command.execute_name.c_str(), domain_to_string(domain));
+    
+    auto* session_manager = parent_->get_session_manager();
+    if (!session_manager) {
+        ESP_LOGE(COMMAND_MANAGER_TAG, "Session manager not available for counter increment");
+        return;
+    }
+    
+    auto* client = session_manager->get_client();
+    if (!client) {
+        ESP_LOGE(COMMAND_MANAGER_TAG, "Tesla client not available for counter increment");
+        return;
+    }
+    
+    auto* peer = client->getPeer(domain);
+    if (!peer) {
+        ESP_LOGE(COMMAND_MANAGER_TAG, "Peer not available for domain %s", domain_to_string(domain));
+        return;
+    }
+    
+    peer->incrementCounter();
+    ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Counter incremented for domain %s", 
+             command.execute_name.c_str(), domain_to_string(domain));
+}
+
+// Simple command creation helpers
+void CommandManager::enqueue_wake_vehicle() {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
+        create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECActionMessage(
+                VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
+                buffer, length);
+        }),
+        "wake vehicle"
+    );
+}
+
+void CommandManager::enqueue_vcsec_poll() {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
+        create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECInformationRequestMessage(
+                VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
+                buffer, length);
+        }),
+        "VCSEC status poll"
+    );
+}
+
+void CommandManager::enqueue_infotainment_poll() {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildCarServerGetVehicleDataMessage(
+                buffer, length, CarServer_GetVehicleData_getChargeState_tag);
+        }),
+        "infotainment data poll"
+    );
+}
+
+void CommandManager::enqueue_set_charging_state(bool enable) {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [enable](auto* client, auto* buffer, auto* length) {
+            // Use Tesla's standard charging start/stop action with proper enum values
+            int32_t action = enable ? 1 : 0;  // 1 = start, 0 = stop
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
+                CarServer_VehicleAction_chargingStartStopAction_tag,
+                &action);
+        }),
+        enable ? "start charging" : "stop charging"
+    );
+}
+
+void CommandManager::enqueue_set_charging_amps(int amps) {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [amps](auto* client, auto* buffer, auto* length) {
+            int32_t amps_param = static_cast<int32_t>(amps);
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
+                CarServer_VehicleAction_setChargingAmpsAction_tag,
+                &amps_param);
+        }),
+        "set charging amps"
+    );
+}
+
+void CommandManager::enqueue_set_charging_limit(int limit) {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [limit](auto* client, auto* buffer, auto* length) {
+            int32_t limit_param = static_cast<int32_t>(limit);
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
+                CarServer_VehicleAction_chargingSetLimitAction_tag,
+                &limit_param);
+        }),
+        "set charging limit"
+    );
 }
 
 } // namespace tesla_ble_vehicle

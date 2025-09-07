@@ -35,7 +35,7 @@ struct BLECommand {
     uint32_t last_tx_at;
     uint8_t retry_count;
 
-    BLECommand(UniversalMessage_Domain d, std::function<int()> e, std::string n = "");
+    BLECommand(UniversalMessage_Domain d, std::function<int()> e, const std::string& n = "");
 };
 
 /**
@@ -72,6 +72,14 @@ public:
     size_t get_queue_size() const { return command_queue_.size(); }
     BLECommand* get_current_command();
     
+    // Simple command creation helpers
+    void enqueue_wake_vehicle();
+    void enqueue_vcsec_poll();
+    void enqueue_infotainment_poll();
+    void enqueue_set_charging_state(bool enable);
+    void enqueue_set_charging_amps(int amps);
+    void enqueue_set_charging_limit(int limit);
+    
 private:
     TeslaBLEVehicle* parent_;
     std::queue<BLECommand> command_queue_;
@@ -87,6 +95,9 @@ private:
     void initiate_vcsec_auth(BLECommand& command);
     void initiate_infotainment_auth(BLECommand& command);
     void initiate_wake_sequence(BLECommand& command);
+    
+    // Counter management
+    void increment_counter_for_command(BLECommand& command, UniversalMessage_Domain domain);
 };
 
 } // namespace tesla_ble_vehicle

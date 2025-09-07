@@ -32,13 +32,6 @@ static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";
 static const char *const READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e";
 static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
 
-// Vehicle action types for CarServer
-typedef enum BLE_CarServer_VehicleAction_E {
-    SET_CHARGING_SWITCH,
-    SET_CHARGING_AMPS,
-    SET_CHARGING_LIMIT
-} BLE_CarServer_VehicleAction;
-
 /**
  * @brief Main Tesla BLE Vehicle component
  * 

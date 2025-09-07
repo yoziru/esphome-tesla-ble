@@ -3,6 +3,7 @@
 #include <functional>
 #include <esphome/core/helpers.h>
 #include <esphome/core/hal.h>
+#include <universal_message.pb.h>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -48,42 +49,6 @@ public:
 };
 
 /**
- * @brief Generic helper for creating BLE commands with reduced code duplication
- * 
- * This template class provides a standardized way to create BLE command functions
- * that handle the common pattern of:
- * 1. Get client from session manager
- * 2. Create message buffer
- * 3. Build message using client
- * 4. Send via BLE manager
- * 
- * Note: Template implementations are in common_impl.h to avoid incomplete type issues
- */
-class BLECommandHelper {
-public:
-    /**
-     * @brief Create a BLE command function using a TeslaBLEVehicle instance
-     * @param vehicle Pointer to the main vehicle component
-     * @param builder Lambda that builds the message using client, buffer, and length
-     * @return Function that can be passed to command_manager->enqueue_command()
-     */
-    template<typename BuilderFunc>
-    static std::function<int()> create_command(TeslaBLEVehicle* vehicle, BuilderFunc builder);
-    
-    /**
-     * @brief Create a BLE command function using explicit manager pointers
-     * @param session_manager Pointer to session manager
-     * @param ble_manager Pointer to BLE manager  
-     * @param builder Lambda that builds the message using client, buffer, and length
-     * @return Function that can be passed to command_manager->enqueue_command()
-     */
-    template<typename BuilderFunc>
-    static std::function<int()> create_command(SessionManager* session_manager, 
-                                               BLEManager* ble_manager, 
-                                               BuilderFunc builder);
-};
-
-/**
  * @brief Logging helpers to reduce code duplication
  */
 class LogHelper {
@@ -94,10 +59,10 @@ public:
     static void log_command_timeout(const char* tag, const std::string& command_name, 
                                    uint32_t timeout_ms, const char* context = "") {
         if (strlen(context) > 0) {
-            ESP_LOGE(tag, "[%s] Command timed out %s after %d ms", 
+            ESP_LOGE(tag, "[%s] Command timed out %s after %" PRIu32 " ms", 
                     command_name.c_str(), context, timeout_ms);
         } else {
-            ESP_LOGE(tag, "[%s] Command timed out after %d ms", 
+            ESP_LOGE(tag, "[%s] Command timed out after %" PRIu32 " ms", 
                     command_name.c_str(), timeout_ms);
         }
     }

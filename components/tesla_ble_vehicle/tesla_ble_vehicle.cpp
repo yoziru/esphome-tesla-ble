@@ -1,5 +1,5 @@
 #include "tesla_ble_vehicle.h"
-#include "common_impl.h"
+#include "common.h"
 #include "log.h"
 #include <esphome/core/helpers.h>
 #include <client.h>
@@ -366,24 +366,14 @@ void TeslaBLEVehicle::set_force_update_button(button::Button *button) {
 
 // Public vehicle actions
 int TeslaBLEVehicle::wake_vehicle() {
-    ESP_LOGI(TAG, "Wake vehicle requested");
+    ESP_LOGD(TAG, "Sending wake command");
     
-    if (!state_manager_->is_asleep()) {
-        ESP_LOGI(TAG, "Vehicle is already awake");
-        return 0;
+    if (!command_manager_) {
+        ESP_LOGE(TAG, "Command manager not available");
+        return -1;
     }
-
-    // Enqueue wake command via command manager
-    command_manager_->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        BLECommandHelper::create_command(this, [](auto* client, auto* buffer, auto* length) {
-            return client->buildVCSECActionMessage(
-                VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
-                buffer, length);
-        }),
-        "wake vehicle"
-    );
-
+    
+    command_manager_->enqueue_wake_vehicle();
     return 0;
 }
 
@@ -439,17 +429,12 @@ int TeslaBLEVehicle::set_charging_state(bool charging) {
         state_manager_->track_command_issued();
     }
     
-    command_manager_->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        BLECommandHelper::create_command(this, [charging](auto* client, auto* buffer, auto* length) {
-            return client->buildCarServerVehicleActionMessage(
-                buffer, length,
-                CarServer_VehicleAction_chargingStartStopAction_tag,
-                &charging);
-        }),
-        charging ? "start charging" : "stop charging"
-    );
-
+    if (!command_manager_) {
+        ESP_LOGE(TAG, "Command manager not available");
+        return -1;
+    }
+    
+    command_manager_->enqueue_set_charging_state(charging);
     return 0;
 }
 
@@ -474,18 +459,12 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
         state_manager_->track_command_issued();
     }
     
-    command_manager_->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        BLECommandHelper::create_command(this, [amps](auto* client, auto* buffer, auto* length) {
-            int32_t amps_param = static_cast<int32_t>(amps);
-            return client->buildCarServerVehicleActionMessage(
-                buffer, length,
-                CarServer_VehicleAction_setChargingAmpsAction_tag,
-                &amps_param);
-        }),
-        "set charging amps"
-    );
-
+    if (!command_manager_) {
+        ESP_LOGE(TAG, "Command manager not available");
+        return -1;
+    }
+    
+    command_manager_->enqueue_set_charging_amps(amps);
     return 0;
 }
 
@@ -504,18 +483,12 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
         state_manager_->track_command_issued();
     }
     
-    command_manager_->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        BLECommandHelper::create_command(this, [limit](auto* client, auto* buffer, auto* length) {
-            int32_t limit_param = static_cast<int32_t>(limit);
-            return client->buildCarServerVehicleActionMessage(
-                buffer, length,
-                CarServer_VehicleAction_chargingSetLimitAction_tag,
-                &limit_param);
-        }),
-        "set charging limit"
-    );
-
+    if (!command_manager_) {
+        ESP_LOGE(TAG, "Command manager not available");
+        return -1;
+    }
+    
+    command_manager_->enqueue_set_charging_limit(limit);
     return 0;
 }
 
@@ -523,23 +496,23 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
 void TeslaBLEVehicle::request_vehicle_data() {
     ESP_LOGD(TAG, "Vehicle data requested");
     
-    if (polling_manager_) {
-        polling_manager_->request_infotainment_poll();
+    if (!command_manager_) {
+        ESP_LOGE(TAG, "Command manager not available");
+        return;
     }
+    
+    command_manager_->enqueue_infotainment_poll();
 }
 
 void TeslaBLEVehicle::request_charging_data() {
     ESP_LOGD(TAG, "Requesting charging data from infotainment");
     
-    command_manager_->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        BLECommandHelper::create_command(this, [](auto* client, auto* buffer, auto* length) {
-            return client->buildCarServerGetVehicleDataMessage(
-                buffer, length,
-                CarServer_GetVehicleData_getChargeState_tag);
-        }),
-        "request charging data"
-    );
+    if (!command_manager_) {
+        ESP_LOGE(TAG, "Command manager not available");
+        return;
+    }
+    
+    command_manager_->enqueue_infotainment_poll();
 }
 
 void TeslaBLEVehicle::update_charging_amps_max_value(int32_t new_max) {
