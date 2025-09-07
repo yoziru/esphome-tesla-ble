@@ -50,7 +50,7 @@ public:
     // Session management
     bool load_session_info(UniversalMessage_Domain domain);
     bool save_session_info(const Signatures_SessionInfo& session_info, UniversalMessage_Domain domain);
-    bool update_session(const Signatures_SessionInfo& session_info, UniversalMessage_Domain domain);
+    int update_session(const Signatures_SessionInfo& session_info, UniversalMessage_Domain domain);
     void invalidate_session(UniversalMessage_Domain domain);
     
     // Authentication state

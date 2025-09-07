@@ -306,7 +306,8 @@ void MessageHandler::handle_session_info(const UniversalMessage_RoutableMessage&
     }
     
     // Update session
-    if (session_manager->update_session(session_info, domain)) {
+    int update_result = session_manager->update_session(session_info, domain);
+    if (update_result == 0) {
         ESP_LOGI(MESSAGE_HANDLER_TAG, "Updated session info for %s", domain_to_string(domain));
         
         // Notify command manager of successful auth
@@ -315,7 +316,7 @@ void MessageHandler::handle_session_info(const UniversalMessage_RoutableMessage&
             command_manager->handle_authentication_response(domain, true);
         }
     } else {
-        ESP_LOGE(MESSAGE_HANDLER_TAG, "Failed to update session info for %s", domain_to_string(domain));
+        ESP_LOGE(MESSAGE_HANDLER_TAG, "Failed to update session info for %s: %d", domain_to_string(domain), update_result);
         
         // Notify command manager of auth failure
         auto* command_manager = parent_->get_command_manager();
