@@ -212,29 +212,65 @@ bool SessionManager::save_session_info(const Signatures_SessionInfo& session_inf
     return true;
 }
 
-bool SessionManager::update_session(const Signatures_SessionInfo& session_info, UniversalMessage_Domain domain) {
+int SessionManager::update_session(const Signatures_SessionInfo& session_info, UniversalMessage_Domain domain) {
     ESP_LOGD(SESSION_MANAGER_TAG, "Updating session for %s", domain_to_string(domain));
     
-    // Update the Tesla client
+    // Get the peer to check current state
     auto peer = tesla_client_->getPeer(domain);
     if (!peer) {
         ESP_LOGE(SESSION_MANAGER_TAG, "Failed to get peer for domain %s", domain_to_string(domain));
-        return false;
+        return -1;
     }
     
+    // Log the counter comparison for debugging
+    ESP_LOGD(SESSION_MANAGER_TAG, "Session info counter comparison for %s: current=%u, received=%u", 
+             domain_to_string(domain), peer->getCounter(), session_info.counter);
+    
+    // Always try to update with the vehicle's session info first
     int result = peer->updateSession(const_cast<Signatures_SessionInfo*>(&session_info));
-    if (result != 0) {
+    
+    if (result == 0) {
+        // Successful update - save the session info
+        ESP_LOGI(SESSION_MANAGER_TAG, "Successfully updated session for %s with counter %u", 
+                 domain_to_string(domain), session_info.counter);
+        if (!save_session_info(session_info, domain)) {
+            ESP_LOGW(SESSION_MANAGER_TAG, "Failed to save updated session info for %s", domain_to_string(domain));
+        }
+        return 0;
+    } else if (result == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION || result == TeslaBLE::TeslaBLE_Status_E_ERROR_COUNTER_REPLAY) {
+        // Counter anti-replay or rollback - the vehicle's session info is the authoritative truth
+        // We need to force our session to match the vehicle's state
+        ESP_LOGW(SESSION_MANAGER_TAG, "Counter anti-replay detected for %s, forcing session to match vehicle's authoritative state (vehicle counter: %u, our counter: %u)", 
+                 domain_to_string(domain), session_info.counter, peer->getCounter());
+        
+        // Invalidate and erase stored session first
+        invalidate_session(domain);
+        
+        // Force update peer state directly with vehicle's authoritative values
+        peer->setCounter(session_info.counter);
+        peer->setEpoch(session_info.epoch);
+        peer->setTimeZero(std::time(nullptr) - session_info.clock_time);
+        peer->setIsValid(true);
+        
+        // Load Tesla key if provided
+        if (session_info.publicKey.size > 0) {
+            peer->loadTeslaKey(session_info.publicKey.bytes, session_info.publicKey.size);
+        }
+        
+        // Save the authoritative session info from the vehicle
+        if (!save_session_info(session_info, domain)) {
+            ESP_LOGW(SESSION_MANAGER_TAG, "Failed to save authoritative session info for %s", domain_to_string(domain));
+            return -1;
+        }
+        
+        ESP_LOGI(SESSION_MANAGER_TAG, "Forced session update for %s with vehicle's authoritative counter %u", 
+                 domain_to_string(domain), session_info.counter);
+        return 0;
+    } else {
+        // Other errors
         ESP_LOGE(SESSION_MANAGER_TAG, "Failed to update session for %s: %d", domain_to_string(domain), result);
-        return false;
+        return result;
     }
-    
-    // Save to NVS
-    if (!save_session_info(session_info, domain)) {
-        ESP_LOGW(SESSION_MANAGER_TAG, "Failed to save updated session info for %s", domain_to_string(domain));
-        // Don't return false here as the session is still updated in memory
-    }
-    
-    return true;
 }
 
 void SessionManager::invalidate_session(UniversalMessage_Domain domain) {

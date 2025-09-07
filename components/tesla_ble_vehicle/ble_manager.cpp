@@ -118,9 +118,9 @@ void BLEManager::process_read_queue() {
     // Check for buffer overflow before appending
     size_t new_size = read_buffer_.size() + chunk.buffer.size();
     if (new_size > MAX_BLE_MESSAGE_SIZE) {
-        ESP_LOGE(BLE_MANAGER_TAG, "Message size would exceed maximum (%zu > %zu bytes)", 
+        ESP_LOGE(BLE_MANAGER_TAG, "Message size would exceed maximum (%zu > %zu bytes), discarding message", 
                  new_size, MAX_BLE_MESSAGE_SIZE);
-        handle_read_error("Message too large");
+        clear_read_buffer();  // Immediately clear buffer to prevent corruption
         return;
     }
 
@@ -168,7 +168,16 @@ int BLEManager::get_expected_message_length() {
     }
     
     // First two bytes contain the message length in big-endian format
-    return (read_buffer_[0] << 8) | read_buffer_[1];
+    int length = (read_buffer_[0] << 8) | read_buffer_[1];
+    
+    // Validate that the length is reasonable (not too large)
+    if (length > MAX_BLE_MESSAGE_SIZE - 2) {
+        ESP_LOGW(BLE_MANAGER_TAG, "Invalid message length: %d (must be 0-%zu)", 
+                 length, MAX_BLE_MESSAGE_SIZE - 2);
+        return -1;
+    }
+    
+    return length;
 }
 
 void BLEManager::process_complete_message() {

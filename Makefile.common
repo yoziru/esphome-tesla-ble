@@ -26,7 +26,7 @@ validate-config: check-uv ## Validate the configuration without building the bin
 	uvx --with pip esphome==$(ESPHOME_VERSION) config $(TARGET)
 
 # Build firmware.bin if YAML sources or dependencies change
-.esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin: $(TARGET) packages/*.yml $(BOARD_FILES) requirements.txt $(shell command -v uv 2>/dev/null)
+.esphome/build/$(PROJECT)/.pioenvs/$(PROJECT)/firmware.bin: $(TARGET) packages/*.yml $(BOARD_FILES) components/**/*.* requirements.txt $(shell command -v uv 2>/dev/null)
 	$(UV_CHECK)
 	uvx --with pip esphome==$(ESPHOME_VERSION) compile $(TARGET)
 

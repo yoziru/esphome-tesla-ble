@@ -2,7 +2,6 @@
 #include "tesla_ble_vehicle.h"
 #include <client.h>
 #include "log.h"
-#include "log.h"
 #include <esphome/core/helpers.h>
 
 namespace esphome {
@@ -100,8 +99,14 @@ void MessageHandler::handle_vcsec_message(const UniversalMessage_RoutableMessage
         return;
     }
     
+    auto* client = session_manager->get_client();
+    if (!client) {
+        ESP_LOGE(MESSAGE_HANDLER_TAG, "Tesla client not available");
+        return;
+    }
+    
     VCSEC_FromVCSECMessage vcsec_message = VCSEC_FromVCSECMessage_init_default;
-    int result = session_manager->get_client()->parseFromVCSECMessage(
+    int result = client->parseFromVCSECMessage(
         const_cast<UniversalMessage_RoutableMessage_protobuf_message_as_bytes_t*>(&message.payload.protobuf_message_as_bytes), &vcsec_message);
     
     if (result != 0) {
@@ -140,7 +145,7 @@ void MessageHandler::handle_vcsec_message(const UniversalMessage_RoutableMessage
         default:
             // Probably information request with public key
             VCSEC_InformationRequest info_message = VCSEC_InformationRequest_init_default;
-            result = session_manager->get_client()->parseVCSECInformationRequest(
+            result = client->parseVCSECInformationRequest(
                 const_cast<UniversalMessage_RoutableMessage_protobuf_message_as_bytes_t*>(&message.payload.protobuf_message_as_bytes), &info_message);
             
             if (result == 0) {
@@ -160,6 +165,12 @@ void MessageHandler::handle_carserver_message(const UniversalMessage_RoutableMes
     auto* session_manager = parent_->get_session_manager();
     if (!session_manager) {
         ESP_LOGE(MESSAGE_HANDLER_TAG, "Session manager not available");
+        return;
+    }
+    
+    auto* client = session_manager->get_client();
+    if (!client) {
+        ESP_LOGE(MESSAGE_HANDLER_TAG, "Tesla client not available");
         return;
     }
     
@@ -232,8 +243,23 @@ void MessageHandler::handle_carserver_message(const UniversalMessage_RoutableMes
             }
         }
     } else {
-        // No action status, assume success for data requests
-        update_command_state_on_response(message);
+        // No action status - could be a data request response or missing status
+        // Only mark as completed if we have a pending infotainment command
+        auto* command_manager = parent_->get_command_manager();
+        if (command_manager && command_manager->has_pending_commands()) {
+            auto* current_command = command_manager->get_current_command();
+            if (current_command && current_command->domain == UniversalMessage_Domain_DOMAIN_INFOTAINMENT) {
+                ESP_LOGD(MESSAGE_HANDLER_TAG, "[%s] No action status received, assuming data request success", 
+                         current_command->execute_name.c_str());
+                command_manager->mark_command_completed();
+            } else {
+                // Not our command, just update state normally
+                update_command_state_on_response(message);
+            }
+        } else {
+            // No pending commands, just update state normally
+            update_command_state_on_response(message);
+        }
     }
 }
 
@@ -280,7 +306,8 @@ void MessageHandler::handle_session_info(const UniversalMessage_RoutableMessage&
     }
     
     // Update session
-    if (session_manager->update_session(session_info, domain)) {
+    int update_result = session_manager->update_session(session_info, domain);
+    if (update_result == 0) {
         ESP_LOGI(MESSAGE_HANDLER_TAG, "Updated session info for %s", domain_to_string(domain));
         
         // Notify command manager of successful auth
@@ -289,7 +316,7 @@ void MessageHandler::handle_session_info(const UniversalMessage_RoutableMessage&
             command_manager->handle_authentication_response(domain, true);
         }
     } else {
-        ESP_LOGE(MESSAGE_HANDLER_TAG, "Failed to update session info for %s", domain_to_string(domain));
+        ESP_LOGE(MESSAGE_HANDLER_TAG, "Failed to update session info for %s: %d", domain_to_string(domain), update_result);
         
         // Notify command manager of auth failure
         auto* command_manager = parent_->get_command_manager();

@@ -108,12 +108,12 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     if (charge_state.which_optional_battery_level && battery_level_sensor_) {
         float battery_level = static_cast<float>(charge_state.optional_battery_level.battery_level);
         
-        // Validate battery level is within reasonable bounds [0-100]
-        if (battery_level >= 0.0f && battery_level <= 100.0f) {
+        // Validate battery level is within reasonable bounds [0-100] and is a valid number
+        if (battery_level >= 0.0f && battery_level <= 100.0f && std::isfinite(battery_level)) {
             ESP_LOGD(STATE_MANAGER_TAG, "Updating battery level to %.1f%%", battery_level);
             publish_sensor_state(battery_level_sensor_, battery_level);
         } else {
-            ESP_LOGW(STATE_MANAGER_TAG, "Invalid battery level received: %.1f%% (expected 0-100)", battery_level);
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid battery level received: %.1f%% (expected 0-100, finite)", battery_level);
         }
     }
     
@@ -143,12 +143,12 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         
         // Update power sensor with validation
         if (has_calculated_power) {
-            // Validate power is non-negative (Tesla max is ~250kW at Superchargers)
-            if (calculated_power_w >= 0.0f && calculated_power_w <= 300000.0f) {
+            // Validate power is non-negative, finite, and within Tesla limits (~250kW at Superchargers)
+            if (calculated_power_w >= 0.0f && calculated_power_w <= 300000.0f && std::isfinite(calculated_power_w)) {
                 ESP_LOGD(STATE_MANAGER_TAG, "Updating charger power to %.3fW", calculated_power_w);
                 publish_sensor_state(charger_power_sensor_, calculated_power_w);
             } else {
-                ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger power calculated/received: %.3fW (expected 0-300000)", calculated_power_w);
+                ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger power calculated/received: %.3fW (expected 0-300000, finite)", calculated_power_w);
             }
         }
     }
@@ -157,12 +157,12 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     if (charge_state.which_optional_charger_voltage && charger_voltage_sensor_) {
         float voltage = static_cast<float>(charge_state.optional_charger_voltage.charger_voltage);
         
-        // Validate voltage (typical range 100-500V for Tesla chargers)
-        if (voltage >= 0.0f && voltage <= 600.0f) {
+        // Validate voltage (typical range 100-500V for Tesla chargers) and is finite
+        if (voltage >= 0.0f && voltage <= 600.0f && std::isfinite(voltage)) {
             ESP_LOGD(STATE_MANAGER_TAG, "Updating charger voltage to %.1fV", voltage);
             publish_sensor_state(charger_voltage_sensor_, voltage);
         } else {
-            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger voltage received: %.1fV (expected 0-600)", voltage);
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger voltage received: %.1fV (expected 0-600, finite)", voltage);
         }
     }
     
@@ -170,12 +170,12 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     if (charge_state.which_optional_charger_actual_current && charger_current_sensor_) {
         float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
         
-        // Validate current (typical range 0-80A for Tesla chargers)
-        if (current >= 0.0f && current <= 100.0f) {
+        // Validate current (typical range 0-80A for Tesla chargers) and is finite
+        if (current >= 0.0f && current <= 100.0f && std::isfinite(current)) {
             ESP_LOGD(STATE_MANAGER_TAG, "Updating charger current to %.1fA", current);
             publish_sensor_state(charger_current_sensor_, current);
         } else {
-            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger current received: %.1fA (expected 0-100)", current);
+            ESP_LOGW(STATE_MANAGER_TAG, "Invalid charger current received: %.1fA (expected 0-100, finite)", current);
         }
     }
     
@@ -499,7 +499,8 @@ void VehicleStateManager::track_command_issued() {
 
 bool VehicleStateManager::should_delay_infotainment_request() const {
     uint32_t now = millis();
-    uint32_t time_since_command = now - last_command_time_;
+    // Rollover-safe time calculation
+    uint32_t time_since_command = Utils::time_since(now, last_command_time_);
     
     bool should_delay = time_since_command < COMMAND_DELAY_TIME;
     if (should_delay) {

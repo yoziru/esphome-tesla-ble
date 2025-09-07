@@ -1,6 +1,6 @@
 #include "polling_manager.h"
 #include "tesla_ble_vehicle.h"
-#include "common_impl.h"
+#include "common.h"
 #include <client.h>
 #include "log.h"
 #include <vector>
@@ -95,6 +95,8 @@ void PollingManager::update_vehicle_state(bool is_awake, bool is_charging, bool 
             ESP_LOGI(POLLING_MANAGER_TAG, "Vehicle just woke up - tracking wake time and requesting immediate infotainment poll");
             request_infotainment_poll(true);  // true = bypass delay
             last_infotainment_poll_ = millis();
+            // Cancel pending initial infotainment poll since we're doing it now due to wake
+            pending_initial_infotainment_poll_ = false;
         }
     }
     
@@ -125,7 +127,7 @@ bool PollingManager::should_poll_infotainment() {
     
     // Give a grace period after connection to let VCSEC establish vehicle state first
     uint32_t time_since_connection = time_since(connection_time_);
-    if (connection_time_ > 0 && time_since_connection < 5000) {  // 5 second grace period
+    if (connection_time_ > 0 && time_since_connection < CONNECTION_GRACE_PERIOD) {
         ESP_LOGV(POLLING_MANAGER_TAG, "Within connection grace period (%u ms), skipping infotainment poll", time_since_connection);
         return false;
     }
@@ -208,16 +210,7 @@ void PollingManager::request_vcsec_poll() {
         return;
     }
     
-    command_manager->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
-            return client->buildVCSECInformationRequestMessage(
-                VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
-                buffer,
-                length);
-        }),
-        "VCSEC status poll"
-    );
+    command_manager->enqueue_vcsec_poll();
 }
 
 void PollingManager::request_infotainment_poll(bool bypass_delay) {
@@ -225,9 +218,11 @@ void PollingManager::request_infotainment_poll(bool bypass_delay) {
     
     // Check if we should delay this request due to recent commands
     if (!bypass_delay) {
-        auto* state_manager = parent_->get_state_manager();
-        if (state_manager && state_manager->should_delay_infotainment_request()) {
-            ESP_LOGD(POLLING_MANAGER_TAG, "Delaying infotainment poll due to recent command");
+        uint32_t now = millis();
+        uint32_t time_since_last = Utils::time_since(now, last_infotainment_poll_);
+        constexpr uint32_t MIN_COMMAND_INTERVAL = 2000; // 2 seconds minimum between commands
+        if (time_since_last < MIN_COMMAND_INTERVAL) {
+            ESP_LOGV(POLLING_MANAGER_TAG, "Skipping infotainment poll - too soon after last poll (%u ms ago)", time_since_last);
             return;
         }
     }
@@ -238,16 +233,7 @@ void PollingManager::request_infotainment_poll(bool bypass_delay) {
         return;
     }
     
-    command_manager->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
-            // Request charging data
-            return client->buildCarServerGetVehicleDataMessage(
-                buffer, length,
-                CarServer_GetVehicleData_getChargeState_tag);
-        }),
-        "infotainment data poll | charging"
-    );
+    command_manager->enqueue_infotainment_poll();
 }
 
 void PollingManager::request_wake_and_poll() {
@@ -259,44 +245,34 @@ void PollingManager::request_wake_and_poll() {
         return;
     }
     
-    // First wake the vehicle
-    command_manager->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
-            return client->buildVCSECActionMessage(
-                VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
-                buffer,
-                length);
-        }),
-        "wake vehicle"
-    );
+    // Wake command
+    command_manager->enqueue_wake_vehicle();
     
     // Then request VCSEC poll to get updated status
-    command_manager->enqueue_command(
-        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
-        BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
-            return client->buildVCSECInformationRequestMessage(
-                VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
-                buffer,
-                length);
-        }),
-        "data update after wake"
-    );
+    command_manager->enqueue_vcsec_poll();
 }
 
 void PollingManager::force_infotainment_poll() {
     ESP_LOGI(POLLING_MANAGER_TAG, "Force infotainment poll requested (bypassing delay)");
-    request_infotainment_poll(true);
+    auto* command_manager = parent_->get_command_manager();
+    if (command_manager) {
+        command_manager->enqueue_infotainment_poll();
+    }
 }
 
 void PollingManager::force_full_update() {
     ESP_LOGI(POLLING_MANAGER_TAG, "Force full update requested (no wake command)");
     
+    auto* command_manager = parent_->get_command_manager();
+    if (!command_manager) {
+        return;
+    }
+    
     // Request fresh VCSEC data first (to get current sleep/awake status)
-    request_vcsec_poll();
+    command_manager->enqueue_vcsec_poll();
     
     // Then request infotainment data (bypassing any delays)
-    force_infotainment_poll();
+    command_manager->enqueue_infotainment_poll();
 }
 
 uint32_t PollingManager::time_since_last_vcsec_poll() const {
@@ -315,9 +291,7 @@ uint32_t PollingManager::time_since_last_infotainment_poll() const {
 
 // Rollover-safe time calculations
 uint32_t PollingManager::time_since(uint32_t timestamp) const {
-    uint32_t now = millis();
-    // This works correctly even with millis() rollover due to unsigned arithmetic
-    return now - timestamp;
+    return Utils::time_since(millis(), timestamp);
 }
 
 bool PollingManager::has_elapsed(uint32_t timestamp, uint32_t interval) const {
@@ -343,7 +317,10 @@ void PollingManager::reset_polling_timestamps() {
 void PollingManager::handle_initial_vcsec_poll_complete() {
     if (pending_initial_infotainment_poll_) {
         ESP_LOGI(POLLING_MANAGER_TAG, "Initial VCSEC poll complete - requesting initial infotainment poll");
-        request_infotainment_poll(true);
+        auto* command_manager = parent_->get_command_manager();
+        if (command_manager) {
+            command_manager->enqueue_infotainment_poll();
+        }
         last_infotainment_poll_ = millis();
         pending_initial_infotainment_poll_ = false;
     }

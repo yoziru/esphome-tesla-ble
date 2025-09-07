@@ -25,6 +25,7 @@ public:
     static constexpr uint32_t DEFAULT_INFOTAINMENT_POLL_INTERVAL_AWAKE = 30000;   // 30s - when awake but not active
     static constexpr uint32_t DEFAULT_INFOTAINMENT_POLL_INTERVAL_ACTIVE = 10000;  // 10s - when charging or unlocked
     static constexpr uint32_t INITIAL_CONNECTION_DELAY = 10000;                   // 10s - delay after connection
+    static constexpr uint32_t CONNECTION_GRACE_PERIOD = 5000;                     // 5s - grace period for VCSEC establishment
     
     explicit PollingManager(TeslaBLEVehicle* parent);
     

@@ -1,13 +1,41 @@
 #include "command_manager.h"
 #include "tesla_ble_vehicle.h"
-#include "common_impl.h"
 #include <client.h>
 #include "log.h"
+#include "common.h"
 
 namespace esphome {
 namespace tesla_ble_vehicle {
 
-BLECommand::BLECommand(UniversalMessage_Domain d, std::function<int()> e, std::string n)
+// Helper function to create simple commands
+template<typename BuilderFunc>
+std::function<int()> create_command(TeslaBLEVehicle* vehicle, BuilderFunc builder) {
+    return [vehicle, builder]() {
+        auto* session_manager = vehicle->get_session_manager();
+        auto* ble_manager = vehicle->get_ble_manager();
+        
+        if (!session_manager || !ble_manager) {
+            return -1;
+        }
+        
+        auto* client = session_manager->get_client();
+        if (!client) {
+            return -1;
+        }
+        
+        unsigned char message_buffer[MAX_BLE_MESSAGE_SIZE];
+        size_t message_length = MAX_BLE_MESSAGE_SIZE;
+        
+        int result = builder(client, message_buffer, &message_length);
+        if (result != 0) {
+            return result;
+        }
+        
+        return ble_manager->write_message(message_buffer, message_length);
+    };
+}
+
+BLECommand::BLECommand(UniversalMessage_Domain d, std::function<int()> e, const std::string& n)
     : domain(d), execute(std::move(e)), execute_name(std::move(n)), 
       state(BLECommandState::IDLE), started_at(millis()), last_tx_at(0), retry_count(0) {}
 
@@ -17,6 +45,13 @@ CommandManager::CommandManager(TeslaBLEVehicle* parent)
 void CommandManager::enqueue_command(UniversalMessage_Domain domain, 
                                     std::function<int()> execute, 
                                     const std::string& name) {
+    // Prevent unbounded queue growth
+    if (command_queue_.size() >= MAX_QUEUE_SIZE) {
+        ESP_LOGE(COMMAND_MANAGER_TAG, "Command queue full (%zu/%zu), rejecting command: %s", 
+                 command_queue_.size(), MAX_QUEUE_SIZE, name.c_str());
+        return;
+    }
+    
     ESP_LOGD(COMMAND_MANAGER_TAG, "Enqueueing command: %s (domain: %s)", 
              name.c_str(), domain_to_string(domain));
     
@@ -31,10 +66,10 @@ void CommandManager::process_command_queue() {
     BLECommand& current_command = command_queue_.front();
     uint32_t now = millis();
 
-    // Check for overall command timeout
-    if (now - current_command.started_at > COMMAND_TIMEOUT) {
-        ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Command timed out after %d ms",
-                 current_command.execute_name.c_str(), COMMAND_TIMEOUT);
+    // Check for overall command timeout (rollover-safe)
+    uint32_t time_since_start = Utils::time_since(now, current_command.started_at);
+    if (time_since_start > COMMAND_TIMEOUT) {
+        LogHelper::log_command_timeout(COMMAND_MANAGER_TAG, current_command.execute_name.c_str(), COMMAND_TIMEOUT);
         mark_command_failed("Overall timeout");
         return;
     }
@@ -59,11 +94,19 @@ void CommandManager::process_command_queue() {
             break;
             
         case BLECommandState::WAITING_FOR_RESPONSE:
-            // Check for response timeout
-            if (now - current_command.last_tx_at > MAX_LATENCY) {
-                ESP_LOGW(COMMAND_MANAGER_TAG, "[%s] Response timeout, retrying",
-                         current_command.execute_name.c_str());
+            // Check for response timeout (rollover-safe)
+            uint32_t time_since_tx = Utils::time_since(now, current_command.last_tx_at);
+            if (time_since_tx > MAX_LATENCY) {
+                LogHelper::log_command_retry(COMMAND_MANAGER_TAG, current_command.execute_name.c_str(), 
+                                           current_command.retry_count + 1, MAX_RETRIES + 1, "Response timeout");
                 current_command.state = BLECommandState::READY;
+            }
+            // Check for overall command timeout even in WAITING_FOR_RESPONSE (rollover-safe)
+            if (time_since_start > COMMAND_TIMEOUT) {
+                LogHelper::log_command_timeout(COMMAND_MANAGER_TAG, current_command.execute_name.c_str(), 
+                                              COMMAND_TIMEOUT, "in WAITING_FOR_RESPONSE");
+                mark_command_failed("Response timeout");
+                return;
             }
             break;
     }
@@ -104,8 +147,9 @@ void CommandManager::process_idle_command(BLECommand& command) {
 void CommandManager::process_auth_waiting_command(BLECommand& command) {
     uint32_t now = millis();
     
-    // Check for auth timeout
-    if (now - command.last_tx_at > MAX_LATENCY) {
+    // Check for auth timeout (rollover-safe)
+    uint32_t time_since_tx = Utils::time_since(now, command.last_tx_at);
+    if (time_since_tx > MAX_LATENCY) {
         switch (command.state) {
             case BLECommandState::WAITING_FOR_VCSEC_AUTH:
                 initiate_vcsec_auth(command);
@@ -160,7 +204,9 @@ void CommandManager::process_auth_waiting_command(BLECommand& command) {
 void CommandManager::process_ready_command(BLECommand& command) {
     uint32_t now = millis();
     
-    if (now - command.last_tx_at > MAX_LATENCY) {
+    // Check if enough time has passed since last transmission (rollover-safe)
+    uint32_t time_since_tx = Utils::time_since(now, command.last_tx_at);
+    if (time_since_tx > MAX_LATENCY) {
         if (command.retry_count >= MAX_RETRIES) {
             ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Max retries exceeded", 
                      command.execute_name.c_str());
@@ -168,8 +214,8 @@ void CommandManager::process_ready_command(BLECommand& command) {
             return;
         }
         
-        ESP_LOGI(COMMAND_MANAGER_TAG, "[%s] Executing command (attempt %d/%d)", 
-                 command.execute_name.c_str(), command.retry_count + 1, MAX_RETRIES + 1);
+        LogHelper::log_command_retry(COMMAND_MANAGER_TAG, command.execute_name.c_str(), 
+                                   command.retry_count + 1, MAX_RETRIES + 1);
         
         int result = command.execute();
         command.last_tx_at = now;
@@ -246,7 +292,7 @@ void CommandManager::initiate_wake_sequence(BLECommand& command) {
     ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Sending wake command", command.execute_name.c_str());
     
     // Execute wake command directly to avoid recursive queue operations
-    auto wake_command = BLECommandHelper::create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+    auto wake_command = create_command(parent_, [](auto* client, auto* buffer, auto* length) {
         return client->buildVCSECActionMessage(
             VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
             buffer, length);
@@ -289,7 +335,8 @@ void CommandManager::retry_command(BLECommand& command) {
         }
         
         command.retry_count++;
-        command.last_tx_at = 0;  // Trigger immediate processing
+        // Add a small delay before retry to prevent tight loops
+        command.last_tx_at = millis() - (MAX_LATENCY - 100);  // Will be ready in 100ms
     }
 }
 
@@ -378,6 +425,85 @@ void CommandManager::update_command_state(BLECommandState new_state) {
     } else {
         ESP_LOGW(COMMAND_MANAGER_TAG, "Attempted to update command state but queue is empty");
     }
+}
+
+// Simple command creation helpers
+void CommandManager::enqueue_wake_vehicle() {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
+        create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECActionMessage(
+                VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
+                buffer, length);
+        }),
+        "wake vehicle"
+    );
+}
+
+void CommandManager::enqueue_vcsec_poll() {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY,
+        create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildVCSECInformationRequestMessage(
+                VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS,
+                buffer, length);
+        }),
+        "VCSEC status poll"
+    );
+}
+
+void CommandManager::enqueue_infotainment_poll() {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            return client->buildCarServerGetVehicleDataMessage(
+                buffer, length, CarServer_GetVehicleData_getChargeState_tag);
+        }),
+        "infotainment data poll"
+    );
+}
+
+void CommandManager::enqueue_set_charging_state(bool enable) {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [enable](auto* client, auto* buffer, auto* length) {
+            // Use Tesla's standard charging start/stop action with proper enum values
+            int32_t action = enable ? 1 : 0;  // 1 = start, 0 = stop
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
+                CarServer_VehicleAction_chargingStartStopAction_tag,
+                &action);
+        }),
+        enable ? "start charging" : "stop charging"
+    );
+}
+
+void CommandManager::enqueue_set_charging_amps(int amps) {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [amps](auto* client, auto* buffer, auto* length) {
+            int32_t amps_param = static_cast<int32_t>(amps);
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
+                CarServer_VehicleAction_setChargingAmpsAction_tag,
+                &amps_param);
+        }),
+        "set charging amps"
+    );
+}
+
+void CommandManager::enqueue_set_charging_limit(int limit) {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [limit](auto* client, auto* buffer, auto* length) {
+            int32_t limit_param = static_cast<int32_t>(limit);
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
+                CarServer_VehicleAction_chargingSetLimitAction_tag,
+                &limit_param);
+        }),
+        "set charging limit"
+    );
 }
 
 } // namespace tesla_ble_vehicle
