@@ -217,9 +217,6 @@ void CommandManager::process_ready_command(BLECommand& command) {
         LogHelper::log_command_retry(COMMAND_MANAGER_TAG, command.execute_name.c_str(), 
                                    command.retry_count + 1, MAX_RETRIES + 1);
         
-        // Increment counter before each command execution (Tesla protocol requirement)
-        increment_counter_for_command(command, command.domain);
-        
         int result = command.execute();
         command.last_tx_at = now;
         command.retry_count++;
@@ -300,8 +297,6 @@ void CommandManager::initiate_wake_sequence(BLECommand& command) {
             VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE,
             buffer, length);
     });
-    
-    // Do NOT increment counter here; handled in process_ready_command
     
     int result = wake_command();
     if (result == 0) {
@@ -430,33 +425,6 @@ void CommandManager::update_command_state(BLECommandState new_state) {
     } else {
         ESP_LOGW(COMMAND_MANAGER_TAG, "Attempted to update command state but queue is empty");
     }
-}
-
-void CommandManager::increment_counter_for_command(BLECommand& command, UniversalMessage_Domain domain) {
-    ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Incrementing counter for domain %s", 
-             command.execute_name.c_str(), domain_to_string(domain));
-    
-    auto* session_manager = parent_->get_session_manager();
-    if (!session_manager) {
-        ESP_LOGE(COMMAND_MANAGER_TAG, "Session manager not available for counter increment");
-        return;
-    }
-    
-    auto* client = session_manager->get_client();
-    if (!client) {
-        ESP_LOGE(COMMAND_MANAGER_TAG, "Tesla client not available for counter increment");
-        return;
-    }
-    
-    auto* peer = client->getPeer(domain);
-    if (!peer) {
-        ESP_LOGE(COMMAND_MANAGER_TAG, "Peer not available for domain %s", domain_to_string(domain));
-        return;
-    }
-    
-    peer->incrementCounter();
-    ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Counter incremented for domain %s", 
-             command.execute_name.c_str(), domain_to_string(domain));
 }
 
 // Simple command creation helpers

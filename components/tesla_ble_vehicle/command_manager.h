@@ -95,9 +95,6 @@ private:
     void initiate_vcsec_auth(BLECommand& command);
     void initiate_infotainment_auth(BLECommand& command);
     void initiate_wake_sequence(BLECommand& command);
-    
-    // Counter management
-    void increment_counter_for_command(BLECommand& command, UniversalMessage_Domain domain);
 };
 
 } // namespace tesla_ble_vehicle
