@@ -24,7 +24,7 @@ std::function<int()> create_command(TeslaBLEVehicle* vehicle, BuilderFunc builde
         }
         
         unsigned char message_buffer[MAX_BLE_MESSAGE_SIZE];
-        size_t message_length = sizeof(message_buffer);
+        size_t message_length = MAX_BLE_MESSAGE_SIZE;
         
         int result = builder(client, message_buffer, &message_length);
         if (result != 0) {
