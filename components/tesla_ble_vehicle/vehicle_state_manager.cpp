@@ -3,6 +3,7 @@
 #include <esphome/core/helpers.h>
 #include <cmath>
 #include <algorithm>
+#include <client.h>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -227,6 +228,83 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charge flap status if available
     if (charge_state.which_optional_charge_port_door_open) {
         update_charge_flap_open(charge_state.optional_charge_port_door_open.charge_port_door_open);
+    }
+    
+    // Process SOC data using tesla-ble library
+    update_soc_data(charge_state);
+}
+
+void VehicleStateManager::update_soc_data(const CarServer_ChargeState& charge_state) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Processing SOC data using tesla-ble library");
+    
+    // Use established client access pattern
+    auto* session_manager = parent_->get_session_manager();
+    if (!session_manager) {
+        ESP_LOGW(STATE_MANAGER_TAG, "Session manager not available for SOC");
+        return;
+    }
+    
+    auto* client = session_manager->get_client();
+    if (!client) {
+        ESP_LOGW(STATE_MANAGER_TAG, "Tesla client not available for SOC extraction");
+        return;
+    }
+    
+    // Create VehicleData wrapper for SOC extraction
+    CarServer_VehicleData vehicle_data = CarServer_VehicleData_init_default;
+    vehicle_data.has_charge_state = true;
+    vehicle_data.charge_state = charge_state;
+    
+    // Extract SOC using production-ready tesla-ble method
+    TeslaBLE::SOCData soc_data;
+    int result = client->extractSOCFromVehicleData(&vehicle_data, &soc_data);
+    
+    if (result == TeslaBLE::TeslaBLE_Status_E_OK && soc_data.valid) {
+        ESP_LOGD(STATE_MANAGER_TAG, "SOC extraction successful: battery=%d%%, usable=%d%%, limit=%d%%", 
+                 soc_data.battery_level, soc_data.usable_battery_level, soc_data.charge_limit_soc);
+                 
+        // Update battery level sensor with SOC data (if available and valid)
+        if (battery_level_sensor_ && soc_data.battery_level != -1) {
+            float battery_level = static_cast<float>(soc_data.battery_level);
+            
+            // Validate SOC battery level is within reasonable bounds
+            if (battery_level >= 0.0f && battery_level <= 100.0f && std::isfinite(battery_level)) {
+                ESP_LOGD(STATE_MANAGER_TAG, "Updating battery level sensor with SOC data: %.1f%%", battery_level);
+                publish_sensor_state(battery_level_sensor_, battery_level);
+            } else {
+                ESP_LOGW(STATE_MANAGER_TAG, "Invalid SOC battery level: %.1f%% (expected 0-100, finite)", battery_level);
+            }
+        }
+        
+        // Update usable battery level sensor (NEW)
+        if (usable_battery_level_sensor_ && soc_data.usable_battery_level != -1) {
+            float usable_battery_level = static_cast<float>(soc_data.usable_battery_level);
+            
+            // Validate usable battery level is within reasonable bounds
+            if (usable_battery_level >= 0.0f && usable_battery_level <= 100.0f && std::isfinite(usable_battery_level)) {
+                ESP_LOGD(STATE_MANAGER_TAG, "Updating usable battery level sensor with SOC data: %.1f%%", usable_battery_level);
+                publish_sensor_state(usable_battery_level_sensor_, usable_battery_level);
+            } else {
+                ESP_LOGW(STATE_MANAGER_TAG, "Invalid usable battery level: %.1f%% (expected 0-100, finite)", usable_battery_level);
+            }
+        }
+        
+        // Update charge limit sensor (NEW)
+        if (charge_limit_sensor_ && soc_data.charge_limit_soc != -1) {
+            float charge_limit = static_cast<float>(soc_data.charge_limit_soc);
+            
+            // Validate charge limit is within reasonable bounds
+            if (charge_limit >= 0.0f && charge_limit <= 100.0f && std::isfinite(charge_limit)) {
+                ESP_LOGD(STATE_MANAGER_TAG, "Updating charge limit sensor with SOC data: %.1f%%", charge_limit);
+                publish_sensor_state(charge_limit_sensor_, charge_limit);
+            } else {
+                ESP_LOGW(STATE_MANAGER_TAG, "Invalid charge limit: %.1f%% (expected 0-100, finite)", charge_limit);
+            }
+        }
+    } else {
+        ESP_LOGW(STATE_MANAGER_TAG, "SOC extraction failed: result=%d, valid=%s", 
+                 result, soc_data.valid ? "true" : "false");
+        ESP_LOGD(STATE_MANAGER_TAG, "Falling back to original battery level processing");
     }
 }
 
