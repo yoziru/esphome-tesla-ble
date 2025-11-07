@@ -103,8 +103,10 @@ The component exposes:
 
 ### Prerequisites
 - Python 3.10+
-- `uv` package manager (https://docs.astral.sh/uv/)
+- `uv` package manager (https://docs.astral.sh/uv/) - Used by the Makefile to run ESPHome without installing it globally
 - ESP32 hardware for testing
+
+**Note**: The `uv` tool is automatically used by the Makefile to run ESPHome commands. It provides isolated execution of ESPHome without requiring a virtual environment or global installation.
 
 ### Initial Setup
 1. Clone the repository
