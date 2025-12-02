@@ -76,6 +76,7 @@ public:
     void set_charger_current_sensor(sensor::Sensor *sensor);
     void set_charging_rate_sensor(sensor::Sensor *sensor);
     void set_charging_state_sensor(text_sensor::TextSensor *sensor);
+    void set_iec61851_state_sensor(text_sensor::TextSensor *sensor);
 
     // Control setters (delegate to state manager)
     void set_charging_switch(switch_::Switch *sw);
@@ -158,6 +159,7 @@ private:
     sensor::Sensor* pending_charger_current_sensor_{nullptr};
     sensor::Sensor* pending_charging_rate_sensor_{nullptr};
     text_sensor::TextSensor* pending_charging_state_sensor_{nullptr};
+    text_sensor::TextSensor* pending_iec61851_state_sensor_{nullptr};
     switch_::Switch* pending_charging_switch_{nullptr};
     number::Number* pending_charging_amps_number_{nullptr};
     number::Number* pending_charging_limit_number_{nullptr};

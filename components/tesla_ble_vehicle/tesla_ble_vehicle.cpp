@@ -121,6 +121,10 @@ void TeslaBLEVehicle::configure_pending_sensors() {
             ESP_LOGD(TAG, "Configuring charging state sensor");
             state_manager_->set_charging_state_sensor(pending_charging_state_sensor_);
         }
+        if (pending_iec61851_state_sensor_) {
+            ESP_LOGD(TAG, "Configuring IEC 61851 state sensor");
+            state_manager_->set_iec61851_state_sensor(pending_iec61851_state_sensor_);
+        }
         
         // Configure controls
         if (pending_charging_switch_) {
@@ -312,6 +316,11 @@ void TeslaBLEVehicle::set_charging_rate_sensor(sensor::Sensor *sensor) {
 void TeslaBLEVehicle::set_charging_state_sensor(text_sensor::TextSensor *sensor) {
     pending_charging_state_sensor_ = sensor;
     if (state_manager_) state_manager_->set_charging_state_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_iec61851_state_sensor(text_sensor::TextSensor *sensor) {
+    pending_iec61851_state_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_iec61851_state_sensor(sensor);
 }
 
 // Control setters (delegate to state manager)

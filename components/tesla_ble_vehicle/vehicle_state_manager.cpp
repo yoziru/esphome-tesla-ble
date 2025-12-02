@@ -96,6 +96,12 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
             std::string state_text = get_charging_state_text(charge_state.charging_state);
             publish_sensor_state(charging_state_sensor_, state_text);
         }
+
+        // Update IEC 61851 state text sensor (A/B/C/D/E)
+        if (iec61851_state_sensor_) {
+            std::string iec_text = get_iec61851_state_text(charge_state.charging_state);
+            publish_sensor_state(iec61851_state_sensor_, iec_text);
+        }
         
         // Update charger connected binary sensor based on charging state
         if (charger_sensor_) {
@@ -489,6 +495,35 @@ bool VehicleStateManager::is_charger_connected_from_state(const CarServer_Charge
 
 void VehicleStateManager::update_charger_connected(bool connected) {
     publish_sensor_state(charger_sensor_, connected);
+}
+
+std::string VehicleStateManager::get_iec61851_state_text(const CarServer_ChargeState_ChargingState& state) {
+    // Map Tesla charge states to IEC 61851 states:
+    // A: No EV connected (pilot 12V) -> Disconnected/Unknown
+    // B: EV connected, not charging (pilot ~9V) -> NoPower/Stopped/Complete
+    // C: Charging (pilot ~6V) -> Starting/Charging/Calibrating
+    // D: Charging with ventilation required (pilot ~3V) -> not distinguishable; map to C
+    // E: Error -> not explicitly exposed; keep B unless Unknown
+    switch (state.which_type) {
+        case CarServer_ChargeState_ChargingState_Unknown_tag:
+            return "A";
+        case CarServer_ChargeState_ChargingState_Disconnected_tag:
+            return "A";
+        case CarServer_ChargeState_ChargingState_NoPower_tag:
+            return "B";
+        case CarServer_ChargeState_ChargingState_Starting_tag:
+            return "C";
+        case CarServer_ChargeState_ChargingState_Charging_tag:
+            return "C";
+        case CarServer_ChargeState_ChargingState_Complete_tag:
+            return "B";
+        case CarServer_ChargeState_ChargingState_Stopped_tag:
+            return "B";
+        case CarServer_ChargeState_ChargingState_Calibrating_tag:
+            return "C";
+        default:
+            return "A";
+    }
 }
 
 // Command tracking for INFOTAINMENT request delay

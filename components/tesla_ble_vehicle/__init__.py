@@ -224,6 +224,15 @@ async def to_code(config):
     })
     cg.add(var.set_charging_state_sensor(charging_state_sensor))
 
+    iec61851_state_sensor = await text_sensor.new_text_sensor({
+        CONF_ID: cv.declare_id(text_sensor.TextSensor)("tesla_iec61851_state_sensor"),
+        CONF_NAME: "IEC 61851",
+        CONF_ICON: "mdi:ev-plug-type2",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+    })
+    cg.add(var.set_iec61851_state_sensor(iec61851_state_sensor))
+
     ## Buttons
     wake_button = await button.new_button({
         CONF_ID: cv.declare_id(TeslaWakeButton)("tesla_wake_button"),
