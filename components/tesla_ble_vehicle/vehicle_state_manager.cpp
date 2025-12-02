@@ -498,19 +498,18 @@ void VehicleStateManager::update_charger_connected(bool connected) {
 }
 
 std::string VehicleStateManager::get_iec61851_state_text(const CarServer_ChargeState_ChargingState& state) {
-    // Map Tesla charge states to IEC 61851 states:
-    // A: No EV connected (pilot 12V) -> Disconnected/Unknown
-    // B: EV connected, not charging (pilot ~9V) -> NoPower/Stopped/Complete
-    // C: Charging (pilot ~6V) -> Starting/Charging/Calibrating
-    // D: Charging with ventilation required (pilot ~3V) -> not distinguishable; map to C
-    // E: Error -> not explicitly exposed; keep B unless Unknown
+    // Map Tesla infotainment charge states to IEC 61851:
+    // A = Standby (EVSE ready, vehicle not connected)
+    // B = Vehicle detected (connected, not charging)
+    // C = Charging (energy flowing / charging sequence)
+    // D = Ventilation required (not available via infotainment; map to C when charging)
+    // E = No power (connected but no power available)
+    // F = Error / Unknown (fallback)
     switch (state.which_type) {
-        case CarServer_ChargeState_ChargingState_Unknown_tag:
-            return "A";
         case CarServer_ChargeState_ChargingState_Disconnected_tag:
             return "A";
         case CarServer_ChargeState_ChargingState_NoPower_tag:
-            return "B";
+            return "E";
         case CarServer_ChargeState_ChargingState_Starting_tag:
             return "C";
         case CarServer_ChargeState_ChargingState_Charging_tag:
@@ -521,8 +520,9 @@ std::string VehicleStateManager::get_iec61851_state_text(const CarServer_ChargeS
             return "B";
         case CarServer_ChargeState_ChargingState_Calibrating_tag:
             return "C";
+        case CarServer_ChargeState_ChargingState_Unknown_tag:
         default:
-            return "A";
+            return "F";
     }
 }
 
