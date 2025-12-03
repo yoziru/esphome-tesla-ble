@@ -82,6 +82,7 @@ public:
     void set_charging_switch(switch_::Switch *sw);
     void set_charging_amps_number(number::Number *number);
     void set_charging_limit_number(number::Number *number);
+    void unlock_charge_port();
 
     // Button setters
     void set_wake_button(button::Button *button);
@@ -208,6 +209,14 @@ protected:
 };
 
 class TeslaForceUpdateButton : public button::Button {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    void press_action() override;
+    TeslaBLEVehicle *parent_{nullptr};
+};
+
+class TeslaUnlockChargePortButton : public button::Button {
 public:
     void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
 protected:
