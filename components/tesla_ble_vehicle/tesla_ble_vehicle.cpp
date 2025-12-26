@@ -99,6 +99,14 @@ void TeslaBLEVehicle::configure_pending_sensors() {
             ESP_LOGD(TAG, "Configuring battery level sensor");
             state_manager_->set_battery_level_sensor(pending_battery_level_sensor_);
         }
+        if (pending_usable_battery_level_sensor_) {
+            ESP_LOGD(TAG, "Configuring usable battery level sensor");
+            state_manager_->set_usable_battery_level_sensor(pending_usable_battery_level_sensor_);
+        }
+        if (pending_charge_limit_sensor_) {
+            ESP_LOGD(TAG, "Configuring charge limit sensor");
+            state_manager_->set_charge_limit_sensor(pending_charge_limit_sensor_);
+        }
         if (pending_charger_power_sensor_) {
             ESP_LOGD(TAG, "Configuring charger power sensor");
             state_manager_->set_charger_power_sensor(pending_charger_power_sensor_);
@@ -287,6 +295,16 @@ void TeslaBLEVehicle::set_binary_sensor_is_charger_connected(binary_sensor::Bina
 void TeslaBLEVehicle::set_battery_level_sensor(sensor::Sensor *sensor) {
     pending_battery_level_sensor_ = sensor;
     if (state_manager_) state_manager_->set_battery_level_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_usable_battery_level_sensor(sensor::Sensor *sensor) {
+    pending_usable_battery_level_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_usable_battery_level_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_charge_limit_sensor(sensor::Sensor *sensor) {
+    pending_charge_limit_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_charge_limit_sensor(sensor);
 }
 
 void TeslaBLEVehicle::set_charger_power_sensor(sensor::Sensor *sensor) {

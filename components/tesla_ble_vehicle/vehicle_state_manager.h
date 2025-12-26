@@ -36,6 +36,8 @@ public:
     void set_charge_flap_sensor(binary_sensor::BinarySensor* sensor) { charge_flap_sensor_ = sensor; }
     void set_charger_sensor(binary_sensor::BinarySensor* sensor) { charger_sensor_ = sensor; }
     void set_battery_level_sensor(sensor::Sensor* sensor) { battery_level_sensor_ = sensor; }
+    void set_usable_battery_level_sensor(sensor::Sensor* sensor) { usable_battery_level_sensor_ = sensor; }
+    void set_charge_limit_sensor(sensor::Sensor* sensor) { charge_limit_sensor_ = sensor; }
     void set_charger_power_sensor(sensor::Sensor* sensor) { charger_power_sensor_ = sensor; }
     void set_charger_voltage_sensor(sensor::Sensor* sensor) { charger_voltage_sensor_ = sensor; }
     void set_charger_current_sensor(sensor::Sensor* sensor) { charger_current_sensor_ = sensor; }
@@ -57,6 +59,9 @@ public:
     void update_charge_state(const CarServer_ChargeState& charge_state);
     void update_climate_state(const CarServer_ClimateState& climate_state);
     void update_drive_state(const CarServer_DriveState& drive_state);
+    
+    // SOC data processing
+    void update_soc_data(const CarServer_ChargeState& charge_state);
     
     // Direct state updates
     void update_asleep(bool asleep);
@@ -99,6 +104,8 @@ private:
     
     // Sensors
     sensor::Sensor* battery_level_sensor_{nullptr};
+    sensor::Sensor* usable_battery_level_sensor_{nullptr};
+    sensor::Sensor* charge_limit_sensor_{nullptr};
     sensor::Sensor* charger_power_sensor_{nullptr};
     sensor::Sensor* charger_voltage_sensor_{nullptr};
     sensor::Sensor* charger_current_sensor_{nullptr};

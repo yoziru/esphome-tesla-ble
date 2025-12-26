@@ -170,6 +170,26 @@ async def to_code(config):
     })
     cg.add(var.set_battery_level_sensor(battery_level_sensor))
 
+    usable_battery_level_sensor = await sensor.new_sensor({
+        CONF_ID: cv.declare_id(sensor.Sensor)("tesla_usable_battery_level_sensor"),
+        CONF_NAME: "Usable Battery Level",
+        CONF_ICON: "mdi:battery-outline",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+        CONF_UNIT_OF_MEASUREMENT: "%",
+    })
+    cg.add(var.set_usable_battery_level_sensor(usable_battery_level_sensor))
+
+    charge_limit_sensor = await sensor.new_sensor({
+        CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charge_limit_sensor"),
+        CONF_NAME: "Charge Limit",
+        CONF_ICON: "mdi:battery-charging-100",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+        CONF_UNIT_OF_MEASUREMENT: "%",
+    })
+    cg.add(var.set_charge_limit_sensor(charge_limit_sensor))
+
     charger_power_sensor = await sensor.new_sensor({
         CONF_ID: cv.declare_id(sensor.Sensor)("tesla_charger_power_sensor"),
         CONF_NAME: "Charger Power",
