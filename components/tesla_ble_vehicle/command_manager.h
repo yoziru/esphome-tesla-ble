@@ -79,6 +79,7 @@ public:
     void enqueue_set_charging_state(bool enable);
     void enqueue_set_charging_amps(int amps);
     void enqueue_set_charging_limit(int limit);
+    void enqueue_unlock_charge_port();
     
 private:
     TeslaBLEVehicle* parent_;

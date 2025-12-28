@@ -21,6 +21,7 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
   - [x] User present / not present
   - [x] Charging flap open / closed (only when vehicle is awake)
   - [x] BLE signal strength
+  - [x] IEC 61851 state (A/B/C/D/E/F)
 
 ## Configuration
 
@@ -43,6 +44,21 @@ tesla_ble_vehicle:
 - **VCSEC**: Basic vehicle status (sleep/awake, locked/unlocked, user presence) - safe to poll when asleep
 - **Infotainment Awake**: Detailed data (battery, charging state) when awake but not active
 - **Infotainment Active**: Frequent updates when charging, unlocked, or user present
+
+
+**IEC 61851 text sensor**
+
+The component exposes a text sensor that maps Tesla infotainment charge states to IEC 61851 states:
+
+- A: Standby (EVSE ready, vehicle not connected) — `Disconnected`
+- B: Vehicle detected (connected, not charging) — `Complete`, `Stopped`
+- C: Charging (energy flowing / charging sequence) — `Starting`, `Charging`, `Calibrating`
+- D: Ventilation required — not exposed via infotainment; treated as C when charging
+- E: No power (connected but no power available) — `NoPower`
+- F: Error / Unknown — `Unknown` or fallback
+
+This sensor appears as `IEC 61851` in Home Assistant and updates alongside the Tesla charging state.
+
 
 **Smart Wake Management:**
 The system respects Tesla's sleep behavior by polling infotainment data only during an 11-minute wake window, then allowing the vehicle to sleep. Active states (charging/unlocked/user present) override this timeout for continuous monitoring.

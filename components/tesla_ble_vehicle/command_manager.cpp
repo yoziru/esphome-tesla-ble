@@ -506,5 +506,19 @@ void CommandManager::enqueue_set_charging_limit(int limit) {
     );
 }
 
+void CommandManager::enqueue_unlock_charge_port() {
+    enqueue_command(
+        UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+        create_command(parent_, [](auto* client, auto* buffer, auto* length) {
+            // Open/unlock the charge port door via infotainment vehicle action
+            // Assumes client provides builder for charge port door open action
+            return client->buildCarServerVehicleActionMessage(
+                buffer, length,
+                CarServer_VehicleAction_chargePortDoorOpen_tag,
+                nullptr);
+        }),
+        "unlock charge port"
+    );
+}
 } // namespace tesla_ble_vehicle
 } // namespace esphome

@@ -121,6 +121,10 @@ void TeslaBLEVehicle::configure_pending_sensors() {
             ESP_LOGD(TAG, "Configuring charging state sensor");
             state_manager_->set_charging_state_sensor(pending_charging_state_sensor_);
         }
+        if (pending_iec61851_state_sensor_) {
+            ESP_LOGD(TAG, "Configuring IEC 61851 state sensor");
+            state_manager_->set_iec61851_state_sensor(pending_iec61851_state_sensor_);
+        }
         
         // Configure controls
         if (pending_charging_switch_) {
@@ -312,6 +316,11 @@ void TeslaBLEVehicle::set_charging_rate_sensor(sensor::Sensor *sensor) {
 void TeslaBLEVehicle::set_charging_state_sensor(text_sensor::TextSensor *sensor) {
     pending_charging_state_sensor_ = sensor;
     if (state_manager_) state_manager_->set_charging_state_sensor(sensor);
+}
+
+void TeslaBLEVehicle::set_iec61851_state_sensor(text_sensor::TextSensor *sensor) {
+    pending_iec61851_state_sensor_ = sensor;
+    if (state_manager_) state_manager_->set_iec61851_state_sensor(sensor);
 }
 
 // Control setters (delegate to state manager)
@@ -515,6 +524,17 @@ void TeslaBLEVehicle::request_charging_data() {
     command_manager_->enqueue_infotainment_poll();
 }
 
+void TeslaBLEVehicle::unlock_charge_port() {
+    ESP_LOGI(TAG, "Unlock/Open charge port requested");
+    if (state_manager_) {
+        state_manager_->track_command_issued();
+    }
+    if (!command_manager_) {
+        ESP_LOGE(TAG, "Command manager not available");
+        return;
+    }
+    command_manager_->enqueue_unlock_charge_port();
+}
 void TeslaBLEVehicle::update_charging_amps_max_value(int32_t new_max) {
     // This method is called by VehicleStateManager when it needs to update max amps
     // but doesn't have access to the Tesla-specific types
@@ -683,6 +703,9 @@ void TeslaForceUpdateButton::press_action() {
     if (parent_) parent_->force_update();
 }
 
+void TeslaUnlockChargePortButton::press_action() {
+    if (parent_) parent_->unlock_charge_port();
+}
 void TeslaChargingSwitch::write_state(bool state) {
     if (parent_) {
         parent_->set_charging_state(state);

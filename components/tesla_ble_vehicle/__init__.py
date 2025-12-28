@@ -30,6 +30,7 @@ TeslaWakeButton = tesla_ble_vehicle_ns.class_("TeslaWakeButton", button.Button)
 TeslaPairButton = tesla_ble_vehicle_ns.class_("TeslaPairButton", button.Button)
 TeslaRegenerateKeyButton = tesla_ble_vehicle_ns.class_("TeslaRegenerateKeyButton", button.Button)
 TeslaForceUpdateButton = tesla_ble_vehicle_ns.class_("TeslaForceUpdateButton", button.Button)
+TeslaUnlockChargePortButton = tesla_ble_vehicle_ns.class_("TeslaUnlockChargePortButton", button.Button)
 
 # Custom switch classes
 TeslaChargingSwitch = tesla_ble_vehicle_ns.class_("TeslaChargingSwitch", switch.Switch)
@@ -224,6 +225,15 @@ async def to_code(config):
     })
     cg.add(var.set_charging_state_sensor(charging_state_sensor))
 
+    iec61851_state_sensor = await text_sensor.new_text_sensor({
+        CONF_ID: cv.declare_id(text_sensor.TextSensor)("tesla_iec61851_state_sensor"),
+        CONF_NAME: "IEC 61851",
+        CONF_ICON: "mdi:ev-plug-type2",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_FORCE_UPDATE: False,
+    })
+    cg.add(var.set_iec61851_state_sensor(iec61851_state_sensor))
+
     ## Buttons
     wake_button = await button.new_button({
         CONF_ID: cv.declare_id(TeslaWakeButton)("tesla_wake_button"),
@@ -263,6 +273,15 @@ async def to_code(config):
     })
     cg.add(force_update_button.set_parent(var))
     cg.add(var.set_force_update_button(force_update_button))
+
+    unlock_charge_port_button = await button.new_button({
+        CONF_ID: cv.declare_id(TeslaUnlockChargePortButton)("tesla_unlock_charge_port_button"),
+        CONF_NAME: "Unlock Charge Port",
+        CONF_ICON: "mdi:ev-plug-tesla",
+        CONF_DISABLED_BY_DEFAULT: False,
+    })
+    cg.add(unlock_charge_port_button.set_parent(var))
+    # No dedicated setter needed; parent method is called by button press
 
     ## Switches
     charger_switch = await switch.new_switch({

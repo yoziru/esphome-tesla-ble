@@ -106,6 +106,7 @@ private:
     
     // Text sensors
     text_sensor::TextSensor* charging_state_sensor_{nullptr};
+    text_sensor::TextSensor* iec61851_state_sensor_{nullptr};
     
     // Controls
     switch_::Switch* charging_switch_{nullptr};
@@ -137,6 +138,10 @@ private:
     std::optional<bool> convert_user_presence(VCSEC_UserPresence_E presence);
     std::string get_charging_state_text(const CarServer_ChargeState_ChargingState& state);
     bool is_charger_connected_from_state(const CarServer_ChargeState_ChargingState& state);
+    std::string get_iec61851_state_text(const CarServer_ChargeState_ChargingState& state);
+
+public:
+    void set_iec61851_state_sensor(text_sensor::TextSensor* sensor) { iec61851_state_sensor_ = sensor; }
 };
 
 } // namespace tesla_ble_vehicle
