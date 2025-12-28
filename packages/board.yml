@@ -4,3 +4,7 @@ esp32:
   flash_size: $flash_size
   framework:
     type: esp-idf
+    components:
+      - name: tesla-ble
+        source: https://github.com/yoziru/tesla-ble.git
+        ref: v3.3.1
