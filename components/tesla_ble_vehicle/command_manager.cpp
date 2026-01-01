@@ -1,7 +1,7 @@
 #include "command_manager.h"
 #include "tesla_ble_vehicle.h"
 #include <client.h>
-#include "log.h"
+#include <logging.h>
 #include "common.h"
 
 namespace esphome {
@@ -53,7 +53,7 @@ void CommandManager::enqueue_command(UniversalMessage_Domain domain,
     }
     
     ESP_LOGD(COMMAND_MANAGER_TAG, "Enqueueing command: %s (domain: %s)", 
-             name.c_str(), domain_to_string(domain));
+             name.c_str(), TeslaBLE::domain_to_string(domain));
     
     command_queue_.emplace(domain, std::move(execute), name);
 }
@@ -354,7 +354,7 @@ void CommandManager::handle_authentication_response(UniversalMessage_Domain doma
     
     if (success) {
         ESP_LOGD(COMMAND_MANAGER_TAG, "[%s] Authentication successful for %s", 
-                 current_command.execute_name.c_str(), domain_to_string(domain));
+                 current_command.execute_name.c_str(), TeslaBLE::domain_to_string(domain));
         
         // Move to next state based on command requirements
         if (domain == UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY) {
@@ -374,7 +374,7 @@ void CommandManager::handle_authentication_response(UniversalMessage_Domain doma
         current_command.last_tx_at = 0;
     } else {
         ESP_LOGE(COMMAND_MANAGER_TAG, "[%s] Authentication failed for %s", 
-                 current_command.execute_name.c_str(), domain_to_string(domain));
+                 current_command.execute_name.c_str(), TeslaBLE::domain_to_string(domain));
         mark_command_failed("Authentication failed");
     }
 }

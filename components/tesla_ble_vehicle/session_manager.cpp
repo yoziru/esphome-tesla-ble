@@ -1,7 +1,7 @@
 #include "session_manager.h"
 #include "tesla_ble_vehicle.h"
 #include <client.h>
-#include "log.h"
+#include <logging.h>
 #include <keys.pb.h>
 #include <pb_encode.h>
 #include <pb_decode.h>
@@ -154,7 +154,7 @@ bool SessionManager::get_public_key(unsigned char* buffer, size_t* length) {
 }
 
 bool SessionManager::load_session_info(UniversalMessage_Domain domain) {
-    ESP_LOGD(SESSION_MANAGER_TAG, "Loading session info for %s", domain_to_string(domain));
+    ESP_LOGD(SESSION_MANAGER_TAG, "Loading session info for %s", TeslaBLE::domain_to_string(domain));
     
     const char* nvs_key = get_nvs_key_for_domain(domain);
     if (!nvs_key) {
@@ -164,13 +164,13 @@ bool SessionManager::load_session_info(UniversalMessage_Domain domain) {
     
     std::vector<uint8_t> session_data;
     if (!load_from_nvs(nvs_key, session_data)) {
-        ESP_LOGD(SESSION_MANAGER_TAG, "No existing session info found for %s", domain_to_string(domain));
+        ESP_LOGD(SESSION_MANAGER_TAG, "No existing session info found for %s", TeslaBLE::domain_to_string(domain));
         return false;
     }
     
     Signatures_SessionInfo session_info = Signatures_SessionInfo_init_default;
     if (!decode_session_info(session_data, session_info)) {
-        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to decode session info for %s", domain_to_string(domain));
+        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to decode session info for %s", TeslaBLE::domain_to_string(domain));
         return false;
     }
     
@@ -180,16 +180,16 @@ bool SessionManager::load_session_info(UniversalMessage_Domain domain) {
     auto peer = tesla_client_->getPeer(domain);
     if (peer) {
         peer->updateSession(&session_info);
-        ESP_LOGI(SESSION_MANAGER_TAG, "Session info loaded for %s", domain_to_string(domain));
+        ESP_LOGI(SESSION_MANAGER_TAG, "Session info loaded for %s", TeslaBLE::domain_to_string(domain));
         return true;
     }
     
-    ESP_LOGE(SESSION_MANAGER_TAG, "Failed to get peer for domain %s", domain_to_string(domain));
+    ESP_LOGE(SESSION_MANAGER_TAG, "Failed to get peer for domain %s", TeslaBLE::domain_to_string(domain));
     return false;
 }
 
 bool SessionManager::save_session_info(const Signatures_SessionInfo& session_info, UniversalMessage_Domain domain) {
-    ESP_LOGD(SESSION_MANAGER_TAG, "Saving session info for %s", domain_to_string(domain));
+    ESP_LOGD(SESSION_MANAGER_TAG, "Saving session info for %s", TeslaBLE::domain_to_string(domain));
     
     const char* nvs_key = get_nvs_key_for_domain(domain);
     if (!nvs_key) {
@@ -199,32 +199,32 @@ bool SessionManager::save_session_info(const Signatures_SessionInfo& session_inf
     
     std::vector<uint8_t> encoded_data;
     if (!encode_session_info(session_info, encoded_data)) {
-        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to encode session info for %s", domain_to_string(domain));
+        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to encode session info for %s", TeslaBLE::domain_to_string(domain));
         return false;
     }
     
     if (!save_to_nvs(nvs_key, encoded_data.data(), encoded_data.size())) {
-        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to save session info to NVS for %s", domain_to_string(domain));
+        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to save session info to NVS for %s", TeslaBLE::domain_to_string(domain));
         return false;
     }
     
-    ESP_LOGI(SESSION_MANAGER_TAG, "Session info saved for %s", domain_to_string(domain));
+    ESP_LOGI(SESSION_MANAGER_TAG, "Session info saved for %s", TeslaBLE::domain_to_string(domain));
     return true;
 }
 
 int SessionManager::update_session(const Signatures_SessionInfo& session_info, UniversalMessage_Domain domain) {
-    ESP_LOGD(SESSION_MANAGER_TAG, "Updating session for %s", domain_to_string(domain));
+    ESP_LOGD(SESSION_MANAGER_TAG, "Updating session for %s", TeslaBLE::domain_to_string(domain));
     
     // Get the peer to check current state
     auto peer = tesla_client_->getPeer(domain);
     if (!peer) {
-        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to get peer for domain %s", domain_to_string(domain));
+        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to get peer for domain %s", TeslaBLE::domain_to_string(domain));
         return -1;
     }
     
     // Log the counter comparison for debugging
     ESP_LOGD(SESSION_MANAGER_TAG, "Session info counter comparison for %s: current=%u, received=%u", 
-             domain_to_string(domain), peer->getCounter(), session_info.counter);
+             TeslaBLE::domain_to_string(domain), peer->getCounter(), session_info.counter);
     
     // Always try to update with the vehicle's session info first
     int result = peer->updateSession(const_cast<Signatures_SessionInfo*>(&session_info));
@@ -232,16 +232,16 @@ int SessionManager::update_session(const Signatures_SessionInfo& session_info, U
     if (result == 0) {
         // Successful update - save the session info
         ESP_LOGI(SESSION_MANAGER_TAG, "Successfully updated session for %s with counter %u", 
-                 domain_to_string(domain), session_info.counter);
+                 TeslaBLE::domain_to_string(domain), session_info.counter);
         if (!save_session_info(session_info, domain)) {
-            ESP_LOGW(SESSION_MANAGER_TAG, "Failed to save updated session info for %s", domain_to_string(domain));
+            ESP_LOGW(SESSION_MANAGER_TAG, "Failed to save updated session info for %s", TeslaBLE::domain_to_string(domain));
         }
         return 0;
     } else if (result == TeslaBLE::TeslaBLE_Status_E_ERROR_INVALID_SESSION || result == TeslaBLE::TeslaBLE_Status_E_ERROR_COUNTER_REPLAY) {
         // Counter anti-replay or rollback - the vehicle's session info is the authoritative truth
         // We need to force our session to match the vehicle's state
         ESP_LOGW(SESSION_MANAGER_TAG, "Counter anti-replay detected for %s, forcing session to match vehicle's authoritative state (vehicle counter: %u, our counter: %u)", 
-                 domain_to_string(domain), session_info.counter, peer->getCounter());
+                 TeslaBLE::domain_to_string(domain), session_info.counter, peer->getCounter());
         
         // Invalidate and erase stored session first
         invalidate_session(domain);
@@ -259,22 +259,22 @@ int SessionManager::update_session(const Signatures_SessionInfo& session_info, U
         
         // Save the authoritative session info from the vehicle
         if (!save_session_info(session_info, domain)) {
-            ESP_LOGW(SESSION_MANAGER_TAG, "Failed to save authoritative session info for %s", domain_to_string(domain));
+            ESP_LOGW(SESSION_MANAGER_TAG, "Failed to save authoritative session info for %s", TeslaBLE::domain_to_string(domain));
             return -1;
         }
         
         ESP_LOGI(SESSION_MANAGER_TAG, "Forced session update for %s with vehicle's authoritative counter %u", 
-                 domain_to_string(domain), session_info.counter);
+                 TeslaBLE::domain_to_string(domain), session_info.counter);
         return 0;
     } else {
         // Other errors
-        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to update session for %s: %d", domain_to_string(domain), result);
+        ESP_LOGE(SESSION_MANAGER_TAG, "Failed to update session for %s: %d", TeslaBLE::domain_to_string(domain), result);
         return result;
     }
 }
 
 void SessionManager::invalidate_session(UniversalMessage_Domain domain) {
-    ESP_LOGI(SESSION_MANAGER_TAG, "Invalidating session for %s", domain_to_string(domain));
+    ESP_LOGI(SESSION_MANAGER_TAG, "Invalidating session for %s", TeslaBLE::domain_to_string(domain));
     
     auto peer = tesla_client_->getPeer(domain);
     if (peer) {
@@ -295,7 +295,7 @@ bool SessionManager::is_domain_authenticated(UniversalMessage_Domain domain) {
 }
 
 bool SessionManager::request_session_info(UniversalMessage_Domain domain) {
-    ESP_LOGD(SESSION_MANAGER_TAG, "Requesting session info for %s", domain_to_string(domain));
+    ESP_LOGD(SESSION_MANAGER_TAG, "Requesting session info for %s", TeslaBLE::domain_to_string(domain));
     
     if (!tesla_client_) {
         ESP_LOGE(SESSION_MANAGER_TAG, "Tesla client not available");

@@ -2,7 +2,7 @@
 #include "tesla_ble_vehicle.h"
 #include "common.h"
 #include <client.h>
-#include "log.h"
+#include <logging.h>
 #include <esphome/core/helpers.h>
 #include <algorithm>
 
@@ -33,7 +33,7 @@ int BLEManager::write_message(const unsigned char* message_buffer, size_t messag
     }
 
     ESP_LOGD(BLE_MANAGER_TAG, "BLE TX: %s", 
-             format_hex(message_buffer, message_length).c_str());
+             TeslaBLE::format_hex(message_buffer, message_length).c_str());
 
     fragment_message(message_buffer, message_length, write_type, auth_req);
     
@@ -55,7 +55,7 @@ void BLEManager::fragment_message(const unsigned char* message, size_t length,
                  (i / BLOCK_LENGTH) + 1, 
                  (length + BLOCK_LENGTH - 1) / BLOCK_LENGTH,
                  chunk_length,
-                 format_hex(chunk.data(), chunk.size()).c_str());
+                 TeslaBLE::format_hex(chunk.data(), chunk.size()).c_str());
         
         write_queue_.emplace(std::move(chunk), write_type, auth_req);
     }
@@ -88,7 +88,7 @@ void BLEManager::process_write_queue() {
         handle_write_error("BLE write failed");
     } else {
         ESP_LOGV(BLE_MANAGER_TAG, "BLE TX chunk: %s", 
-                 format_hex(chunk.data.data(), chunk.data.size()).c_str());
+                 TeslaBLE::format_hex(chunk.data.data(), chunk.data.size()).c_str());
         write_queue_.pop();
     }
 }
@@ -100,7 +100,7 @@ void BLEManager::add_received_data(const std::vector<unsigned char>& data) {
     }
 
     ESP_LOGV(BLE_MANAGER_TAG, "BLE RX chunk: %s", 
-             format_hex(data.data(), data.size()).c_str());
+             TeslaBLE::format_hex(data.data(), data.size()).c_str());
 
     read_queue_.emplace(data);
 }
@@ -181,7 +181,7 @@ int BLEManager::get_expected_message_length() {
 }
 
 void BLEManager::process_complete_message() {
-    ESP_LOGD(BLE_MANAGER_TAG, "BLE RX: %s", format_hex(read_buffer_.data(), read_buffer_.size()).c_str());
+    ESP_LOGD(BLE_MANAGER_TAG, "BLE RX: %s", TeslaBLE::format_hex(read_buffer_.data(), read_buffer_.size()).c_str());
     ESP_LOGD(BLE_MANAGER_TAG, "Processing complete received message (%zu bytes)", read_buffer_.size());
     
     // Pass the complete message to the message handler
