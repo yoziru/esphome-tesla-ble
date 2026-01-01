@@ -12,13 +12,11 @@
 #include <esphome/core/component.h>
 #include <esphome/core/automation.h>
 
-#include "common.h"
-#include "message_handler.h"
-#include "command_manager.h"
-#include "ble_manager.h"
-#include "session_manager.h"
+#include "ble_adapter_impl.h"
+#include "storage_adapter_impl.h"
+#include <vehicle.h>
 #include "vehicle_state_manager.h"
-#include "polling_manager.h"
+#include <memory>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -108,79 +106,74 @@ public:
     // Internal helper methods for state manager
     void update_charging_amps_max_value(int32_t new_max);
 
-    // Manager accessors (for internal use by managers)
-    MessageHandler* get_message_handler() const { return message_handler_.get(); }
-    CommandManager* get_command_manager() const { return command_manager_.get(); }
-    BLEManager* get_ble_manager() const { return ble_manager_.get(); }
-    SessionManager* get_session_manager() const { return session_manager_.get(); }
+    // Manager accessors
     VehicleStateManager* get_state_manager() const { return state_manager_.get(); }
-    PollingManager* get_polling_manager() const { return polling_manager_.get(); }
-
+    
     // BLE connection state
     bool is_connected() const { return node_state == espbt::ClientState::ESTABLISHED; }
     uint16_t get_read_handle() const { return read_handle_; }
     uint16_t get_write_handle() const { return write_handle_; }
 
 private:
-    // Specialized managers
-    std::unique_ptr<MessageHandler> message_handler_;
-    std::unique_ptr<CommandManager> command_manager_;
-    std::unique_ptr<BLEManager> ble_manager_;
-    std::unique_ptr<SessionManager> session_manager_;
-    std::unique_ptr<VehicleStateManager> state_manager_;
-    std::unique_ptr<PollingManager> polling_manager_;
-
-    // BLE connection details
-    uint16_t handle_{0};
-    uint16_t read_handle_{0};
-    uint16_t write_handle_{0};
-    espbt::ESPBTUUID service_uuid_;
-    espbt::ESPBTUUID read_uuid_;
-    espbt::ESPBTUUID write_uuid_;
-
-    // Configuration
-    std::string vin_;
-    std::string role_{"DRIVER"};
-    
-    // Polling intervals (in milliseconds) - stored for late initialization
-    uint32_t vcsec_poll_interval_{10000};                     // 10s default
-    uint32_t infotainment_poll_interval_awake_{30000};        // 30s default 
-    uint32_t infotainment_poll_interval_active_{10000};       // 10s default
-    uint32_t infotainment_sleep_timeout_{660000};             // 11 minutes (660s) default
-
-    // Temporary storage for sensors before state_manager_ is initialized
-    binary_sensor::BinarySensor* pending_asleep_sensor_{nullptr};
-    binary_sensor::BinarySensor* pending_unlocked_sensor_{nullptr};
-    binary_sensor::BinarySensor* pending_user_present_sensor_{nullptr};
-    binary_sensor::BinarySensor* pending_charge_flap_sensor_{nullptr};
-    binary_sensor::BinarySensor* pending_charger_sensor_{nullptr};
-    sensor::Sensor* pending_battery_level_sensor_{nullptr};
-    sensor::Sensor* pending_charger_power_sensor_{nullptr};
-    sensor::Sensor* pending_charger_voltage_sensor_{nullptr};
-    sensor::Sensor* pending_charger_current_sensor_{nullptr};
-    sensor::Sensor* pending_charging_rate_sensor_{nullptr};
-    text_sensor::TextSensor* pending_charging_state_sensor_{nullptr};
-    text_sensor::TextSensor* pending_iec61851_state_sensor_{nullptr};
-    switch_::Switch* pending_charging_switch_{nullptr};
-    number::Number* pending_charging_amps_number_{nullptr};
-    number::Number* pending_charging_limit_number_{nullptr};
-
-    // Initialization methods
+    // Initialization helpers
     void initialize_managers();
-    void setup_button_callbacks();
     void initialize_ble_uuids();
     void configure_pending_sensors();
+    void setup_button_callbacks();
 
-    // Connection event handlers
+    // Connection handlers
     void handle_connection_established();
     void handle_connection_lost();
 
-    friend class MessageHandler;
-    friend class CommandManager;
-    friend class BLEManager;
-    friend class SessionManager;
+    // Adapters & Managers
+    std::shared_ptr<BleAdapterImpl> ble_adapter_;
+    std::shared_ptr<StorageAdapterImpl> storage_adapter_;
+    std::shared_ptr<::TeslaBLE::Vehicle> vehicle_;
+    std::unique_ptr<VehicleStateManager> state_manager_;
+
+    // Configuration
+    std::string vin_;
+    std::string role_;
+    
+    // Polling intervals
+    uint32_t vcsec_poll_interval_{10000};
+    uint32_t infotainment_poll_interval_awake_{30000};
+    uint32_t infotainment_poll_interval_active_{10000};
+    uint32_t infotainment_sleep_timeout_{660000};
+    
+    // Polling state
+    uint32_t last_vcsec_poll_{0};
+    uint32_t last_infotainment_poll_{0};
+
+    // BLE state
+    espbt::ESPBTUUID service_uuid_;
+    espbt::ESPBTUUID read_uuid_;
+    espbt::ESPBTUUID write_uuid_;
+    uint16_t read_handle_{0};
+    uint16_t write_handle_{0};
+
+    // Pending sensors (waiting for state manager init)
+    binary_sensor::BinarySensor *pending_asleep_sensor_{nullptr};
+    binary_sensor::BinarySensor *pending_unlocked_sensor_{nullptr};
+    binary_sensor::BinarySensor *pending_user_present_sensor_{nullptr};
+    binary_sensor::BinarySensor *pending_charge_flap_sensor_{nullptr};
+    binary_sensor::BinarySensor *pending_charger_sensor_{nullptr};
+    
+    sensor::Sensor *pending_battery_level_sensor_{nullptr};
+    sensor::Sensor *pending_charger_power_sensor_{nullptr};
+    sensor::Sensor *pending_charger_voltage_sensor_{nullptr};
+    sensor::Sensor *pending_charger_current_sensor_{nullptr};
+    sensor::Sensor *pending_charging_rate_sensor_{nullptr};
+    
+    text_sensor::TextSensor *pending_charging_state_sensor_{nullptr};
+    text_sensor::TextSensor *pending_iec61851_state_sensor_{nullptr};
+    
+    switch_::Switch *pending_charging_switch_{nullptr};
+    number::Number *pending_charging_amps_number_{nullptr};
+    number::Number *pending_charging_limit_number_{nullptr};
+
+    // Friends
     friend class VehicleStateManager;
-    friend class PollingManager;
 };
 
 // Custom button classes (simplified)

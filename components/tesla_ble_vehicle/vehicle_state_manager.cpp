@@ -251,20 +251,12 @@ void VehicleStateManager::update_asleep(bool asleep) {
     ESP_LOGD(STATE_MANAGER_TAG, "Vehicle sleep state: %s", asleep ? "ASLEEP" : "AWAKE");
     publish_sensor_state(asleep_sensor_, asleep);
     
-    // Notify polling manager of state change
-    if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!asleep, is_charging_, is_unlocked(), is_user_present_);
-    }
+    // Notify parent of state change if needed (polling logic now in parent::update)
 }
 
 void VehicleStateManager::update_unlocked(bool unlocked) {
     ESP_LOGD(STATE_MANAGER_TAG, "Vehicle lock state: %s", unlocked ? "UNLOCKED" : "LOCKED");
     publish_sensor_state(unlocked_sensor_, unlocked);
-    
-    // Notify polling manager of state change
-    if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, unlocked, is_user_present_);
-    }
 }
 
 void VehicleStateManager::update_user_present(bool present) {
@@ -272,11 +264,6 @@ void VehicleStateManager::update_user_present(bool present) {
     publish_sensor_state(user_present_sensor_, present);
     
     is_user_present_ = present;
-    
-    // Notify polling manager of state change
-    if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, is_unlocked(), is_user_present_);
-    }
 }
 
 void VehicleStateManager::update_charge_flap_open(bool open) {
@@ -535,7 +522,7 @@ void VehicleStateManager::track_command_issued() {
 bool VehicleStateManager::should_delay_infotainment_request() const {
     uint32_t now = millis();
     // Rollover-safe time calculation
-    uint32_t time_since_command = Utils::time_since(now, last_command_time_);
+    uint32_t time_since_command = (now - last_command_time_);
     
     bool should_delay = time_since_command < COMMAND_DELAY_TIME;
     if (should_delay) {
