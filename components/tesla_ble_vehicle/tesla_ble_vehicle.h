@@ -171,6 +171,8 @@ private:
     switch_::Switch *pending_charging_switch_{nullptr};
     number::Number *pending_charging_amps_number_{nullptr};
     number::Number *pending_charging_limit_number_{nullptr};
+    
+    std::string last_rx_hex_;
 
     // Friends
     friend class VehicleStateManager;

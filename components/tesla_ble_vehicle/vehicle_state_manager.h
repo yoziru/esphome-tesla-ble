@@ -124,11 +124,11 @@ private:
     static const uint32_t COMMAND_DELAY_TIME = 3000; // 3 seconds delay after command
     
     // Helper methods
-    void publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state);
-    void publish_sensor_state(sensor::Sensor* sensor, float state);
-    void publish_sensor_state(switch_::Switch* switch_comp, bool state);
-    void publish_sensor_state(number::Number* number_comp, float state);
-    void publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state);
+    bool publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state);
+    bool publish_sensor_state(sensor::Sensor* sensor, float state);
+    bool publish_sensor_state(switch_::Switch* switch_comp, bool state);
+    bool publish_sensor_state(number::Number* number_comp, float state);
+    bool publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state);
     void set_sensor_available(binary_sensor::BinarySensor* sensor, bool available);
     void set_sensor_available(sensor::Sensor* sensor, bool available);
     

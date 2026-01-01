@@ -1,11 +1,30 @@
 #include "tesla_ble_vehicle.h"
 #include "common.h"
-#include <logging.h>
 #include <esphome/core/helpers.h>
 #include <client.h>
+#include <tb_utils.h>
+#include <esp_log.h>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
+
+void tesla_ble_log_callback(TeslaBLE::LogLevel level, const char* tag, const char* format, va_list args) {
+    // Safety checks
+    if (tag == nullptr) tag = "TeslaBLE";
+    if (format == nullptr) return;
+    
+    int esphome_level;
+    switch (level) {
+        case TeslaBLE::LogLevel::ERROR:   esphome_level = ESPHOME_LOG_LEVEL_ERROR; break;
+        case TeslaBLE::LogLevel::WARN:    esphome_level = ESPHOME_LOG_LEVEL_WARN; break;
+        case TeslaBLE::LogLevel::INFO:    esphome_level = ESPHOME_LOG_LEVEL_INFO; break;
+        case TeslaBLE::LogLevel::DEBUG:   esphome_level = ESPHOME_LOG_LEVEL_DEBUG; break;
+        case TeslaBLE::LogLevel::VERBOSE: esphome_level = ESPHOME_LOG_LEVEL_VERBOSE; break;
+        default: return;
+    }
+    // Use 0 for line number since we're in a callback and don't have meaningful line info
+    esp_log_vprintf_(esphome_level, tag, 0, format, args);
+}
 
 TeslaBLEVehicle::TeslaBLEVehicle() : vin_(""), role_("DRIVER") {
     ESP_LOGCONFIG(TAG, "Constructing Tesla BLE Vehicle component");
@@ -47,6 +66,9 @@ void TeslaBLEVehicle::initialize_managers() {
         ESP_LOGE(TAG, "Failed to initialize storage adapter");
     }
     
+    // Register logging bridge
+    TeslaBLE::g_log_callback = tesla_ble_log_callback;
+    
     // Create vehicle instance
     vehicle_ = std::make_shared<TeslaBLE::Vehicle>(ble_adapter_, storage_adapter_);
     
@@ -55,9 +77,27 @@ void TeslaBLEVehicle::initialize_managers() {
     
     ESP_LOGD(TAG, "Wiring up callbacks...");
     
+    // Register raw message callback for reassembled logging with de-duplication
+    vehicle_->set_raw_message_callback([this](const std::vector<uint8_t>& data) {
+        std::string hex = TeslaBLE::format_hex(data.data(), data.size());
+        if (hex != last_rx_hex_) {
+            ESP_LOGD(TAG, "BLE RX: %s", hex.c_str());
+            last_rx_hex_ = hex;
+        }
+    });
+    
     // Wire Vehicle callbacks to State Manager
     vehicle_->set_vehicle_status_callback([this](const VCSEC_VehicleStatus& s) {
-        if (state_manager_) state_manager_->update_vehicle_status(s);
+        if (state_manager_) {
+            state_manager_->update_vehicle_status(s);
+            
+            // Trigger infotainment poll if vehicle is awake and we haven't polled yet (or if state just changed to awake)
+            if (!state_manager_->is_asleep() && last_infotainment_poll_ == 0) {
+                ESP_LOGI(TAG, "Vehicle is awake, triggering initial infotainment poll");
+                vehicle_->infotainment_poll();
+                last_infotainment_poll_ = millis();
+            }
+        }
     });
     
     vehicle_->set_charge_state_callback([this](const CarServer_ChargeState& s) {
@@ -184,7 +224,7 @@ void TeslaBLEVehicle::update() {
     
     // VCSEC Polling
     if (now - last_vcsec_poll_ >= vcsec_poll_interval_) {
-        ESP_LOGD(TAG, "Polling VCSEC");
+        ESP_LOGI(TAG, "Polling VCSEC");
         vehicle_->vcsec_poll();
         last_vcsec_poll_ = now;
     }
@@ -198,11 +238,16 @@ void TeslaBLEVehicle::update() {
          infotainment_interval = infotainment_sleep_timeout_; 
     }
     
-    // Check if we also have an "active" interval different from "awake"?
-    // Using simple awake interval for now.
+    // Check for "active" state to use faster polling
+    if (!state_manager_->is_asleep()) {
+        if (state_manager_->is_charging() || state_manager_->is_user_present() || state_manager_->is_unlocked()) {
+            infotainment_interval = infotainment_poll_interval_active_;
+            ESP_LOGD(TAG, "Vehicle is active, using active polling interval (%dms)", infotainment_interval);
+        }
+    }
     
     if (now - last_infotainment_poll_ >= infotainment_interval) {
-         ESP_LOGD(TAG, "Polling Infotainment");
+         ESP_LOGI(TAG, "Polling Infotainment");
          vehicle_->infotainment_poll();
          last_infotainment_poll_ = now;
     }
@@ -570,11 +615,7 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
     switch (event) {
         case ESP_GATTC_OPEN_EVT:
             if (param->open.status == ESP_GATT_OK) {
-                ESP_LOGI(TAG, "BLE connection established");
-                // Small delay to ensure state is fully set before triggering polling
-                this->set_timeout(100, [this]() {
-                    handle_connection_established();
-                });
+                ESP_LOGI(TAG, "BLE physical link established");
             }
             break;
             
@@ -629,6 +670,9 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
             
             this->node_state = espbt::ClientState::ESTABLISHED;
             ESP_LOGI(TAG, "BLE connection fully established");
+            
+            // Now that characteristics are ready and notifications are enabled, trigger connection handling
+            handle_connection_established();
             break;
             
         case ESP_GATTC_NOTIFY_EVT: {
@@ -660,12 +704,17 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
 }
 
 void TeslaBLEVehicle::handle_connection_established() {
-    ESP_LOGI(TAG, "Connection established - setting up polling");
-    
-    ESP_LOGI(TAG, "Polling will start on next update cycle");
-    
     if (vehicle_) {
         vehicle_->set_connected(true);
+        
+        // Polling will happen in update() cycle
+        // Set last_infotainment_poll_ to 0 to signal that an infotainment poll is needed as soon as vehicle is awake
+        last_infotainment_poll_ = 0;
+        
+        // Trigger initial VCSEC poll for sleep status
+        ESP_LOGI(TAG, "Connection established - triggering initial VCSEC poll");
+        vehicle_->vcsec_poll();
+        last_vcsec_poll_ = millis();
     }
     
     if (state_manager_) {
@@ -683,6 +732,10 @@ void TeslaBLEVehicle::handle_connection_lost() {
     if (ble_adapter_) {
         ble_adapter_->clear_queues();
     }
+    
+    // Reset initial poll times
+    last_infotainment_poll_ = 0;
+    last_vcsec_poll_ = 0;
     
     this->status_set_warning("BLE connection lost");
 }
