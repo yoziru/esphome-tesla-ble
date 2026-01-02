@@ -441,13 +441,22 @@ void TeslaBLEVehicle::set_force_update_button(button::Button *button) {
 
 // Public vehicle actions
 int TeslaBLEVehicle::wake_vehicle() {
-    ESP_LOGD(TAG, "Sending wake command");
+    ESP_LOGD(TAG, "Wake vehicle requested");
     
-    if (vehicle_) {
-        vehicle_->wake();
+    if (!vehicle_) {
+        return -1;
+    }
+    
+    // Check if vehicle is already awake - if so, just do a VCSEC poll instead
+    if (state_manager_ && !state_manager_->is_asleep()) {
+        ESP_LOGI(TAG, "Vehicle already awake - sending VCSEC poll instead");
+        vehicle_->vcsec_poll();
         return 0;
     }
-    return -1;
+    
+    ESP_LOGI(TAG, "Sending wake command");
+    vehicle_->wake();
+    return 0;
 }
 
 int TeslaBLEVehicle::start_pairing() {
