@@ -88,7 +88,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         if (was_charging != is_charging_) {
             ESP_LOGD(STATE_MANAGER_TAG, "Charging state changed: %s", is_charging_ ? "ON" : "OFF");
         } else {
-            ESP_LOGV(STATE_MANAGER_TAG, "Charging state unchanged: %s", is_charging_ ? "ON" : "OFF");
+            ESP_LOGD(STATE_MANAGER_TAG, "Charging state unchanged: %s", is_charging_ ? "ON" : "OFF");
         }
         
         // Update charging state text sensor
@@ -116,8 +116,9 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         
         // Validate battery level is within reasonable bounds [0-100] and is a valid number
         if (battery_level >= 0.0f && battery_level <= 100.0f && std::isfinite(battery_level)) {
-            ESP_LOGD(STATE_MANAGER_TAG, "Updating battery level to %.1f%%", battery_level);
-            publish_sensor_state(battery_level_sensor_, battery_level);
+            if (publish_sensor_state(battery_level_sensor_, battery_level)) {
+                ESP_LOGI(STATE_MANAGER_TAG, "Updating battery level to %.1f%%", battery_level);
+            }
         } else {
             ESP_LOGW(STATE_MANAGER_TAG, "Invalid battery level received: %.1f%% (expected 0-100, finite)", battery_level);
         }
@@ -216,18 +217,18 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update max charging amps if available
     if (charge_state.which_optional_charge_current_request_max) {
         int32_t new_max = charge_state.optional_charge_current_request_max.charge_current_request_max;
-        ESP_LOGD(STATE_MANAGER_TAG, "Received max charging amps from vehicle: %d A (current stored: %d A)", new_max, charging_amps_max_);
         
         // Skip update if new_max is 0 or invalid - likely not ready or invalid value from vehicle
         if (new_max <= 0) {
-            ESP_LOGV(STATE_MANAGER_TAG, "Skipping max charging amps update - invalid value from vehicle: %d A", new_max);
+            ESP_LOGD(STATE_MANAGER_TAG, "Skipping max charging amps update - invalid value from vehicle: %d A", new_max);
         } else if (new_max != charging_amps_max_) {
+            ESP_LOGI(STATE_MANAGER_TAG, "Received new max charging amps from vehicle: %d A (was: %d A)", new_max, charging_amps_max_);
             update_charging_amps_max(new_max);
         } else {
-            ESP_LOGV(STATE_MANAGER_TAG, "Max charging amps unchanged: %d A", new_max);
+            ESP_LOGD(STATE_MANAGER_TAG, "Max charging amps unchanged: %d A", new_max);
         }
     } else {
-        ESP_LOGV(STATE_MANAGER_TAG, "No max charging amps data in charge state");
+        ESP_LOGD(STATE_MANAGER_TAG, "No max charging amps data in charge state");
     }
     
     // Update charge flap status if available
@@ -248,44 +249,32 @@ void VehicleStateManager::update_drive_state(const CarServer_DriveState& drive_s
 
 // Direct state update methods
 void VehicleStateManager::update_asleep(bool asleep) {
-    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle sleep state: %s", asleep ? "ASLEEP" : "AWAKE");
-    publish_sensor_state(asleep_sensor_, asleep);
-    
-    // Notify polling manager of state change
-    if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!asleep, is_charging_, is_unlocked(), is_user_present_);
+    if (publish_sensor_state(asleep_sensor_, asleep)) {
+        ESP_LOGI(STATE_MANAGER_TAG, "Vehicle sleep state: %s", asleep ? "ASLEEP" : "AWAKE");
     }
 }
 
 void VehicleStateManager::update_unlocked(bool unlocked) {
-    ESP_LOGD(STATE_MANAGER_TAG, "Vehicle lock state: %s", unlocked ? "UNLOCKED" : "LOCKED");
-    publish_sensor_state(unlocked_sensor_, unlocked);
-    
-    // Notify polling manager of state change
-    if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, unlocked, is_user_present_);
+    if (publish_sensor_state(unlocked_sensor_, unlocked)) {
+        ESP_LOGI(STATE_MANAGER_TAG, "Vehicle lock state: %s", unlocked ? "UNLOCKED" : "LOCKED");
     }
 }
 
 void VehicleStateManager::update_user_present(bool present) {
-    ESP_LOGD(STATE_MANAGER_TAG, "User presence: %s", present ? "PRESENT" : "NOT_PRESENT");
-    publish_sensor_state(user_present_sensor_, present);
+    if (publish_sensor_state(user_present_sensor_, present)) {
+        ESP_LOGI(STATE_MANAGER_TAG, "User presence: %s", present ? "PRESENT" : "NOT_PRESENT");
+    }
     
     is_user_present_ = present;
-    
-    // Notify polling manager of state change
-    if (parent_->get_polling_manager()) {
-        parent_->get_polling_manager()->update_vehicle_state(!is_asleep(), is_charging_, is_unlocked(), is_user_present_);
-    }
 }
 
 void VehicleStateManager::update_charge_flap_open(bool open) {
-    ESP_LOGV(STATE_MANAGER_TAG, "Charge flap: %s", open ? "OPEN" : "CLOSED");
+    ESP_LOGD(STATE_MANAGER_TAG, "Charge flap: %s", open ? "OPEN" : "CLOSED");
     publish_sensor_state(charge_flap_sensor_, open);
 }
 
 void VehicleStateManager::update_charging_amps(float amps) {
-    ESP_LOGV(STATE_MANAGER_TAG, "Charging amps from vehicle: %.1f A", amps);
+    ESP_LOGD(STATE_MANAGER_TAG, "Charging amps from vehicle: %.1f A", amps);
     
     // Always update the number component (since we're using delay-based approach)
     publish_sensor_state(charging_amps_number_, amps);
@@ -372,28 +361,36 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 }
 
 // Private helper methods
-void VehicleStateManager::publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state) {
+bool VehicleStateManager::publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state) {
     if (sensor != nullptr && (!sensor->has_state() || sensor->state != state)) {
         sensor->publish_state(state);
+        return true;
     }
+    return false;
 }
 
-void VehicleStateManager::publish_sensor_state(sensor::Sensor* sensor, float state) {
+bool VehicleStateManager::publish_sensor_state(sensor::Sensor* sensor, float state) {
     if (sensor != nullptr && (!sensor->has_state() || std::abs(sensor->state - state) > 0.001f)) {
         sensor->publish_state(state);
+        return true;
     }
+    return false;
 }
 
-void VehicleStateManager::publish_sensor_state(switch_::Switch* switch_comp, bool state) {
+bool VehicleStateManager::publish_sensor_state(switch_::Switch* switch_comp, bool state) {
     if (switch_comp != nullptr && (!switch_comp->has_state() || switch_comp->state != state)) {
         switch_comp->publish_state(state);
+        return true;
     }
+    return false;
 }
 
-void VehicleStateManager::publish_sensor_state(number::Number* number_comp, float state) {
+bool VehicleStateManager::publish_sensor_state(number::Number* number_comp, float state) {
     if (number_comp != nullptr && (!number_comp->has_state() || std::abs(number_comp->state - state) > 0.001f)) {
         number_comp->publish_state(state);
+        return true;
     }
+    return false;
 }
 
 void VehicleStateManager::set_sensor_available(binary_sensor::BinarySensor* sensor, bool available) {
@@ -446,10 +443,12 @@ std::optional<bool> VehicleStateManager::convert_user_presence(VCSEC_UserPresenc
     }
 }
 
-void VehicleStateManager::publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state) {
+bool VehicleStateManager::publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state) {
     if (sensor != nullptr && (!sensor->has_state() || sensor->state != state)) {
         sensor->publish_state(state);
+        return true;
     }
+    return false;
 }
 
 std::string VehicleStateManager::get_charging_state_text(const CarServer_ChargeState_ChargingState& state) {
@@ -535,11 +534,11 @@ void VehicleStateManager::track_command_issued() {
 bool VehicleStateManager::should_delay_infotainment_request() const {
     uint32_t now = millis();
     // Rollover-safe time calculation
-    uint32_t time_since_command = Utils::time_since(now, last_command_time_);
+    uint32_t time_since_command = (now - last_command_time_);
     
     bool should_delay = time_since_command < COMMAND_DELAY_TIME;
     if (should_delay) {
-        ESP_LOGV(STATE_MANAGER_TAG, "Delaying INFOTAINMENT request (%dms since last command)", time_since_command);
+        ESP_LOGD(STATE_MANAGER_TAG, "Delaying INFOTAINMENT request (%dms since last command)", time_since_command);
     }
     return should_delay;
 }
