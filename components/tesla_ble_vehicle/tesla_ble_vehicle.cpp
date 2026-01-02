@@ -8,7 +8,7 @@
 namespace esphome {
 namespace tesla_ble_vehicle {
 
-void tesla_ble_log_callback(TeslaBLE::LogLevel level, const char* tag, const char* format, va_list args) {
+void tesla_ble_log_callback(TeslaBLE::LogLevel level, const char* tag, int line, const char* format, va_list args) {
     // Safety checks
     if (tag == nullptr) tag = "TeslaBLE";
     if (format == nullptr) return;
@@ -22,8 +22,7 @@ void tesla_ble_log_callback(TeslaBLE::LogLevel level, const char* tag, const cha
         case TeslaBLE::LogLevel::VERBOSE: esphome_level = ESPHOME_LOG_LEVEL_VERBOSE; break;
         default: return;
     }
-    // Use 0 for line number since we're in a callback and don't have meaningful line info
-    esp_log_vprintf_(esphome_level, tag, 0, format, args);
+    esp_log_vprintf_(esphome_level, tag, line, format, args);
 }
 
 TeslaBLEVehicle::TeslaBLEVehicle() : vin_(""), role_("DRIVER") {
