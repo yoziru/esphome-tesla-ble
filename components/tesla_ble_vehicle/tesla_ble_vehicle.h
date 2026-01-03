@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <map>
+#include <string>
 #include <esphome/components/ble_client/ble_client.h>
 #include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
 #include <esphome/components/binary_sensor/binary_sensor.h>
@@ -9,6 +11,9 @@
 #include <esphome/components/button/button.h>
 #include <esphome/components/switch/switch.h>
 #include <esphome/components/number/number.h>
+#include <esphome/components/lock/lock.h>
+#include <esphome/components/cover/cover.h>
+#include <esphome/components/climate/climate.h>
 #include <esphome/core/component.h>
 #include <esphome/core/automation.h>
 
@@ -16,7 +21,6 @@
 #include "storage_adapter_impl.h"
 #include <vehicle.h>
 #include "vehicle_state_manager.h"
-#include <memory>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -35,6 +39,13 @@ static const char *const WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e";
  * 
  * This is the main component that coordinates all Tesla BLE operations.
  * It uses specialized managers for different aspects of the communication.
+ * 
+ * Sensor registration is done via generic methods:
+ *   - set_binary_sensor(id, sensor)
+ *   - set_sensor(id, sensor)
+ *   - set_text_sensor(id, sensor)
+ * 
+ * This allows adding new sensors purely in Python without C++ changes.
  */
 class TeslaBLEVehicle : public PollingComponent, public ble_client::BLEClientNode {
 public:
@@ -51,7 +62,9 @@ public:
     void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                            esp_ble_gattc_cb_param_t *param) override;
 
+    // ==========================================================================
     // Configuration setters
+    // ==========================================================================
     void set_vin(const char *vin);
     void set_role(const std::string &role);
     void set_charging_amps_max(int amps_max);
@@ -62,33 +75,45 @@ public:
     void set_infotainment_poll_interval_active(uint32_t interval_ms);
     void set_infotainment_sleep_timeout(uint32_t interval_ms);
 
-    // Sensor setters (delegate to state manager)
-    void set_binary_sensor_is_asleep(binary_sensor::BinarySensor *s);
-    void set_binary_sensor_is_unlocked(binary_sensor::BinarySensor *s);
-    void set_binary_sensor_is_user_present(binary_sensor::BinarySensor *s);
-    void set_binary_sensor_is_charge_flap_open(binary_sensor::BinarySensor *s);
-    void set_binary_sensor_is_charger_connected(binary_sensor::BinarySensor *s);
-    void set_battery_level_sensor(sensor::Sensor *sensor);
-    void set_charger_power_sensor(sensor::Sensor *sensor);
-    void set_charger_voltage_sensor(sensor::Sensor *sensor);
-    void set_charger_current_sensor(sensor::Sensor *sensor);
-    void set_charging_rate_sensor(sensor::Sensor *sensor);
-    void set_charging_state_sensor(text_sensor::TextSensor *sensor);
-    void set_iec61851_state_sensor(text_sensor::TextSensor *sensor);
+    // ==========================================================================
+    // Generic sensor setters - delegates to state manager
+    // These are the primary interface for Python codegen
+    // ==========================================================================
+    void set_binary_sensor(const std::string& id, binary_sensor::BinarySensor* sensor);
+    void set_sensor(const std::string& id, sensor::Sensor* sensor);
+    void set_text_sensor(const std::string& id, text_sensor::TextSensor* sensor);
 
-    // Control setters (delegate to state manager)
+    // ==========================================================================
+    // Control setters (switches and numbers need special handling)
+    // ==========================================================================
     void set_charging_switch(switch_::Switch *sw);
+    void set_steering_wheel_heat_switch(switch_::Switch *sw);
+    void set_sentry_mode_switch(switch_::Switch *sw);
     void set_charging_amps_number(number::Number *number);
     void set_charging_limit_number(number::Number *number);
-    void unlock_charge_port();
 
+    // ==========================================================================
+    // Lock, Cover, and Climate setters
+    // ==========================================================================
+    void set_doors_lock(lock::Lock *lck);
+    void set_charge_port_latch_lock(lock::Lock *lck);
+    void set_trunk_cover(cover::Cover *cvr);
+    void set_frunk_cover(cover::Cover *cvr);
+    void set_windows_cover(cover::Cover *cvr);
+    void set_charge_port_door_cover(cover::Cover *cvr);
+    void set_climate(climate::Climate *clm);
+
+    // ==========================================================================
     // Button setters
+    // ==========================================================================
     void set_wake_button(button::Button *button);
     void set_pair_button(button::Button *button);
     void set_regenerate_key_button(button::Button *button);
     void set_force_update_button(button::Button *button);
 
+    // ==========================================================================
     // Public vehicle actions
+    // ==========================================================================
     int wake_vehicle();
     int start_pairing();
     int regenerate_key();
@@ -98,10 +123,32 @@ public:
     int set_charging_state(bool charging);
     int set_charging_amps(int amps);
     int set_charging_limit(int limit);
-
-    // Data request actions
-    void request_vehicle_data();
-    void request_charging_data();
+    
+    // Closure controls (VCSEC)
+    void lock_vehicle();
+    void unlock_vehicle();
+    void open_trunk();
+    void close_trunk();
+    void open_frunk();
+    void open_charge_port();
+    void close_charge_port();
+    void unlock_charge_port();
+    void unlatch_driver_door();
+    
+    // HVAC controls (Infotainment)
+    void set_climate_on(bool enable);
+    void set_climate_temp(float temp);
+    void set_climate_keeper(int mode);  // 0=Off, 1=On, 2=Dog, 3=Camp
+    void set_bioweapon_mode(bool enable);
+    void set_preconditioning_max(bool enable);  // Defrost
+    void set_steering_wheel_heat(bool enable);
+    
+    // Vehicle controls (Infotainment)
+    void flash_lights();
+    void honk_horn();
+    void set_sentry_mode(bool enable);
+    void vent_windows();
+    void close_windows();
     
     // Internal helper methods for state manager
     void update_charging_amps_max_value(int32_t new_max);
@@ -152,25 +199,34 @@ private:
     uint16_t read_handle_{0};
     uint16_t write_handle_{0};
 
-    // Pending sensors (waiting for state manager init)
-    binary_sensor::BinarySensor *pending_asleep_sensor_{nullptr};
-    binary_sensor::BinarySensor *pending_unlocked_sensor_{nullptr};
-    binary_sensor::BinarySensor *pending_user_present_sensor_{nullptr};
-    binary_sensor::BinarySensor *pending_charge_flap_sensor_{nullptr};
-    binary_sensor::BinarySensor *pending_charger_sensor_{nullptr};
+    // ==========================================================================
+    // Pending sensors (stored before state manager is initialized)
+    // ==========================================================================
+    std::map<std::string, binary_sensor::BinarySensor*> pending_binary_sensors_;
+    std::map<std::string, sensor::Sensor*> pending_sensors_;
+    std::map<std::string, text_sensor::TextSensor*> pending_text_sensors_;
     
-    sensor::Sensor *pending_battery_level_sensor_{nullptr};
-    sensor::Sensor *pending_charger_power_sensor_{nullptr};
-    sensor::Sensor *pending_charger_voltage_sensor_{nullptr};
-    sensor::Sensor *pending_charger_current_sensor_{nullptr};
-    sensor::Sensor *pending_charging_rate_sensor_{nullptr};
-    
-    text_sensor::TextSensor *pending_charging_state_sensor_{nullptr};
-    text_sensor::TextSensor *pending_iec61851_state_sensor_{nullptr};
-    
+    // Pending switches
     switch_::Switch *pending_charging_switch_{nullptr};
+    switch_::Switch *pending_steering_wheel_heat_switch_{nullptr};
+    switch_::Switch *pending_sentry_mode_switch_{nullptr};
+    
+    // Pending numbers
     number::Number *pending_charging_amps_number_{nullptr};
     number::Number *pending_charging_limit_number_{nullptr};
+    
+    // Pending locks
+    lock::Lock *pending_doors_lock_{nullptr};
+    lock::Lock *pending_charge_port_latch_lock_{nullptr};
+    
+    // Pending covers
+    cover::Cover *pending_trunk_cover_{nullptr};
+    cover::Cover *pending_frunk_cover_{nullptr};
+    cover::Cover *pending_windows_cover_{nullptr};
+    cover::Cover *pending_charge_port_door_cover_{nullptr};
+    
+    // Pending climate
+    climate::Climate *pending_climate_{nullptr};
     
     std::string last_rx_hex_;
 
@@ -178,54 +234,69 @@ private:
     friend class VehicleStateManager;
 };
 
-// Custom button classes (simplified)
-class TeslaWakeButton : public button::Button {
+// =============================================================================
+// Generic Tesla Button - use DEFINE_TESLA_BUTTON macro for each button type
+// =============================================================================
+
+/**
+ * @brief Generic Tesla button base that calls a parent method on press
+ * 
+ * Each button type is defined using the DEFINE_TESLA_BUTTON macro below.
+ * This eliminates boilerplate and makes adding new buttons trivial.
+ */
+class TeslaButtonBase : public button::Button {
 public:
     void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
 protected:
-    void press_action() override;
     TeslaBLEVehicle *parent_{nullptr};
 };
 
-class TeslaPairButton : public button::Button {
+// Macro to define a Tesla button that calls a specific parent method
+#define DEFINE_TESLA_BUTTON(ClassName, ParentMethod) \
+    class ClassName : public TeslaButtonBase { \
+    protected: \
+        void press_action() override { if (parent_) parent_->ParentMethod(); } \
+    };
+
+// Define all button types using the macro
+DEFINE_TESLA_BUTTON(TeslaWakeButton, wake_vehicle)
+DEFINE_TESLA_BUTTON(TeslaPairButton, start_pairing)
+DEFINE_TESLA_BUTTON(TeslaRegenerateKeyButton, regenerate_key)
+DEFINE_TESLA_BUTTON(TeslaForceUpdateButton, force_update)
+DEFINE_TESLA_BUTTON(TeslaFlashLightsButton, flash_lights)
+DEFINE_TESLA_BUTTON(TeslaHonkHornButton, honk_horn)
+DEFINE_TESLA_BUTTON(TeslaUnlatchDriverDoorButton, unlatch_driver_door)
+
+// =============================================================================
+// Generic Tesla Switch - use DEFINE_TESLA_SWITCH macro for each switch type
+// =============================================================================
+
+/**
+ * @brief Generic Tesla switch base that calls a parent method on state change
+ * 
+ * Each switch type is defined using the DEFINE_TESLA_SWITCH macro below.
+ * The macro generates a switch that calls parent->Method(state) and publishes state.
+ */
+class TeslaSwitchBase : public switch_::Switch {
 public:
     void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
 protected:
-    void press_action() override;
     TeslaBLEVehicle *parent_{nullptr};
 };
 
-class TeslaRegenerateKeyButton : public button::Button {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-protected:
-    void press_action() override;
-    TeslaBLEVehicle *parent_{nullptr};
-};
+// Macro to define a Tesla switch that calls a specific parent method with bool state
+#define DEFINE_TESLA_SWITCH(ClassName, ParentMethod) \
+    class ClassName : public TeslaSwitchBase { \
+    protected: \
+        void write_state(bool state) override { \
+            if (parent_) { parent_->ParentMethod(state); publish_state(state); } \
+        } \
+    };
 
-class TeslaForceUpdateButton : public button::Button {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-protected:
-    void press_action() override;
-    TeslaBLEVehicle *parent_{nullptr};
-};
-
-class TeslaUnlockChargePortButton : public button::Button {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-protected:
-    void press_action() override;
-    TeslaBLEVehicle *parent_{nullptr};
-};
-
-class TeslaChargingSwitch : public switch_::Switch {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-protected:
-    void write_state(bool state) override;
-    TeslaBLEVehicle *parent_{nullptr};
-};
+// Define all switch types using the macro
+DEFINE_TESLA_SWITCH(TeslaChargingSwitch, set_charging_state)
+DEFINE_TESLA_SWITCH(TeslaSteeringWheelHeatSwitch, set_steering_wheel_heat)
+DEFINE_TESLA_SWITCH(TeslaSentryModeSwitch, set_sentry_mode)
 
 class TeslaChargingAmpsNumber : public number::Number {
 public:
@@ -244,7 +315,80 @@ protected:
     TeslaBLEVehicle *parent_{nullptr};
 };
 
-// Action classes for automation (unchanged for compatibility)
+// =============================================================================
+// Lock classes - combined sensor + control for doors and charge port
+// =============================================================================
+
+class TeslaLockBase : public lock::Lock {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+protected:
+    TeslaBLEVehicle *parent_{nullptr};
+};
+
+class TeslaDoorsLock : public TeslaLockBase {
+protected:
+    void control(const lock::LockCall &call) override;
+};
+
+class TeslaChargePortLatchLock : public TeslaLockBase {
+protected:
+    void control(const lock::LockCall &call) override;
+};
+
+// =============================================================================
+// Cover classes - combined sensor + control for trunk, frunk, windows
+// =============================================================================
+
+class TeslaCoverBase : public cover::Cover {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+    cover::CoverTraits get_traits() override;
+protected:
+    TeslaBLEVehicle *parent_{nullptr};
+};
+
+class TeslaTrunkCover : public TeslaCoverBase {
+protected:
+    void control(const cover::CoverCall &call) override;
+};
+
+class TeslaFrunkCover : public TeslaCoverBase {
+protected:
+    void control(const cover::CoverCall &call) override;
+};
+
+class TeslaWindowsCover : public TeslaCoverBase {
+protected:
+    void control(const cover::CoverCall &call) override;
+};
+
+class TeslaChargePortDoorCover : public TeslaCoverBase {
+protected:
+    void control(const cover::CoverCall &call) override;
+};
+
+// =============================================================================
+// Climate class - HVAC control with temperature
+// =============================================================================
+
+class TeslaClimate : public climate::Climate {
+public:
+    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+    climate::ClimateTraits traits() override;
+    void control(const climate::ClimateCall &call) override;
+    
+    // Called by state manager to update current state
+    void update_state(bool is_on, float current_temp, float target_temp);
+    
+protected:
+    TeslaBLEVehicle *parent_{nullptr};
+};
+
+// =============================================================================
+// Action classes for automation
+// =============================================================================
+
 template<typename... Ts> class WakeAction : public Action<Ts...> {
 public:
     WakeAction(TeslaBLEVehicle *parent) : parent_(parent) {}

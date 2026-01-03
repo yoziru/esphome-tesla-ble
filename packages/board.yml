@@ -7,4 +7,4 @@ esp32:
     components:
       - name: tesla-ble
         source: https://github.com/yoziru/tesla-ble.git
-        ref: v4.1.1
+        ref: v4.1.2
