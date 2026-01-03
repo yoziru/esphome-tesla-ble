@@ -7,9 +7,6 @@
 namespace esphome {
 namespace tesla_ble_vehicle {
 
-// Forward declaration for climate entity
-class TeslaClimate;
-
 VehicleStateManager::VehicleStateManager(TeslaBLEVehicle* parent)
     : parent_(parent), is_charging_(false), charging_amps_max_(32) {}
 
@@ -535,11 +532,9 @@ void VehicleStateManager::update_charger_connected(bool connected) {
 void VehicleStateManager::set_sensors_available(bool available) {
     ESP_LOGD(STATE_MANAGER_TAG, "Setting sensors available: %s", available ? "true" : "false");
     
-    // Set availability for key sensors
+    // Set availability for key binary sensors
     set_sensor_available(get_binary_sensor("asleep"), available);
-    set_sensor_available(get_binary_sensor("doors"), available);
     set_sensor_available(get_binary_sensor("user_present"), available);
-    set_sensor_available(get_binary_sensor("charge_flap"), available);
 }
 
 void VehicleStateManager::reset_all_states() {
