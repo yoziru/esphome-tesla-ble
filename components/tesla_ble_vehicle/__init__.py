@@ -123,10 +123,10 @@ BINARY_SENSORS = [
     {"id": "door_driver_rear", "name": "Door Driver Rear", "icon": "mdi:car-door", "device_class": "door", "disabled_by_default": True},
     {"id": "door_passenger_front", "name": "Door Passenger Front", "icon": "mdi:car-door", "device_class": "door", "disabled_by_default": True},
     {"id": "door_passenger_rear", "name": "Door Passenger Rear", "icon": "mdi:car-door", "device_class": "door", "disabled_by_default": True},
-    {"id": "window_driver_front", "name": "Window Driver Front", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
-    {"id": "window_driver_rear", "name": "Window Driver Rear", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
-    {"id": "window_passenger_front", "name": "Window Passenger Front", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
-    {"id": "window_passenger_rear", "name": "Window Passenger Rear", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
+    {"id": "window_driver_front", "name": "Window Driver Front", "icon": "mdi:car-window-side", "device_class": "window", "disabled_by_default": True},
+    {"id": "window_driver_rear", "name": "Window Driver Rear", "icon": "mdi:car-window-side", "device_class": "window", "disabled_by_default": True},
+    {"id": "window_passenger_front", "name": "Window Passenger Front", "icon": "mdi:car-window-side", "device_class": "window", "disabled_by_default": True},
+    {"id": "window_passenger_rear", "name": "Window Passenger Rear", "icon": "mdi:car-window-side", "device_class": "window", "disabled_by_default": True},
     {"id": "sunroof", "name": "Sunroof", "icon": "mdi:car-select", "device_class": "window", "disabled_by_default": True},
 ]
 
