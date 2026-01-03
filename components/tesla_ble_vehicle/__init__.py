@@ -198,7 +198,6 @@ CLIMATE = {
     "name": "Climate",
     "class": TeslaClimate,
     "setter": "set_climate",
-    "accuracy_decimals": 1,  # Display precision for internal temperature
 }
 
 NUMBERS = [
