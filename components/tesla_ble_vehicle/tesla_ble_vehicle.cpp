@@ -89,13 +89,6 @@ void TeslaBLEVehicle::initialize_managers() {
     vehicle_->set_vehicle_status_callback([this](const VCSEC_VehicleStatus& s) {
         if (state_manager_) {
             state_manager_->update_vehicle_status(s);
-            
-            // Trigger infotainment poll if vehicle is awake and we haven't polled yet (or if state just changed to awake)
-            if (!state_manager_->is_asleep() && last_infotainment_poll_ == 0) {
-                ESP_LOGI(TAG, "Vehicle is awake, triggering initial infotainment poll");
-                vehicle_->infotainment_poll();
-                last_infotainment_poll_ = millis();
-            }
         }
     });
     
@@ -715,14 +708,13 @@ void TeslaBLEVehicle::handle_connection_established() {
     if (vehicle_) {
         vehicle_->set_connected(true);
         
-        // Polling will happen in update() cycle
-        // Set last_infotainment_poll_ to 0 to signal that an infotainment poll is needed as soon as vehicle is awake
-        last_infotainment_poll_ = 0;
-        
-        // Trigger initial VCSEC poll for sleep status
-        ESP_LOGI(TAG, "Connection established - triggering initial VCSEC poll");
+        // Trigger initial polls - library handles auth sequencing
+        // Use force_wake=true for initial infotainment poll to ensure we get data on boot
+        ESP_LOGI(TAG, "Connection established - triggering initial VCSEC and infotainment polls");
         vehicle_->vcsec_poll();
+        vehicle_->infotainment_poll(true);  // force_wake=true for initial poll
         last_vcsec_poll_ = millis();
+        last_infotainment_poll_ = millis();
     }
     
     if (state_manager_) {
@@ -741,7 +733,7 @@ void TeslaBLEVehicle::handle_connection_lost() {
         ble_adapter_->clear_queues();
     }
     
-    // Reset initial poll times
+    // Reset poll state for next connection
     last_infotainment_poll_ = 0;
     last_vcsec_poll_ = 0;
     
