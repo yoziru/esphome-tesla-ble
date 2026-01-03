@@ -7,9 +7,6 @@
 namespace esphome {
 namespace tesla_ble_vehicle {
 
-// Forward declaration for climate entity
-class TeslaClimate;
-
 VehicleStateManager::VehicleStateManager(TeslaBLEVehicle* parent)
     : parent_(parent), is_charging_(false), charging_amps_max_(32) {}
 
