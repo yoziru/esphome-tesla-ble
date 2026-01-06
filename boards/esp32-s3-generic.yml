@@ -1,0 +1,4 @@
+substitutions:
+  board: afruit_feather_esp32s3
+  variant: esp32s3
+  flash_size: 4MB
