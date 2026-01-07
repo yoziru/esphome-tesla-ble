@@ -89,8 +89,10 @@ StorageAdapterImpl::~StorageAdapterImpl() {
 }
 
 bool StorageAdapterImpl::initialize() {
+    ESP_LOGI(ADAPTER_TAG, "NVS: initializing flash storage");
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOGW(ADAPTER_TAG, "NVS: init error %s, erasing NVS then re-init", esp_err_to_name(err));
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
@@ -101,6 +103,7 @@ bool StorageAdapterImpl::initialize() {
     if (err != ESP_OK) return false;
     
     initialized_ = true;
+    ESP_LOGI(ADAPTER_TAG, "NVS: opened namespace 'storage'");
     return true;
 }
 
@@ -119,11 +122,28 @@ bool StorageAdapterImpl::load(const std::string& key, std::vector<uint8_t>& buff
     
     size_t required_size = 0;
     esp_err_t err = nvs_get_blob(storage_handle_, nvs_key, nullptr, &required_size);
-    if (err != ESP_OK || required_size == 0) return false;
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW(ADAPTER_TAG, "NVS: key '%s' not found", nvs_key);
+        return false;
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(ADAPTER_TAG, "NVS: get size for key '%s' failed: %s", nvs_key, esp_err_to_name(err));
+        return false;
+    }
+    if (required_size == 0) {
+        ESP_LOGW(ADAPTER_TAG, "NVS: key '%s' has zero size", nvs_key);
+        return false;
+    }
     
     buffer.resize(required_size);
     err = nvs_get_blob(storage_handle_, nvs_key, buffer.data(), &required_size);
-    return err == ESP_OK;
+    if (err == ESP_OK) {
+        ESP_LOGI(ADAPTER_TAG, "NVS: loaded key '%s' (%u bytes)", nvs_key, (unsigned) required_size);
+        return true;
+    } else {
+        ESP_LOGE(ADAPTER_TAG, "NVS: load key '%s' failed: %s", nvs_key, esp_err_to_name(err));
+        return false;
+    }
 }
 
 bool StorageAdapterImpl::save(const std::string& key, const std::vector<uint8_t>& buffer) {
@@ -132,10 +152,19 @@ bool StorageAdapterImpl::save(const std::string& key, const std::vector<uint8_t>
     const char* nvs_key = map_key(key);
     if (!nvs_key) return false;
     
+    ESP_LOGI(ADAPTER_TAG, "NVS: saving key '%s' (%u bytes)", nvs_key, (unsigned) buffer.size());
     esp_err_t err = nvs_set_blob(storage_handle_, nvs_key, buffer.data(), buffer.size());
-    if (err != ESP_OK) return false;
-    
-    return nvs_commit(storage_handle_) == ESP_OK;
+    if (err != ESP_OK) {
+        ESP_LOGE(ADAPTER_TAG, "NVS: set blob failed for key '%s': %s", nvs_key, esp_err_to_name(err));
+        return false;
+    }
+    err = nvs_commit(storage_handle_);
+    if (err != ESP_OK) {
+        ESP_LOGE(ADAPTER_TAG, "NVS: commit failed after saving key '%s': %s", nvs_key, esp_err_to_name(err));
+        return false;
+    }
+    ESP_LOGI(ADAPTER_TAG, "NVS: key '%s' saved and committed", nvs_key);
+    return true;
 }
 
 bool StorageAdapterImpl::remove(const std::string& key) {
@@ -144,8 +173,13 @@ bool StorageAdapterImpl::remove(const std::string& key) {
     const char* nvs_key = map_key(key);
     if (!nvs_key) return false;
     
+    ESP_LOGW(ADAPTER_TAG, "NVS: erasing key '%s'", nvs_key);
     esp_err_t err = nvs_erase_key(storage_handle_, nvs_key);
-    return (err == ESP_OK) && (nvs_commit(storage_handle_) == ESP_OK);
+    bool ok = (err == ESP_OK) && (nvs_commit(storage_handle_) == ESP_OK);
+    if (!ok) {
+        ESP_LOGE(ADAPTER_TAG, "NVS: erase/commit failed for key '%s': %s", nvs_key, esp_err_to_name(err));
+    }
+    return ok;
 }
 
 } // namespace tesla_ble_vehicle

@@ -62,63 +62,54 @@ void TeslaBLEVehicle::setup() {
 }
 
 void TeslaBLEVehicle::initialize_managers() {
-  ESP_LOGD(TAG, "Initializing components...");
-
-  ble_adapter_ = std::make_shared<BleAdapterImpl>(this);
-  storage_adapter_ = std::make_shared<StorageAdapterImpl>();
-
-  if (!storage_adapter_->initialize()) {
-    ESP_LOGE(TAG, "Failed to initialize storage adapter");
-  }
-
-  TeslaBLE::set_log_callback(tesla_ble_log_callback);
-  vehicle_ =
-      std::make_shared<TeslaBLE::Vehicle>(ble_adapter_, storage_adapter_);
-  state_manager_ = std::make_unique<VehicleStateManager>(this);
-
-  ESP_LOGD(TAG, "Wiring up callbacks...");
-
-  vehicle_->set_raw_message_callback([this](const std::vector<uint8_t> &data) {
-    std::string hex = TeslaBLE::format_hex(data.data(), data.size());
-    if (hex != last_rx_hex_) {
-      ESP_LOGV(TAG, "BLE RX: %s", hex.c_str());
-      last_rx_hex_ = hex;
+    ESP_LOGD(TAG, "Initializing components...");
+    
+    ble_adapter_ = std::make_shared<BleAdapterImpl>(this);
+    storage_adapter_ = std::make_shared<StorageAdapterImpl>();
+    
+    if (!storage_adapter_->initialize()) {
+        ESP_LOGE(TAG, "Failed to initialize storage adapter");
     }
-  });
-
-  vehicle_->set_vehicle_status_callback([this](const VCSEC_VehicleStatus &s) {
-    if (state_manager_)
-      state_manager_->update_vehicle_status(s);
-  });
-
-  vehicle_->set_charge_state_callback([this](const CarServer_ChargeState &s) {
-    if (state_manager_)
-      state_manager_->update_charge_state(s);
-  });
-
-  vehicle_->set_climate_state_callback([this](const CarServer_ClimateState &s) {
-    if (state_manager_)
-      state_manager_->update_climate_state(s);
-  });
-
-  vehicle_->set_drive_state_callback([this](const CarServer_DriveState &s) {
-    if (state_manager_)
-      state_manager_->update_drive_state(s);
-  });
-
-  vehicle_->set_tire_pressure_state_callback(
-      [this](const CarServer_TirePressureState &s) {
-        if (state_manager_)
-          state_manager_->update_tire_pressure_state(s);
-      });
-
-  vehicle_->set_closures_state_callback(
-      [this](const CarServer_ClosuresState &s) {
-        if (state_manager_)
-          state_manager_->update_closures_state(s);
-      });
-
-  ESP_LOGD(TAG, "All components initialized");
+    
+    TeslaBLE::g_log_callback = tesla_ble_log_callback;
+    vehicle_ = std::make_shared<TeslaBLE::Vehicle>(ble_adapter_, storage_adapter_);
+    state_manager_ = std::make_unique<VehicleStateManager>(this);
+    
+    ESP_LOGD(TAG, "Wiring up callbacks...");
+    
+    vehicle_->set_raw_message_callback([this](const std::vector<uint8_t>& data) {
+        std::string hex = TeslaBLE::format_hex(data.data(), data.size());
+        if (hex != last_rx_hex_) {
+            ESP_LOGD(TAG, "BLE RX: %s", hex.c_str());
+            last_rx_hex_ = hex;
+        }
+    });
+    
+    vehicle_->set_vehicle_status_callback([this](const VCSEC_VehicleStatus& s) {
+        if (state_manager_) state_manager_->update_vehicle_status(s);
+    });
+    
+    vehicle_->set_charge_state_callback([this](const CarServer_ChargeState& s) {
+        if (state_manager_) state_manager_->update_charge_state(s);
+    });
+    
+    vehicle_->set_climate_state_callback([this](const CarServer_ClimateState& s) {
+        if (state_manager_) state_manager_->update_climate_state(s);
+    });
+    
+    vehicle_->set_drive_state_callback([this](const CarServer_DriveState& s) {
+        if (state_manager_) state_manager_->update_drive_state(s);
+    });
+    
+    vehicle_->set_tire_pressure_state_callback([this](const CarServer_TirePressureState& s) {
+        if (state_manager_) state_manager_->update_tire_pressure_state(s);
+    });
+    
+    vehicle_->set_closures_state_callback([this](const CarServer_ClosuresState& s) {
+        if (state_manager_) state_manager_->update_closures_state(s);
+    });
+    
+    ESP_LOGD(TAG, "All components initialized");
 }
 
 void TeslaBLEVehicle::initialize_ble_uuids() {

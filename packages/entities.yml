@@ -1,0 +1,265 @@
+# Tesla entities declared in YAML so you can use `id:` + `!extend`.
+#
+# Usage (example):
+#   packages:
+#     client: !include modules/esphome-tesla-ble/packages/client.yml
+#     tesla_entities: !include modules/esphome-tesla-ble/packages/entities.yml
+#
+#   tesla_ble_vehicle:
+#     id: tesla_ble_vehicle_id
+#     auto_create_entities: false
+#
+# Then you can `!extend` any of the ids below from your main YAML.
+
+binary_sensor:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: asleep
+    id: tesla_asleep
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: user_present
+    id: tesla_user_present
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charger
+    id: tesla_charger_connected
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: parking_brake
+    id: tesla_parking_brake
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: door_driver_front
+    id: tesla_door_driver_front
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: door_driver_rear
+    id: tesla_door_driver_rear
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: door_passenger_front
+    id: tesla_door_passenger_front
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: door_passenger_rear
+    id: tesla_door_passenger_rear
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: window_driver_front
+    id: tesla_window_driver_front
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: window_driver_rear
+    id: tesla_window_driver_rear
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: window_passenger_front
+    id: tesla_window_passenger_front
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: window_passenger_rear
+    id: tesla_window_passenger_rear
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: sunroof
+    id: tesla_sunroof
+
+sensor:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: battery_level
+    id: tesla_battery_level
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: range
+    id: tesla_range
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charger_power
+    id: tesla_charger_power
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charger_voltage
+    id: tesla_charger_voltage
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charger_current
+    id: tesla_charger_current
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charging_rate
+    id: tesla_charging_rate
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: energy_added
+    id: tesla_energy_added
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: time_to_full
+    id: tesla_time_to_full
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: outside_temp
+    id: tesla_outside_temp
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: odometer
+    id: tesla_odometer
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: tpms_front_left
+    id: tesla_tpms_front_left
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: tpms_front_right
+    id: tesla_tpms_front_right
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: tpms_rear_left
+    id: tesla_tpms_rear_left
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: tpms_rear_right
+    id: tesla_tpms_rear_right
+
+text_sensor:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charging_state
+    id: tesla_charging_state
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: iec61851_state
+    id: tesla_iec61851_state
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: shift_state
+    id: tesla_shift_state
+
+switch:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charging
+    id: tesla_charging
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: steering_wheel_heat
+    id: tesla_steering_wheel_heat
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: sentry_mode
+    id: tesla_sentry_mode
+
+number:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charging_amps
+    id: tesla_charging_amps
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charging_limit
+    id: tesla_charging_limit
+
+button:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: wake
+    id: tesla_wake
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: pair
+    id: tesla_pair
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: regenerate_key
+    id: tesla_regenerate_key
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: force_update
+    id: tesla_force_update
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: flash_lights
+    id: tesla_flash_lights
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: honk_horn
+    id: tesla_honk_horn
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: unlatch_driver_door
+    id: tesla_unlatch_driver_door
+
+lock:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: doors
+    id: tesla_doors_lock
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charge_port_latch
+    id: tesla_charge_port_latch
+
+cover:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: trunk
+    id: tesla_trunk
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: frunk
+    id: tesla_frunk
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: windows
+    id: tesla_windows
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charge_port_door
+    id: tesla_charge_port_door
+
+climate:
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    id: tesla_climate
