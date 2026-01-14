@@ -391,11 +391,18 @@ int TeslaBLEVehicle::regenerate_key() {
 }
 
 void TeslaBLEVehicle::force_update() {
+    uint32_t now = millis();
+    if (now - last_infotainment_poll_ < infotainment_poll_interval_active_) {
+        ESP_LOGD(TAG, "Force update requested too soon (within active polling interval) - ignoring");
+        return;
+    }
+    
     ESP_LOGI(TAG, "Force update requested");
+    last_infotainment_poll_ = now;
     
     if (vehicle_) {
-         vehicle_->wake();
-         vehicle_->vcsec_poll();
+         // wake_vehicle() already sends VCSEC poll if car is already awake
+         this->wake_vehicle();
          vehicle_->infotainment_poll();
     }
 }
