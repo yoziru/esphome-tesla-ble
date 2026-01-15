@@ -159,12 +159,8 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         
         // Sync charging switch with vehicle state
         if (charging_switch_ && (!charging_switch_->has_state() || charging_switch_->state != is_charging_)) {
-            if (should_delay_infotainment_request()) {
-                ESP_LOGD(STATE_MANAGER_TAG, "Delaying charging switch sync due to recent command");
-            } else {
-                ESP_LOGD(STATE_MANAGER_TAG, "Syncing charging switch to vehicle state: %s", is_charging_ ? "ON" : "OFF");
-                publish_sensor_state(charging_switch_, is_charging_);
-            }
+            ESP_LOGD(STATE_MANAGER_TAG, "Syncing charging switch to vehicle state: %s", is_charging_ ? "ON" : "OFF");
+            publish_sensor_state(charging_switch_, is_charging_);
         }
         
         if (was_charging != is_charging_) {
@@ -230,7 +226,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update charger current
+    // Update charger current (real-time feedback, never delay)
     if (charge_state.which_optional_charger_actual_current) {
         float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
         if (current >= 0.0f && current <= 100.0f && std::isfinite(current)) {
@@ -244,7 +240,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         publish_sensor("charging_rate", rate_mph);
     }
 
-    // Update charging amps
+    // Update charging amps (real-time feedback, never delay)
     if (charge_state.which_optional_charger_actual_current && charging_amps_number_) {
         float amps = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
         update_charging_amps(amps);
@@ -253,9 +249,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charge limit
     if (charge_state.which_optional_charge_limit_soc && charging_limit_number_) {
         float limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
-        if (!should_delay_infotainment_request()) {
-            publish_sensor_state(charging_limit_number_, limit);
-        }
+        publish_sensor_state(charging_limit_number_, limit);
     }
     
     // Update max charging amps
@@ -327,10 +321,8 @@ void VehicleStateManager::update_climate_state(const CarServer_ClimateState& cli
     if (climate_state.which_optional_steering_wheel_heater && steering_wheel_heat_switch_ != nullptr) {
         bool heater_on = climate_state.optional_steering_wheel_heater.steering_wheel_heater;
         if (!steering_wheel_heat_switch_->has_state() || steering_wheel_heat_switch_->state != heater_on) {
-            if (!should_delay_infotainment_request()) {
-                ESP_LOGD(STATE_MANAGER_TAG, "Syncing steering wheel heat switch to vehicle state: %s", heater_on ? "ON" : "OFF");
-                publish_sensor_state(steering_wheel_heat_switch_, heater_on);
-            }
+            ESP_LOGD(STATE_MANAGER_TAG, "Syncing steering wheel heat switch to vehicle state: %s", heater_on ? "ON" : "OFF");
+            publish_sensor_state(steering_wheel_heat_switch_, heater_on);
         }
     }
     
@@ -466,10 +458,8 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
                              closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Aware_tag ||
                              closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Panic_tag);
         if (!sentry_mode_switch_->has_state() || sentry_mode_switch_->state != sentry_active) {
-            if (!should_delay_infotainment_request()) {
-                ESP_LOGD(STATE_MANAGER_TAG, "Syncing sentry mode switch to vehicle state: %s", sentry_active ? "ON" : "OFF");
-                publish_sensor_state(sentry_mode_switch_, sentry_active);
-            }
+            ESP_LOGD(STATE_MANAGER_TAG, "Syncing sentry mode switch to vehicle state: %s", sentry_active ? "ON" : "OFF");
+            publish_sensor_state(sentry_mode_switch_, sentry_active);
         }
     }
     
@@ -601,15 +591,10 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 // =============================================================================
 
 void VehicleStateManager::track_command_issued() {
-    last_command_time_ = millis();
-    ESP_LOGD(STATE_MANAGER_TAG, "Command issued - will delay updates for %dms", COMMAND_DELAY_TIME);
+    ESP_LOGD(STATE_MANAGER_TAG, "Command issued - state updates will sync immediately");
 }
 
-bool VehicleStateManager::should_delay_infotainment_request() const {
-    uint32_t now = millis();
-    uint32_t time_since_command = now - last_command_time_;
-    return time_since_command < COMMAND_DELAY_TIME;
-}
+
 
 // =============================================================================
 // Private helper methods
