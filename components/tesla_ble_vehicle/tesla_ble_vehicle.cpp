@@ -60,7 +60,7 @@ void TeslaBLEVehicle::initialize_managers() {
     vehicle_->set_raw_message_callback([this](const std::vector<uint8_t>& data) {
         std::string hex = TeslaBLE::format_hex(data.data(), data.size());
         if (hex != last_rx_hex_) {
-            ESP_LOGD(TAG, "BLE RX: %s", hex.c_str());
+            ESP_LOGV(TAG, "BLE RX: %s", hex.c_str());
             last_rx_hex_ = hex;
         }
     });
