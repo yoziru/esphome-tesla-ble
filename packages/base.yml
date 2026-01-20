@@ -20,6 +20,21 @@ esphome:
 
 logger:
   level: INFO
+  # level: DEBUG
+  # logs:
+  #   esp32_ble_tracker: INFO
+  #   esp32_ble_client: INFO
+  #   binary_sensor: INFO
+  #   lock: INFO
+  #   sensor: INFO
+  #   switch: INFO
+  #   cover: INFO
+
+syslog:
+  port: 51801
+
+udp:
+  addresses: 192.168.1.10
 
 api:
   encryption:
