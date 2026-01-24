@@ -903,7 +903,7 @@ void TeslaClimate::control(const climate::ClimateCall &call) {
     }
     
     // Handle custom presets
-    const char* custom = call.get_custom_preset();
+    const char* custom = call.get_custom_preset().c_str();
     if (custom != nullptr) {
         if (strcmp(custom, "Normal") == 0) {
             parent_->set_preconditioning_max(false);
@@ -923,7 +923,7 @@ void TeslaClimate::control(const climate::ClimateCall &call) {
     }
     
     // Handle custom fan modes
-    const char* fan = call.get_custom_fan_mode();
+    const char* fan = call.get_custom_fan_mode().c_str();
     if (fan != nullptr) {
         if (strcmp(fan, "Normal") == 0) {
             parent_->set_bioweapon_mode(false);
