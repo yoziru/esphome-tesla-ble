@@ -1,0 +1,13 @@
+-I.esphome/build/tesla-ble/src
+-I.esphome/build/tesla-ble/src/esphome
+-Icomponents
+-I/Users/yoziru/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0
+-I/Users/yoziru/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0/riscv32-esp-elf/rv32imc_zicsr_zifencei/ilp32
+-I/Users/yoziru/.platformio/packages/toolchain-riscv32-esp/picolibc/include
+-I/Users/yoziru/.platformio/packages/framework-espidf/components/newlib/platform_include
+--target=riscv32-esp-elf
+--sysroot=/Users/yoziru/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf
+-std=c++17
+-xc++
+-DESP_PLATFORM
+-DIDF_VER="5.5.2"
