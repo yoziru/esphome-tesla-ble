@@ -50,8 +50,8 @@ void TeslaBLEVehicle::initialize_managers() {
     if (!storage_adapter_->initialize()) {
         ESP_LOGE(TAG, "Failed to initialize storage adapter");
     }
-    
-    TeslaBLE::g_log_callback = tesla_ble_log_callback;
+
+    TeslaBLE::set_log_callback(tesla_ble_log_callback);
     vehicle_ = std::make_shared<TeslaBLE::Vehicle>(ble_adapter_, storage_adapter_);
     state_manager_ = std::make_unique<VehicleStateManager>(this);
     
