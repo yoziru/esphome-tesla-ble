@@ -896,31 +896,31 @@ void TeslaClimate::control(const climate::ClimateCall &call) {
     }
     
     // Handle custom presets
-    const char* custom = call.get_custom_preset();
-    if (custom != nullptr) {
-        if (strcmp(custom, "Normal") == 0) {
+    if (call.has_custom_preset()) {
+        auto custom = call.get_custom_preset();
+        if (custom == "Normal") {
             parent_->set_preconditioning_max(false);
             parent_->set_climate_keeper(0);
-        } else if (strcmp(custom, "Defrost") == 0) {
+        } else if (custom == "Defrost") {
             parent_->set_preconditioning_max(true);
-        } else if (strcmp(custom, "Keep On") == 0) {
+        } else if (custom == "Keep On") {
             parent_->set_preconditioning_max(false);
             parent_->set_climate_keeper(1);
-        } else if (strcmp(custom, "Dog Mode") == 0) {
+        } else if (custom == "Dog Mode") {
             parent_->set_preconditioning_max(false);
             parent_->set_climate_keeper(2);
-        } else if (strcmp(custom, "Camp Mode") == 0) {
+        } else if (custom == "Camp Mode") {
             parent_->set_preconditioning_max(false);
             parent_->set_climate_keeper(3);
         }
     }
     
     // Handle custom fan modes
-    const char* fan = call.get_custom_fan_mode();
-    if (fan != nullptr) {
-        if (strcmp(fan, "Normal") == 0) {
+    if (call.has_custom_fan_mode()) {
+        auto fan = call.get_custom_fan_mode();
+        if (fan == "Normal") {
             parent_->set_bioweapon_mode(false);
-        } else if (strcmp(fan, "Bioweapon Mode") == 0) {
+        } else if (fan == "Bioweapon Mode") {
             parent_->set_bioweapon_mode(true);
         }
     }
