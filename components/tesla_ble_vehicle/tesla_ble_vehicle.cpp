@@ -477,7 +477,7 @@ void TeslaBLEVehicle::force_update() {
   last_infotainment_poll_ = now;
 
   if (vehicle_) {
-    this->wake_vehicle();
+    vehicle_->vcsec_poll();
     vehicle_->infotainment_poll(true);
   }
 }
@@ -821,7 +821,7 @@ void TeslaBLEVehicle::handle_connection_established() {
     vehicle_->set_connected(true);
     ESP_LOGI(TAG, "Connection established - triggering initial polls");
     vehicle_->vcsec_poll();
-    vehicle_->infotainment_poll(false);
+    vehicle_->infotainment_poll(true);
     last_vcsec_poll_ = millis();
     last_infotainment_poll_ = millis();
   }
