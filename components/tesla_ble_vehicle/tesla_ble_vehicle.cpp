@@ -46,13 +46,18 @@ TeslaBLEVehicle::TeslaBLEVehicle() : vin_(""), role_("DRIVER") {
 
 void TeslaBLEVehicle::setup() {
   ESP_LOGCONFIG(TAG, "Setting up TeslaBLEVehicle");
-
   initialize_ble_uuids();
   initialize_managers();
   configure_pending_sensors();
 
-  if (!vin_.empty())
+
+  if (vin_.empty()) {
+    ESP_LOGE(TAG, "VIN not configured - component will not function properly");
+    this->status_set_warning("VIN not configured");
+    return;
+  } else {
     vehicle_->set_vin(vin_);
+  }
 
   setup_button_callbacks();
 }
