@@ -50,14 +50,13 @@ void TeslaBLEVehicle::setup() {
   initialize_managers();
   configure_pending_sensors();
 
-
   if (vin_.empty()) {
     ESP_LOGE(TAG, "VIN not configured - component will not function properly");
     this->status_set_warning("VIN not configured");
     return;
-  } else {
-    vehicle_->set_vin(vin_);
   }
+
+  vehicle_->set_vin(vin_);
 
   setup_button_callbacks();
 }
@@ -197,12 +196,16 @@ void TeslaBLEVehicle::update() {
   }
 
   // Infotainment Polling - use faster interval when vehicle is active
-  uint32_t infotainment_interval =
-      state_manager_->is_asleep() ? infotainment_sleep_timeout_
-      : (state_manager_->is_charging() || state_manager_->is_user_present() ||
-         state_manager_->is_unlocked())
-          ? infotainment_poll_interval_active_
-          : infotainment_poll_interval_awake_;
+  const bool is_asleep = state_manager_->is_asleep();
+  const bool is_active = state_manager_->is_charging() ||
+                         state_manager_->is_user_present() ||
+                         state_manager_->is_unlocked();
+  uint32_t infotainment_interval = infotainment_poll_interval_awake_;
+  if (is_asleep) {
+    infotainment_interval = infotainment_sleep_timeout_;
+  } else if (is_active) {
+    infotainment_interval = infotainment_poll_interval_active_;
+  }
 
   if (now - last_infotainment_poll_ >= infotainment_interval) {
     ESP_LOGI(TAG, "Polling Infotainment");
@@ -236,7 +239,7 @@ void TeslaBLEVehicle::set_vin(const char *vin) {
     return;
   }
 
-  vin_ = std::string(vin);
+  vin_ = vin;
   ESP_LOGD(TAG, "VIN set to: %s", vin_.c_str());
 
   if (vehicle_) {
@@ -1049,31 +1052,31 @@ void TeslaClimate::control(const climate::ClimateCall &call) {
   }
 
   // Handle custom presets
-  const char *custom = call.get_custom_preset().c_str();
-  if (custom != nullptr) {
-    if (strcmp(custom, "Normal") == 0) {
+  const auto custom = call.get_custom_preset();
+  if (!custom.empty()) {
+    if (custom == "Normal") {
       parent_->set_preconditioning_max(false);
       parent_->set_climate_keeper(0);
-    } else if (strcmp(custom, "Defrost") == 0) {
+    } else if (custom == "Defrost") {
       parent_->set_preconditioning_max(true);
-    } else if (strcmp(custom, "Keep On") == 0) {
+    } else if (custom == "Keep On") {
       parent_->set_preconditioning_max(false);
       parent_->set_climate_keeper(1);
-    } else if (strcmp(custom, "Dog Mode") == 0) {
+    } else if (custom == "Dog Mode") {
       parent_->set_preconditioning_max(false);
       parent_->set_climate_keeper(2);
-    } else if (strcmp(custom, "Camp Mode") == 0) {
+    } else if (custom == "Camp Mode") {
       parent_->set_preconditioning_max(false);
       parent_->set_climate_keeper(3);
     }
   }
 
   // Handle custom fan modes
-  const char *fan = call.get_custom_fan_mode().c_str();
-  if (fan != nullptr) {
-    if (strcmp(fan, "Normal") == 0) {
+  const auto fan = call.get_custom_fan_mode();
+  if (!fan.empty()) {
+    if (fan == "Normal") {
       parent_->set_bioweapon_mode(false);
-    } else if (strcmp(fan, "Bioweapon Mode") == 0) {
+    } else if (fan == "Bioweapon Mode") {
       parent_->set_bioweapon_mode(true);
     }
   }
