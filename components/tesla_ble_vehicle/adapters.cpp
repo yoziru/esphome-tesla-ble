@@ -27,7 +27,7 @@ void BleAdapterImpl::disconnect() {
 bool BleAdapterImpl::write(const std::vector<uint8_t>& data) {
     if (!parent_->is_connected()) return false;
     
-    ESP_LOGD(ADAPTER_TAG, "BLE TX: %s", TeslaBLE::format_hex(data.data(), data.size()).c_str());
+    ESP_LOGV(ADAPTER_TAG, "BLE TX: %s", TeslaBLE::format_hex(data.data(), data.size()).c_str());
     
     // Fragment message
     for (size_t i = 0; i < data.size(); i += BLOCK_LENGTH) {

@@ -8,31 +8,34 @@ namespace esphome {
 namespace tesla_ble_vehicle {
 
 VehicleStateManager::VehicleStateManager(TeslaBLEVehicle* parent)
-    : parent_(parent), is_charging_(false), charging_amps_max_(32) {}
+    : parent_(parent) {}
 
 // =============================================================================
 // Generic sensor setters/getters
 // =============================================================================
 
 void VehicleStateManager::set_binary_sensor(const std::string& id, binary_sensor::BinarySensor* sensor) {
-    if (sensor != nullptr) {
-        binary_sensors_[id] = sensor;
-        ESP_LOGD(STATE_MANAGER_TAG, "Registered binary sensor: %s", id.c_str());
+    if (sensor == nullptr) {
+        return;
     }
+    binary_sensors_[id] = sensor;
+    ESP_LOGD(STATE_MANAGER_TAG, "Registered binary sensor: %s", id.c_str());
 }
 
 void VehicleStateManager::set_sensor(const std::string& id, sensor::Sensor* sensor) {
-    if (sensor != nullptr) {
-        sensors_[id] = sensor;
-        ESP_LOGD(STATE_MANAGER_TAG, "Registered sensor: %s", id.c_str());
+    if (sensor == nullptr) {
+        return;
     }
+    sensors_[id] = sensor;
+    ESP_LOGD(STATE_MANAGER_TAG, "Registered sensor: %s", id.c_str());
 }
 
 void VehicleStateManager::set_text_sensor(const std::string& id, text_sensor::TextSensor* sensor) {
-    if (sensor != nullptr) {
-        text_sensors_[id] = sensor;
-        ESP_LOGD(STATE_MANAGER_TAG, "Registered text sensor: %s", id.c_str());
+    if (sensor == nullptr) {
+        return;
     }
+    text_sensors_[id] = sensor;
+    ESP_LOGD(STATE_MANAGER_TAG, "Registered text sensor: %s", id.c_str());
 }
 
 binary_sensor::BinarySensor* VehicleStateManager::get_binary_sensor(const std::string& id) {
@@ -71,24 +74,18 @@ const text_sensor::TextSensor* VehicleStateManager::get_text_sensor(const std::s
 // =============================================================================
 
 bool VehicleStateManager::publish_binary_sensor(const std::string& id, bool state) {
-    if (auto* sensor = get_binary_sensor(id)) {
-        return publish_sensor_state(sensor, state);
-    }
-    return false;
+    auto* sensor = get_binary_sensor(id);
+    return sensor != nullptr && publish_sensor_state(sensor, state);
 }
 
 bool VehicleStateManager::publish_sensor(const std::string& id, float state) {
-    if (auto* sensor = get_sensor(id)) {
-        return publish_sensor_state(sensor, state);
-    }
-    return false;
+    auto* sensor = get_sensor(id);
+    return sensor != nullptr && publish_sensor_state(sensor, state);
 }
 
 bool VehicleStateManager::publish_text_sensor(const std::string& id, const std::string& state) {
-    if (auto* sensor = get_text_sensor(id)) {
-        return publish_sensor_state(sensor, state);
-    }
-    return false;
+    auto* sensor = get_text_sensor(id);
+    return sensor != nullptr && publish_sensor_state(sensor, state);
 }
 
 // =============================================================================
@@ -143,9 +140,8 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
-        bool was_charging = is_charging_;
-        
-        bool new_charging_state = (
+        const bool was_charging = is_charging_;
+        const bool new_charging_state = (
             charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag ||
             charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Starting_tag
         );
@@ -159,12 +155,8 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         
         // Sync charging switch with vehicle state
         if (charging_switch_ && (!charging_switch_->has_state() || charging_switch_->state != is_charging_)) {
-            if (should_delay_infotainment_request()) {
-                ESP_LOGD(STATE_MANAGER_TAG, "Delaying charging switch sync due to recent command");
-            } else {
-                ESP_LOGD(STATE_MANAGER_TAG, "Syncing charging switch to vehicle state: %s", is_charging_ ? "ON" : "OFF");
-                publish_sensor_state(charging_switch_, is_charging_);
-            }
+            ESP_LOGD(STATE_MANAGER_TAG, "Syncing charging switch to vehicle state: %s", is_charging_ ? "ON" : "OFF");
+            publish_sensor_state(charging_switch_, is_charging_);
         }
         
         if (was_charging != is_charging_) {
@@ -176,13 +168,13 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         publish_text_sensor("iec61851_state", get_iec61851_state_text(charge_state.charging_state));
         
         // Update charger connected binary sensor
-        bool charger_connected = is_charger_connected_from_state(charge_state.charging_state);
+        const bool charger_connected = is_charger_connected_from_state(charge_state.charging_state);
         publish_binary_sensor("charger", charger_connected);
     }
     
     // Update battery level
     if (charge_state.which_optional_battery_level) {
-        float battery_level = static_cast<float>(charge_state.optional_battery_level.battery_level);
+        const float battery_level = static_cast<float>(charge_state.optional_battery_level.battery_level);
         if (battery_level >= 0.0f && battery_level <= 100.0f && std::isfinite(battery_level)) {
             if (publish_sensor("battery_level", battery_level)) {
                 ESP_LOGI(STATE_MANAGER_TAG, "Updating battery level to %.1f%%", battery_level);
@@ -192,7 +184,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update charger power - prefer native kW value from vehicle
     if (charge_state.which_optional_charger_power) {
-        float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
+        const float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
         if (power_kw >= 0.0f && power_kw <= 500.0f && std::isfinite(power_kw)) {
             publish_sensor("charger_power", power_kw);
         }
@@ -200,7 +192,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update range (battery_range is in miles)
     if (charge_state.which_optional_battery_range) {
-        float range = charge_state.optional_battery_range.battery_range;
+        const float range = charge_state.optional_battery_range.battery_range;
         if (range >= 0.0f && range <= 500.0f && std::isfinite(range)) {
             publish_sensor("range", range);
         }
@@ -208,7 +200,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update energy added (kWh)
     if (charge_state.which_optional_charge_energy_added) {
-        float energy = charge_state.optional_charge_energy_added.charge_energy_added;
+        const float energy = charge_state.optional_charge_energy_added.charge_energy_added;
         if (energy >= 0.0f && std::isfinite(energy)) {
             publish_sensor("energy_added", energy);
         }
@@ -216,7 +208,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update time to full charge (minutes)
     if (charge_state.which_optional_minutes_to_full_charge) {
-        float minutes = static_cast<float>(charge_state.optional_minutes_to_full_charge.minutes_to_full_charge);
+        const float minutes = static_cast<float>(charge_state.optional_minutes_to_full_charge.minutes_to_full_charge);
         if (minutes >= 0.0f && std::isfinite(minutes)) {
             publish_sensor("time_to_full", minutes);
         }
@@ -224,15 +216,15 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update charger voltage
     if (charge_state.which_optional_charger_voltage) {
-        float voltage = static_cast<float>(charge_state.optional_charger_voltage.charger_voltage);
+        const float voltage = static_cast<float>(charge_state.optional_charger_voltage.charger_voltage);
         if (voltage >= 0.0f && voltage <= 600.0f && std::isfinite(voltage)) {
             publish_sensor("charger_voltage", voltage);
         }
     }
     
-    // Update charger current
+    // Update charger current (real-time feedback, never delay)
     if (charge_state.which_optional_charger_actual_current) {
-        float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
+        const float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
         if (current >= 0.0f && current <= 100.0f && std::isfinite(current)) {
             publish_sensor("charger_current", current);
         }
@@ -240,22 +232,20 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update charging rate
     if (charge_state.which_optional_charge_rate_mph) {
-        float rate_mph = static_cast<float>(charge_state.optional_charge_rate_mph.charge_rate_mph);
+        const float rate_mph = static_cast<float>(charge_state.optional_charge_rate_mph.charge_rate_mph);
         publish_sensor("charging_rate", rate_mph);
     }
 
-    // Update charging amps
+    // Update charging amps (real-time feedback, never delay)
     if (charge_state.which_optional_charger_actual_current && charging_amps_number_) {
-        float amps = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
+        const float amps = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
         update_charging_amps(amps);
     }
     
     // Update charge limit
     if (charge_state.which_optional_charge_limit_soc && charging_limit_number_) {
-        float limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
-        if (!should_delay_infotainment_request()) {
-            publish_sensor_state(charging_limit_number_, limit);
-        }
+        const float limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
+        publish_sensor_state(charging_limit_number_, limit);
     }
     
     // Update max charging amps
@@ -269,7 +259,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     
     // Update charge port door cover (physical door open/closed)
     if (charge_state.which_optional_charge_port_door_open) {
-        bool door_open = charge_state.optional_charge_port_door_open.charge_port_door_open;
+        const bool door_open = charge_state.optional_charge_port_door_open.charge_port_door_open;
         if (charge_port_door_cover_ != nullptr) {
             charge_port_door_cover_->position = door_open ? cover::COVER_OPEN : cover::COVER_CLOSED;
             charge_port_door_cover_->publish_state();
@@ -279,8 +269,8 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charge port latch lock (cable latch engaged/disengaged)
     if (charge_state.has_charge_port_latch) {
         // Engaged = locked (cable secured), Disengaged = unlocked (cable can be removed)
-        bool latch_engaged = (charge_state.charge_port_latch.which_type == CarServer_ChargePortLatchState_Engaged_tag);
-        bool latch_disengaged = (charge_state.charge_port_latch.which_type == CarServer_ChargePortLatchState_Disengaged_tag);
+        const bool latch_engaged = (charge_state.charge_port_latch.which_type == CarServer_ChargePortLatchState_Engaged_tag);
+        const bool latch_disengaged = (charge_state.charge_port_latch.which_type == CarServer_ChargePortLatchState_Disengaged_tag);
         if (charge_port_latch_lock_ != nullptr && (latch_engaged || latch_disengaged)) {
             auto new_state = latch_engaged ? lock::LOCK_STATE_LOCKED : lock::LOCK_STATE_UNLOCKED;
             if (charge_port_latch_lock_->state != new_state) {
@@ -296,7 +286,7 @@ void VehicleStateManager::update_climate_state(const CarServer_ClimateState& cli
     
     // Inside temperature (used internally for climate entity)
     if (climate_state.which_optional_inside_temp_celsius) {
-        float temp = climate_state.optional_inside_temp_celsius.inside_temp_celsius;
+        const float temp = climate_state.optional_inside_temp_celsius.inside_temp_celsius;
         if (temp >= -40.0f && temp <= 60.0f && std::isfinite(temp)) {
             current_inside_temp_ = temp;
         }
@@ -304,7 +294,7 @@ void VehicleStateManager::update_climate_state(const CarServer_ClimateState& cli
     
     // Outside temperature
     if (climate_state.which_optional_outside_temp_celsius) {
-        float temp = climate_state.optional_outside_temp_celsius.outside_temp_celsius;
+        const float temp = climate_state.optional_outside_temp_celsius.outside_temp_celsius;
         if (temp >= -50.0f && temp <= 60.0f && std::isfinite(temp)) {
             publish_sensor("outside_temp", temp);
         }
@@ -312,7 +302,7 @@ void VehicleStateManager::update_climate_state(const CarServer_ClimateState& cli
     
     // Driver temperature setting (used for climate entity target temp)
     if (climate_state.which_optional_driver_temp_setting) {
-        float temp = climate_state.optional_driver_temp_setting.driver_temp_setting;
+        const float temp = climate_state.optional_driver_temp_setting.driver_temp_setting;
         if (temp >= 15.0f && temp <= 30.0f && std::isfinite(temp)) {
             target_temp_ = temp;
         }
@@ -325,19 +315,15 @@ void VehicleStateManager::update_climate_state(const CarServer_ClimateState& cli
     
     // Steering wheel heater - sync switch state from vehicle
     if (climate_state.which_optional_steering_wheel_heater && steering_wheel_heat_switch_ != nullptr) {
-        bool heater_on = climate_state.optional_steering_wheel_heater.steering_wheel_heater;
+        const bool heater_on = climate_state.optional_steering_wheel_heater.steering_wheel_heater;
         if (!steering_wheel_heat_switch_->has_state() || steering_wheel_heat_switch_->state != heater_on) {
-            if (!should_delay_infotainment_request()) {
-                ESP_LOGD(STATE_MANAGER_TAG, "Syncing steering wheel heat switch to vehicle state: %s", heater_on ? "ON" : "OFF");
-                publish_sensor_state(steering_wheel_heat_switch_, heater_on);
-            }
+            ESP_LOGD(STATE_MANAGER_TAG, "Syncing steering wheel heat switch to vehicle state: %s", heater_on ? "ON" : "OFF");
+            publish_sensor_state(steering_wheel_heat_switch_, heater_on);
         }
     }
     
     // Update climate entity with current state
-    if (climate_ != nullptr) {
-        // Import TeslaClimate to call update_state method
-        auto* tesla_climate = static_cast<TeslaClimate*>(climate_);
+    if (auto* tesla_climate = static_cast<TeslaClimate*>(climate_)) {
         tesla_climate->update_state(climate_on_, current_inside_temp_, target_temp_);
     }
 }
@@ -350,13 +336,13 @@ void VehicleStateManager::update_drive_state(const CarServer_DriveState& drive_s
         publish_text_sensor("shift_state", get_shift_state_text(drive_state.shift_state));
         
         // Parking brake sensor - true when in P
-        bool parked = (drive_state.shift_state.which_type == CarServer_ShiftState_P_tag);
+        const bool parked = (drive_state.shift_state.which_type == CarServer_ShiftState_P_tag);
         publish_binary_sensor("parking_brake", parked);
     }
     
     // Odometer (convert from hundredths of a mile to miles)
     if (drive_state.which_optional_odometer_in_hundredths_of_a_mile) {
-        float odometer = static_cast<float>(drive_state.optional_odometer_in_hundredths_of_a_mile.odometer_in_hundredths_of_a_mile) / 100.0f;
+        const float odometer = static_cast<float>(drive_state.optional_odometer_in_hundredths_of_a_mile.odometer_in_hundredths_of_a_mile) / 100.0f;
         if (odometer >= 0.0f && std::isfinite(odometer)) {
             publish_sensor("odometer", odometer);
         }
@@ -368,28 +354,28 @@ void VehicleStateManager::update_tire_pressure_state(const CarServer_TirePressur
     
     // Tire pressures in bar
     if (tire_pressure_state.which_optional_tpms_pressure_fl) {
-        float pressure = tire_pressure_state.optional_tpms_pressure_fl.tpms_pressure_fl;
+        const float pressure = tire_pressure_state.optional_tpms_pressure_fl.tpms_pressure_fl;
         if (pressure >= 0.0f && pressure <= 5.0f && std::isfinite(pressure)) {
             publish_sensor("tpms_front_left", pressure);
         }
     }
     
     if (tire_pressure_state.which_optional_tpms_pressure_fr) {
-        float pressure = tire_pressure_state.optional_tpms_pressure_fr.tpms_pressure_fr;
+        const float pressure = tire_pressure_state.optional_tpms_pressure_fr.tpms_pressure_fr;
         if (pressure >= 0.0f && pressure <= 5.0f && std::isfinite(pressure)) {
             publish_sensor("tpms_front_right", pressure);
         }
     }
     
     if (tire_pressure_state.which_optional_tpms_pressure_rl) {
-        float pressure = tire_pressure_state.optional_tpms_pressure_rl.tpms_pressure_rl;
+        const float pressure = tire_pressure_state.optional_tpms_pressure_rl.tpms_pressure_rl;
         if (pressure >= 0.0f && pressure <= 5.0f && std::isfinite(pressure)) {
             publish_sensor("tpms_rear_left", pressure);
         }
     }
     
     if (tire_pressure_state.which_optional_tpms_pressure_rr) {
-        float pressure = tire_pressure_state.optional_tpms_pressure_rr.tpms_pressure_rr;
+        const float pressure = tire_pressure_state.optional_tpms_pressure_rr.tpms_pressure_rr;
         if (pressure >= 0.0f && pressure <= 5.0f && std::isfinite(pressure)) {
             publish_sensor("tpms_rear_right", pressure);
         }
@@ -415,14 +401,14 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
     
     // Trunks - update cover entities
     if (closures_state.which_optional_door_open_trunk_front) {
-        bool frunk_open = closures_state.optional_door_open_trunk_front.door_open_trunk_front;
+        const bool frunk_open = closures_state.optional_door_open_trunk_front.door_open_trunk_front;
         if (frunk_cover_ != nullptr) {
             frunk_cover_->position = frunk_open ? cover::COVER_OPEN : cover::COVER_CLOSED;
             frunk_cover_->publish_state();
         }
     }
     if (closures_state.which_optional_door_open_trunk_rear) {
-        bool trunk_open = closures_state.optional_door_open_trunk_rear.door_open_trunk_rear;
+        const bool trunk_open = closures_state.optional_door_open_trunk_rear.door_open_trunk_rear;
         if (trunk_cover_ != nullptr) {
             trunk_cover_->position = trunk_open ? cover::COVER_OPEN : cover::COVER_CLOSED;
             trunk_cover_->publish_state();
@@ -447,7 +433,7 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
         window_pr = closures_state.optional_window_open_passenger_rear.window_open_passenger_rear;
         publish_binary_sensor("window_passenger_rear", window_pr);
     }
-    bool any_window_open = window_df || window_dr || window_pf || window_pr;
+    const bool any_window_open = window_df || window_dr || window_pf || window_pr;
     
     if (windows_cover_ != nullptr) {
         windows_cover_->position = any_window_open ? cover::COVER_OPEN : cover::COVER_CLOSED;
@@ -456,20 +442,18 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
     
     // Sunroof (any percent open > 0 means open)
     if (closures_state.which_optional_sun_roof_percent_open) {
-        bool sunroof_open = closures_state.optional_sun_roof_percent_open.sun_roof_percent_open > 0;
+        const bool sunroof_open = closures_state.optional_sun_roof_percent_open.sun_roof_percent_open > 0;
         publish_binary_sensor("sunroof", sunroof_open);
     }
     
     // Sentry mode - sync switch state from vehicle
     if (closures_state.has_sentry_mode_state && sentry_mode_switch_ != nullptr) {
-        bool sentry_active = (closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Armed_tag ||
-                             closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Aware_tag ||
-                             closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Panic_tag);
+        const bool sentry_active = (closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Armed_tag ||
+                              closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Aware_tag ||
+                              closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Panic_tag);
         if (!sentry_mode_switch_->has_state() || sentry_mode_switch_->state != sentry_active) {
-            if (!should_delay_infotainment_request()) {
-                ESP_LOGD(STATE_MANAGER_TAG, "Syncing sentry mode switch to vehicle state: %s", sentry_active ? "ON" : "OFF");
-                publish_sensor_state(sentry_mode_switch_, sentry_active);
-            }
+            ESP_LOGD(STATE_MANAGER_TAG, "Syncing sentry mode switch to vehicle state: %s", sentry_active ? "ON" : "OFF");
+            publish_sensor_state(sentry_mode_switch_, sentry_active);
         }
     }
     
@@ -586,11 +570,14 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
         ESP_LOGW(STATE_MANAGER_TAG, "Invalid max charging amps: %d A", new_max);
         return;
     }
-    
-    int32_t old_max = charging_amps_max_;
+
+    if (new_max == charging_amps_max_) {
+        return;
+    }
+
     charging_amps_max_ = new_max;
-    
-    if (charging_amps_number_ && old_max != new_max && parent_) {
+
+    if (charging_amps_number_ && parent_) {
         parent_->update_charging_amps_max_value(new_max);
         ESP_LOGD(STATE_MANAGER_TAG, "Updated max charging amps to %d A", new_max);
     }
@@ -601,14 +588,7 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 // =============================================================================
 
 void VehicleStateManager::track_command_issued() {
-    last_command_time_ = millis();
-    ESP_LOGD(STATE_MANAGER_TAG, "Command issued - will delay updates for %dms", COMMAND_DELAY_TIME);
-}
-
-bool VehicleStateManager::should_delay_infotainment_request() const {
-    uint32_t now = millis();
-    uint32_t time_since_command = now - last_command_time_;
-    return time_since_command < COMMAND_DELAY_TIME;
+    ESP_LOGD(STATE_MANAGER_TAG, "Command issued - state updates will sync immediately");
 }
 
 // =============================================================================

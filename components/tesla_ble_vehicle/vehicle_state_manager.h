@@ -133,10 +133,10 @@ public:
     void set_charging_amps_max(int max) { charging_amps_max_ = max; }
     
     // ==========================================================================
-    // Command tracking for INFOTAINMENT request delay
+    // ==========================================================================
+    // Command tracking
     // ==========================================================================
     void track_command_issued();
-    bool should_delay_infotainment_request() const;
     
 private:
     TeslaBLEVehicle* parent_;
@@ -180,9 +180,7 @@ private:
     float target_temp_{21.0f};
     bool climate_on_{false};
     
-    // Command delay tracking - prevents stale data from overwriting fresh user commands
-    uint32_t last_command_time_{0};
-    static const uint32_t COMMAND_DELAY_TIME = 3000; // 3 seconds delay after command
+
     
     // ==========================================================================
     // Helper methods for publishing sensor state
