@@ -25,6 +25,9 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 
 ## Configuration
 
+### Entities declared in YAML (for `id:`, `!extend`, templates)
+
+
 ### Polling Intervals
 
 The component supports configurable polling intervals to balance responsiveness and battery life:
