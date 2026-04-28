@@ -1021,15 +1021,16 @@ void TeslaChargePortDoorCover::control(const cover::CoverCall &call) {
 // Climate implementation
 // =============================================================================
 
+TeslaClimate::TeslaClimate() {
+  this->set_supported_custom_presets(
+      {"Normal", "Defrost", "Keep On", "Dog Mode", "Camp Mode"});
+  this->set_supported_custom_fan_modes({"Normal", "Bioweapon Mode"});
+}
+
 climate::ClimateTraits TeslaClimate::traits() {
   auto traits = climate::ClimateTraits();
   traits.set_supported_modes(
       {climate::CLIMATE_MODE_OFF, climate::CLIMATE_MODE_HEAT_COOL});
-  // Custom presets with clear text descriptions
-  traits.set_supported_custom_presets(
-      {"Normal", "Defrost", "Keep On", "Dog Mode", "Camp Mode"});
-  // Custom fan modes with clear text descriptions
-  traits.set_supported_custom_fan_modes({"Normal", "Bioweapon Mode"});
   // Use feature flags for current temperature support
   traits.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE);
   traits.set_visual_min_temperature(15.0f);
