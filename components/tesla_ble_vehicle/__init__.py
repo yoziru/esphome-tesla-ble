@@ -547,7 +547,7 @@ TESLA_SET_CHARGING_LIMIT_ACTION_SCHEMA = cv.Schema({
 # =============================================================================
 
 @automation.register_action(
-    "tesla_ble_vehicle.wake", WakeAction, TESLA_WAKE_ACTION_SCHEMA
+    "tesla_ble_vehicle.wake", WakeAction, TESLA_WAKE_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_wake_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -555,7 +555,7 @@ async def tesla_wake_to_code(config, action_id, template_arg, args):
 
 
 @automation.register_action(
-    "tesla_ble_vehicle.pair", PairAction, TESLA_PAIR_ACTION_SCHEMA
+    "tesla_ble_vehicle.pair", PairAction, TESLA_PAIR_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_pair_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -563,7 +563,7 @@ async def tesla_pair_to_code(config, action_id, template_arg, args):
 
 
 @automation.register_action(
-    "tesla_ble_vehicle.regenerate_key", RegenerateKeyAction, TESLA_REGENERATE_KEY_ACTION_SCHEMA
+    "tesla_ble_vehicle.regenerate_key", RegenerateKeyAction, TESLA_REGENERATE_KEY_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_regenerate_key_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -571,7 +571,7 @@ async def tesla_regenerate_key_to_code(config, action_id, template_arg, args):
 
 
 @automation.register_action(
-    "tesla_ble_vehicle.force_update", ForceUpdateAction, TESLA_FORCE_UPDATE_ACTION_SCHEMA
+    "tesla_ble_vehicle.force_update", ForceUpdateAction, TESLA_FORCE_UPDATE_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_force_update_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -579,7 +579,7 @@ async def tesla_force_update_to_code(config, action_id, template_arg, args):
 
 
 @automation.register_action(
-    "tesla_ble_vehicle.set_charging", SetChargingAction, TESLA_SET_CHARGING_ACTION_SCHEMA
+    "tesla_ble_vehicle.set_charging", SetChargingAction, TESLA_SET_CHARGING_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_set_charging_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -590,7 +590,7 @@ async def tesla_set_charging_to_code(config, action_id, template_arg, args):
 
 
 @automation.register_action(
-    "tesla_ble_vehicle.set_charging_amps", SetChargingAmpsAction, TESLA_SET_CHARGING_AMPS_ACTION_SCHEMA
+    "tesla_ble_vehicle.set_charging_amps", SetChargingAmpsAction, TESLA_SET_CHARGING_AMPS_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_set_charging_amps_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -601,7 +601,7 @@ async def tesla_set_charging_amps_to_code(config, action_id, template_arg, args)
 
 
 @automation.register_action(
-    "tesla_ble_vehicle.set_charging_limit", SetChargingLimitAction, TESLA_SET_CHARGING_LIMIT_ACTION_SCHEMA
+    "tesla_ble_vehicle.set_charging_limit", SetChargingLimitAction, TESLA_SET_CHARGING_LIMIT_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_set_charging_limit_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
