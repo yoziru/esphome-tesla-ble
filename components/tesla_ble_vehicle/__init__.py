@@ -473,7 +473,7 @@ async def to_code(config):
     cg.add(var.set_infotainment_poll_interval_active(config[CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE] * 1000))
     cg.add(var.set_infotainment_sleep_timeout(config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000))
     
-    # Create all sensors using data-driven approach with generic setters
+    # Create all entities using data-driven approach with generic setters
     for definition in BINARY_SENSORS:
         await create_binary_sensor(var, definition)
     
