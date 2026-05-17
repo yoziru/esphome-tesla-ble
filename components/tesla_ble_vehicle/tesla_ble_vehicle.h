@@ -374,6 +374,7 @@ protected:
 
 class TeslaClimate : public climate::Climate {
 public:
+    TeslaClimate();
     void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
     climate::ClimateTraits traits() override;
     void control(const climate::ClimateCall &call) override;
