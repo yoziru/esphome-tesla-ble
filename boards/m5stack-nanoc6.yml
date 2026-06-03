@@ -11,10 +11,10 @@ esp32:
       CONFIG_USE_MINIMAL_MDNS: y
       CONFIG_ESPTOOLPY_FLASHSIZE_4MB: y
 
-# Board specific entities
 light:
   - platform: status_led
     name: "Status LED"
+    id: blue_status_led
     entity_category: diagnostic
     pin: GPIO7
 
@@ -22,29 +22,44 @@ light:
   - platform: esp32_rmt_led_strip
     rgb_order: GRB
     pin: GPIO20
-    num_leds: 4
+    num_leds: 1
     chipset: ws2812
     name: "RGB LED"
+    id: rgb_led
     entity_category: diagnostic
     power_supply: rgbpwr
+    default_transition_length: 150ms
 
 power_supply:
   - id: "rgbpwr"
-    enable_on_boot: true
     pin: GPIO19
-    enable_time: 10ms
+
+    # According to the datasheet of the Awinic AW35122FDR, it takes the load
+    # switch 0.5ms to fully turn on (it has slew rate control), see "Switch
+    # turn on time".
+    enable_time: 5ms
     keep_on_time: 10ms
 
 #G9=Button
 binary_sensor:
   - platform: gpio
     name: Button
+    id: case_button
     entity_category: diagnostic
     pin:
       number: GPIO9
+
+      # M5Stack intended to use the GPIO9 for the button to allow the user to
+      # force the ESP into download mode. Acknowledge the warning from ESPHome.
+      # See "Download Mode" in https://docs.m5stack.com/en/core/M5NanoC6
+      ignore_strapping_warning: true
+
       inverted: true
       mode:
         input: true
         pullup: true
     filters:
       - delayed_off: 10ms
+    on_press:
+      then:
+        - logger.log: Button Pressed
