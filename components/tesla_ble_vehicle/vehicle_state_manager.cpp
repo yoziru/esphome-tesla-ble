@@ -229,6 +229,42 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
             publish_sensor("charger_current", current);
         }
     }
+
+// Update EVSE max current (what the charger can theoretically provide)
+    if (charge_state.which_optional_charger_pilot_current) {
+        const float pilot_current = static_cast<float>(charge_state.optional_charger_pilot_current.charger_pilot_current);
+        if (pilot_current >= 0.0f && pilot_current <= 100.0f && std::isfinite(pilot_current)) {
+            publish_sensor("evse_max_current", pilot_current);
+        }
+    }
+
+    // Update vehicle max acceptable charge current (onboard charger limit)
+    if (charge_state.which_optional_charge_current_request_max) {
+        const int32_t max_amps = charge_state.optional_charge_current_request_max.charge_current_request_max;
+        if (max_amps > 0 && max_amps <= 100) {
+            publish_sensor("vehicle_max_charge_current", static_cast<float>(max_amps));
+            if (max_amps != charging_amps_max_) {
+                ESP_LOGI(STATE_MANAGER_TAG, "Received new max charging amps: %d A", max_amps);
+                update_charging_amps_max(max_amps);
+            }
+        }
+    }
+
+    // Update charge current request (what the car is actively requesting from the EVSE)
+    if (charge_state.which_optional_charge_current_request) {
+        const int32_t request = charge_state.optional_charge_current_request.charge_current_request;
+        if (request >= 0 && request <= 100) {
+            publish_sensor("charge_current_request", static_cast<float>(request));
+        }
+    }
+
+    // Publish charge limit reason as text sensor
+    if (charge_state.which_optional_charge_limit_reason) {
+        const auto reason = charge_state.optional_charge_limit_reason.charge_limit_reason;
+        publish_text_sensor("charge_limit_reason", get_charge_limit_reason_text(reason));
+    } else {
+        publish_text_sensor("charge_limit_reason", "-");
+    }
     
     // Update charging rate
     if (charge_state.which_optional_charge_rate_mph) {
@@ -246,15 +282,6 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     if (charge_state.which_optional_charge_limit_soc && charging_limit_number_) {
         const float limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
         publish_sensor_state(charging_limit_number_, limit);
-    }
-    
-    // Update max charging amps
-    if (charge_state.which_optional_charge_current_request_max) {
-        int32_t new_max = charge_state.optional_charge_current_request_max.charge_current_request_max;
-        if (new_max > 0 && new_max != charging_amps_max_) {
-            ESP_LOGI(STATE_MANAGER_TAG, "Received new max charging amps: %d A", new_max);
-            update_charging_amps_max(new_max);
-        }
     }
     
     // Update charge port door cover (physical door open/closed)
@@ -730,6 +757,18 @@ std::string VehicleStateManager::get_shift_state_text(const CarServer_ShiftState
         case CarServer_ShiftState_D_tag: return "D";
         case CarServer_ShiftState_SNA_tag: return "SNA";
         case CarServer_ShiftState_Invalid_tag: return "Invalid";
+        default: return "Unknown";
+    }
+}
+
+std::string VehicleStateManager::get_charge_limit_reason_text(const CarServer_ChargeState_ChargeLimitReason& reason) {
+    switch (reason) {
+        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonUnknown: return "Unknown";
+        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonNone: return "None";
+        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonEvse: return "EVSE";
+        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonBattTempLow: return "BattTempLow";
+        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonHighSoc: return "HighSoc";
+        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonCabin: return "Cabin";
         default: return "Unknown";
     }
 }
