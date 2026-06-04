@@ -150,9 +150,6 @@ public:
     void vent_windows();
     void close_windows();
     
-    // Internal helper methods for state manager
-    void update_charging_amps_max_value(int32_t new_max);
-
     // Manager accessors
     VehicleStateManager* get_state_manager() const { return state_manager_.get(); }
     
@@ -230,6 +227,9 @@ private:
     
     std::string last_rx_hex_;
 
+    // Configured max (stored before state_manager is initialized)
+    int configured_charging_amps_max_{32};
+
     // Friends
     friend class VehicleStateManager;
 };
@@ -301,7 +301,6 @@ DEFINE_TESLA_SWITCH(TeslaSentryModeSwitch, set_sentry_mode)
 class TeslaChargingAmpsNumber : public number::Number {
 public:
     void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-    void update_max_value(int32_t new_max);
 protected:
     void control(float value) override;
     TeslaBLEVehicle *parent_{nullptr};

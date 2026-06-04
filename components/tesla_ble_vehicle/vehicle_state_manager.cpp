@@ -604,8 +604,7 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 
     charging_amps_max_ = new_max;
 
-    if (charging_amps_number_ && parent_) {
-        parent_->update_charging_amps_max_value(new_max);
+    if (charging_amps_number_) {
         ESP_LOGD(STATE_MANAGER_TAG, "Updated max charging amps to %d A", new_max);
     }
 }

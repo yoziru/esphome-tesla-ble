@@ -260,6 +260,8 @@ void TeslaBLEVehicle::set_charging_amps_max(int amps_max) {
     return;
   }
 
+  configured_charging_amps_max_ = amps_max;
+
   if (state_manager_) {
     state_manager_->set_charging_amps_max(amps_max);
   }
@@ -510,7 +512,7 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
 
   if (amps < 0) {
     ESP_LOGW(TAG, "Invalid charging amps: %d", amps);
-    return -1;
+    return 0;
   }
 
   int max_amps = state_manager_->get_charging_amps_max();
@@ -525,11 +527,11 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
 
   if (!vehicle_) {
     ESP_LOGE(TAG, "Vehicle instance not available");
-    return -1;
+    return amps;
   }
 
   vehicle_->set_charging_amps(amps);
-  return 0;
+  return amps;
 }
 
 int TeslaBLEVehicle::set_charging_limit(int limit) {
@@ -727,15 +729,6 @@ void TeslaBLEVehicle::close_windows() {
     vehicle_->close_windows();
 }
 
-void TeslaBLEVehicle::update_charging_amps_max_value(int32_t new_max) {
-  if (pending_charging_amps_number_) {
-    auto *tesla_amps =
-        static_cast<TeslaChargingAmpsNumber *>(pending_charging_amps_number_);
-    tesla_amps->update_max_value(new_max);
-    ESP_LOGD(TAG, "Updated charging amps max value to %d A", new_max);
-  }
-}
-
 // =============================================================================
 // BLE event handling
 // =============================================================================
@@ -834,8 +827,11 @@ void TeslaBLEVehicle::handle_connection_established() {
     last_infotainment_poll_ = millis();
   }
 
-  if (state_manager_)
+  // Reset charging amps max to configured value on each connection
+  if (state_manager_) {
+    state_manager_->set_charging_amps_max(configured_charging_amps_max_);
     state_manager_->set_sensors_available(true);
+  }
   this->status_clear_warning();
 }
 
@@ -869,29 +865,8 @@ void TeslaChargingAmpsNumber::control(float value) {
     return;
   }
 
-  parent_->set_charging_amps(static_cast<int>(value));
-  publish_state(value);
-}
-
-void TeslaChargingAmpsNumber::update_max_value(int32_t new_max) {
-  if (new_max <= 0)
-    return;
-
-  auto old_max = this->traits.get_max_value();
-
-  if (std::abs(old_max - new_max) > 0.1f) {
-    ESP_LOGD(TAG, "Updating charging amps max from %.0f to %d A", old_max,
-             new_max);
-    this->traits.set_max_value(new_max);
-
-    if (this->has_state() && this->state > new_max) {
-      this->publish_state(new_max);
-    }
-
-    if (this->has_state()) {
-      this->publish_state(this->state);
-    }
-  }
+  int clamped = parent_->set_charging_amps(static_cast<int>(value));
+  publish_state(static_cast<float>(clamped));
 }
 
 void TeslaChargingLimitNumber::control(float value) {
