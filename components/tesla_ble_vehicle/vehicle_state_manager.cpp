@@ -272,9 +272,9 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         publish_sensor("charging_rate", rate_mph);
     }
 
-    // Update charging amps (real-time feedback, never delay)
-    if (charge_state.which_optional_charger_actual_current && charging_amps_number_) {
-        const float amps = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
+    // Update charging amps (set to charging amp setpoint)
+    if (charge_state.which_optional_charge_current_request && charging_amps_number_) {
+        const float amps = static_cast<float>(charge_state.optional_charge_current_request.charge_current_request);
         update_charging_amps(amps);
     }
     
@@ -528,7 +528,7 @@ void VehicleStateManager::update_charge_flap_open(bool open) {
 }
 
 void VehicleStateManager::update_charging_amps(float amps) {
-    ESP_LOGD(STATE_MANAGER_TAG, "Charging amps from vehicle: %.1f A", amps);
+    ESP_LOGD(STATE_MANAGER_TAG, "Charging amps setpoint from vehicle: %.1f A", amps);
     publish_sensor_state(charging_amps_number_, amps);
 }
 
