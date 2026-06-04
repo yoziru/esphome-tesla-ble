@@ -15,7 +15,7 @@ jobs:
           - tesla-ble-m5stack-atoms3.yml
           - tesla-ble-m5stack-nanoc6.yml
     steps:
-      - uses: actions/checkout@v4.3.0
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
       - name: Mock secrets.yaml from example
         run: cp secrets.yaml.example secrets.yaml
       - name: Get ESPHome version
@@ -25,7 +25,7 @@ jobs:
           esphome_version=$(grep esphome requirements.txt | cut -d'=' -f3)
           echo "esphome_version=$esphome_version" >> "$GITHUB_OUTPUT"
       - name: Build ESPHome firmware to verify configuration
-        uses: esphome/build-action@v7.0.0
+        uses: esphome/build-action@4ef4722a2935eac47b7e227fe0e1f8e0f8afcc42 # v7.3.0
         with:
           yaml-file: ${{ matrix.file }}
           version: ${{ steps.get_esphome_version.outputs.esphome_version }}
