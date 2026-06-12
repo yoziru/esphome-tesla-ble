@@ -209,8 +209,12 @@ void TeslaBLEVehicle::update() {
 
   if (now - last_infotainment_poll_ >= infotainment_interval) {
     ESP_LOGI(TAG, "Polling Infotainment");
-    bool vehicle_is_awake = !state_manager_->is_asleep();
-    vehicle_->infotainment_poll(vehicle_is_awake);
+    // Use explicit WakePolicy instead of the legacy bool parameter:
+    // - NoWakeSkip when the vehicle is known asleep (background poll should not wake)
+    // - WakeIfNeeded when the vehicle is known awake (poll normally)
+    auto policy = state_manager_->is_asleep() ? TeslaBLE::WakePolicy::NoWakeSkip
+                                              : TeslaBLE::WakePolicy::WakeIfNeeded;
+    vehicle_->infotainment_poll(policy);
     last_infotainment_poll_ = now;
   }
 }
@@ -488,7 +492,7 @@ void TeslaBLEVehicle::force_update() {
 
   if (vehicle_) {
     vehicle_->vcsec_poll();
-    vehicle_->infotainment_poll(true);
+    vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WakeIfNeeded);
   }
 }
 
@@ -822,7 +826,7 @@ void TeslaBLEVehicle::handle_connection_established() {
     vehicle_->set_connected(true);
     ESP_LOGI(TAG, "Connection established - triggering initial polls");
     vehicle_->vcsec_poll();
-    vehicle_->infotainment_poll(true);
+    vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WakeIfNeeded);
     last_vcsec_poll_ = millis();
     last_infotainment_poll_ = millis();
   }
