@@ -163,6 +163,8 @@ TEXT_SENSORS = [
     {"id": "iec61851_state", "name": "IEC 61851", "icon": "mdi:ev-plug-type2", "disabled_by_default": True},
     {"id": "shift_state", "name": "Shift State", "icon": "mdi:car-shift-pattern", "disabled_by_default": True},
     {"id": "charge_limit_reason", "name": "Charge Limit Reason", "icon": "mdi:ev-plug-tesla"},
+    {"id": "command_phase", "name": "Command Phase", "icon": "mdi:progress-check", "entity_category": "diagnostic", "disabled_by_default": True, "setter": "set_command_phase_text_sensor"},
+    {"id": "command_outcome", "name": "Command Outcome", "icon": "mdi:check-circle-outline", "entity_category": "diagnostic", "disabled_by_default": True, "setter": "set_command_outcome_text_sensor"},
 ]
 
 BUTTONS = [
@@ -319,10 +321,15 @@ async def create_text_sensor(var, definition):
     }
     if "icon" in definition:
         config[CONF_ICON] = definition["icon"]
+    if "entity_category" in definition:
+        if definition["entity_category"] == "diagnostic":
+            config[CONF_ENTITY_CATEGORY] = cg.EntityCategory.ENTITY_CATEGORY_DIAGNOSTIC
     
     sens = await text_sensor.new_text_sensor(config)
-    # Use generic setter with sensor ID
-    cg.add(var.set_text_sensor(definition["id"], sens))
+    if definition.get("setter"):
+        cg.add(getattr(var, definition["setter"])(sens))
+    else:
+        cg.add(var.set_text_sensor(definition["id"], sens))
     return sens
 
 

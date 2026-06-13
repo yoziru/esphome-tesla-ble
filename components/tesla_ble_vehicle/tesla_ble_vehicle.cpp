@@ -430,6 +430,85 @@ void TeslaBLEVehicle::set_force_update_button(button::Button *button) {
 }
 
 // =============================================================================
+// Command tracking (v5.1.0 OperationResult + phase callbacks)
+// =============================================================================
+
+void TeslaBLEVehicle::handle_command_result(TeslaBLE::OperationResult result) {
+  if (result.is_success()) {
+    ESP_LOGD(TAG, "Command completed successfully");
+    this->status_clear_warning();
+    if (command_outcome_sensor_)
+      command_outcome_sensor_->publish_state("Success");
+  } else if (result.is_skipped()) {
+    ESP_LOGD(TAG, "Command skipped (vehicle asleep)");
+    this->status_clear_warning();
+    if (command_outcome_sensor_)
+      command_outcome_sensor_->publish_state("Skipped");
+  } else {
+    const char *err_msg = result.error() ? result.error()->message() : "unknown error";
+    ESP_LOGW(TAG, "Command failed: %s", err_msg);
+    this->status_set_warning("Command failed");
+    if (command_outcome_sensor_)
+      command_outcome_sensor_->publish_state("Failed");
+  }
+}
+
+void TeslaBLEVehicle::handle_command_phase(TeslaBLE::OperationPhase phase) {
+  if (!command_phase_sensor_)
+    return;
+
+  const char *phase_str;
+  switch (phase) {
+    case TeslaBLE::OperationPhase::QUEUED:
+      phase_str = "Queued";
+      break;
+    case TeslaBLE::OperationPhase::ENSURING_VCSEC_SESSION:
+      phase_str = "VCSEC Session";
+      break;
+    case TeslaBLE::OperationPhase::ENSURING_AWAKE:
+      phase_str = "Waking";
+      break;
+    case TeslaBLE::OperationPhase::ENSURING_INFOTAINMENT_SESSION:
+      phase_str = "Infotainment Session";
+      break;
+    case TeslaBLE::OperationPhase::SENDING_REQUEST:
+      phase_str = "Sending";
+      break;
+    case TeslaBLE::OperationPhase::AWAITING_RESPONSE:
+      phase_str = "Awaiting Response";
+      break;
+    case TeslaBLE::OperationPhase::TERMINAL:
+      phase_str = "Terminal";
+      break;
+    default:
+      phase_str = "Unknown";
+      break;
+  }
+  command_phase_sensor_->publish_state(phase_str);
+}
+
+void TeslaBLEVehicle::send_command_with_tracking(
+    UniversalMessage_Domain domain,
+    const std::string &name,
+    std::function<int(TeslaBLE::Client *, uint8_t *, size_t *)> builder,
+    TeslaBLE::WakePolicy wake_policy) {
+  if (!vehicle_) {
+    ESP_LOGE(TAG, "Cannot send command '%s': vehicle not initialized", name.c_str());
+    return;
+  }
+
+  vehicle_->send_command_result(
+      domain, name, std::move(builder),
+      [this](TeslaBLE::OperationResult result) {
+        handle_command_result(std::move(result));
+      },
+      wake_policy,
+      [this](TeslaBLE::OperationPhase phase) {
+        handle_command_phase(phase);
+      });
+}
+
+// =============================================================================
 // Public vehicle actions
 // =============================================================================
 
@@ -564,74 +643,96 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
 
 void TeslaBLEVehicle::lock_vehicle() {
   ESP_LOGI(TAG, "Lock vehicle requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->lock();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Lock",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        return client->build_vcsec_action_message(VCSEC_RKEAction_E_RKE_ACTION_LOCK, buff, len);
+      });
 }
 
 void TeslaBLEVehicle::unlock_vehicle() {
   ESP_LOGI(TAG, "Unlock vehicle requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->unlock();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Unlock",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        return client->build_vcsec_action_message(VCSEC_RKEAction_E_RKE_ACTION_UNLOCK, buff, len);
+      });
 }
 
 void TeslaBLEVehicle::open_trunk() {
   ESP_LOGI(TAG, "Open trunk requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->open_trunk();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Open Trunk",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
+        request.rearTrunk = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
+        return client->build_vcsec_closure_message(&request, buff, len);
+      });
 }
 
 void TeslaBLEVehicle::close_trunk() {
   ESP_LOGI(TAG, "Close trunk requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->close_trunk();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Close Trunk",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
+        request.rearTrunk = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE;
+        return client->build_vcsec_closure_message(&request, buff, len);
+      });
 }
 
 void TeslaBLEVehicle::open_frunk() {
   ESP_LOGI(TAG, "Open frunk requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->open_frunk();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Open Frunk",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
+        request.frontTrunk = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
+        return client->build_vcsec_closure_message(&request, buff, len);
+      });
 }
 
 void TeslaBLEVehicle::open_charge_port() {
   ESP_LOGI(TAG, "Open charge port requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->open_charge_port();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Open Charge Port",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
+        request.chargePort = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
+        return client->build_vcsec_closure_message(&request, buff, len);
+      });
 }
 
 void TeslaBLEVehicle::close_charge_port() {
   ESP_LOGI(TAG, "Close charge port requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->close_charge_port();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Close Charge Port",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
+        request.chargePort = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE;
+        return client->build_vcsec_closure_message(&request, buff, len);
+      });
 }
 
 void TeslaBLEVehicle::unlock_charge_port() {
   ESP_LOGI(TAG, "Unlock charge port latch requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->unlock_charge_port();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Unlock Charge Port",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        return client->build_car_server_vehicle_action_message(
+            buff, len, CarServer_VehicleAction_chargePortDoorOpen_tag, nullptr);
+      });
 }
 
 void TeslaBLEVehicle::unlatch_driver_door() {
   ESP_LOGI(TAG, "Unlatch driver door requested");
-  if (state_manager_)
-    state_manager_->track_command_issued();
-  if (vehicle_)
-    vehicle_->unlatch_driver_door();
+  send_command_with_tracking(
+      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Unlatch Driver Door",
+      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
+        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
+        request.frontDriverDoor = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
+        return client->build_vcsec_closure_message(&request, buff, len);
+      });
 }
 
 // =============================================================================

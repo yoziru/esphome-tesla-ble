@@ -3,6 +3,7 @@
 #include <memory>
 #include <map>
 #include <string>
+#include <functional>
 #include <esphome/components/ble_client/ble_client.h>
 #include <esphome/components/esp32_ble_tracker/esp32_ble_tracker.h>
 #include <esphome/components/binary_sensor/binary_sensor.h>
@@ -150,6 +151,10 @@ public:
     void vent_windows();
     void close_windows();
     
+    // Command tracking sensors
+    void set_command_phase_text_sensor(text_sensor::TextSensor *sensor) { command_phase_sensor_ = sensor; }
+    void set_command_outcome_text_sensor(text_sensor::TextSensor *sensor) { command_outcome_sensor_ = sensor; }
+
     // Manager accessors
     VehicleStateManager* get_state_manager() const { return state_manager_.get(); }
     
@@ -229,6 +234,18 @@ private:
 
     // Configured max (stored before state_manager is initialized)
     int configured_charging_amps_max_{32};
+
+    // Command tracking
+    void handle_command_result(TeslaBLE::OperationResult result);
+    void handle_command_phase(TeslaBLE::OperationPhase phase);
+    void send_command_with_tracking(
+        UniversalMessage_Domain domain,
+        const std::string &name,
+        std::function<int(TeslaBLE::Client *, uint8_t *, size_t *)> builder,
+        TeslaBLE::WakePolicy wake_policy = TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+
+    text_sensor::TextSensor *command_phase_sensor_{nullptr};
+    text_sensor::TextSensor *command_outcome_sensor_{nullptr};
 
     // Friends
     friend class VehicleStateManager;
