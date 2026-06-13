@@ -16,7 +16,7 @@ esphome:
   comment: ${device_description}
   project:
     name: yoziru.esphome-tesla-ble
-    version: "2026.6.6"
+    version: "2026.6.7"
 
 logger:
   level: INFO
