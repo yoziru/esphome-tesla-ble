@@ -258,12 +258,29 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
 
-    // Publish charge limit reason as text sensor
+    ESP_LOGD(STATE_MANAGER_TAG, "charge_limit_reason which=%d actual=%ld request=%ld pilot=%ld",
+             charge_state.which_optional_charge_limit_reason,
+             charge_state.optional_charger_actual_current.charger_actual_current,
+             charge_state.optional_charge_current_request.charge_current_request,
+             charge_state.optional_charger_pilot_current.charger_pilot_current);
+
+    const bool appears_externally_limited = is_charging_ && charge_state.which_optional_charge_current_request &&
+                                            ((charge_state.which_optional_charger_actual_current &&
+                                              charge_state.optional_charger_actual_current.charger_actual_current + 1 <
+                                                  charge_state.optional_charge_current_request.charge_current_request) ||
+                                             (charge_state.which_optional_charger_pilot_current &&
+                                              charge_state.optional_charger_pilot_current.charger_pilot_current <
+                                                  charge_state.optional_charge_current_request.charge_current_request));
+
+    // Publish charge limit reason as text sensor.
+    // Some BLE responses omit charge_limit_reason even when charging is externally limited.
     if (charge_state.which_optional_charge_limit_reason) {
         const auto reason = charge_state.optional_charge_limit_reason.charge_limit_reason;
         publish_text_sensor("charge_limit_reason", get_charge_limit_reason_text(reason));
+    } else if (appears_externally_limited) {
+        publish_text_sensor("charge_limit_reason", "ExternalLimit");
     } else {
-        publish_text_sensor("charge_limit_reason", "-");
+        publish_text_sensor("charge_limit_reason", "Unknown");
     }
     
     // Update charging rate
