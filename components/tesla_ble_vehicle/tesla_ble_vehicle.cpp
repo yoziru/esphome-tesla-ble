@@ -434,57 +434,26 @@ void TeslaBLEVehicle::set_force_update_button(button::Button *button) {
 // =============================================================================
 
 void TeslaBLEVehicle::handle_command_result(TeslaBLE::OperationResult result) {
+  std::string value = last_command_name_;
+
   if (result.is_success()) {
-    ESP_LOGD(TAG, "Command completed successfully");
+    value += " → Success";
     this->status_clear_warning();
-    if (command_outcome_sensor_)
-      command_outcome_sensor_->publish_state("Success");
   } else if (result.is_skipped()) {
-    ESP_LOGD(TAG, "Command skipped (vehicle asleep)");
+    value += " → Skipped";
     this->status_clear_warning();
-    if (command_outcome_sensor_)
-      command_outcome_sensor_->publish_state("Skipped");
   } else {
-    const char *err_msg = result.error() ? result.error()->message().c_str() : "unknown error";
-    ESP_LOGW(TAG, "Command failed: %s", err_msg);
+    value += " → Failed";
+    if (result.error()) {
+      value += ": ";
+      value += result.error()->message();
+    }
+    ESP_LOGW(TAG, "Command failed: %s", value.c_str());
     this->status_set_warning("Command failed");
-    if (command_outcome_sensor_)
-      command_outcome_sensor_->publish_state("Failed");
   }
-}
 
-void TeslaBLEVehicle::handle_command_phase(TeslaBLE::OperationPhase phase) {
-  if (!command_phase_sensor_)
-    return;
-
-  const char *phase_str;
-  switch (phase) {
-    case TeslaBLE::OperationPhase::QUEUED:
-      phase_str = "Queued";
-      break;
-    case TeslaBLE::OperationPhase::ENSURING_VCSEC_SESSION:
-      phase_str = "VCSEC Session";
-      break;
-    case TeslaBLE::OperationPhase::ENSURING_AWAKE:
-      phase_str = "Waking";
-      break;
-    case TeslaBLE::OperationPhase::ENSURING_INFOTAINMENT_SESSION:
-      phase_str = "Infotainment Session";
-      break;
-    case TeslaBLE::OperationPhase::SENDING_REQUEST:
-      phase_str = "Sending";
-      break;
-    case TeslaBLE::OperationPhase::AWAITING_RESPONSE:
-      phase_str = "Awaiting Response";
-      break;
-    case TeslaBLE::OperationPhase::TERMINAL:
-      phase_str = "Terminal";
-      break;
-    default:
-      phase_str = "Unknown";
-      break;
-  }
-  command_phase_sensor_->publish_state(phase_str);
+  if (last_command_sensor_)
+    last_command_sensor_->publish_state(value);
 }
 
 void TeslaBLEVehicle::send_command_with_tracking(
@@ -497,15 +466,13 @@ void TeslaBLEVehicle::send_command_with_tracking(
     return;
   }
 
+  last_command_name_ = name;
   vehicle_->send_command_result(
       domain, name, std::move(builder),
       [this](TeslaBLE::OperationResult result) {
         handle_command_result(std::move(result));
       },
-      wake_policy,
-      [this](TeslaBLE::OperationPhase phase) {
-        handle_command_phase(phase);
-      });
+      wake_policy);
 }
 
 // =============================================================================

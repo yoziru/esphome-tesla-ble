@@ -152,8 +152,7 @@ public:
     void close_windows();
     
     // Command tracking sensors
-    void set_command_phase_text_sensor(text_sensor::TextSensor *sensor) { command_phase_sensor_ = sensor; }
-    void set_command_outcome_text_sensor(text_sensor::TextSensor *sensor) { command_outcome_sensor_ = sensor; }
+    void set_last_command_text_sensor(text_sensor::TextSensor *sensor) { last_command_sensor_ = sensor; }
 
     // Manager accessors
     VehicleStateManager* get_state_manager() const { return state_manager_.get(); }
@@ -237,15 +236,14 @@ private:
 
     // Command tracking
     void handle_command_result(TeslaBLE::OperationResult result);
-    void handle_command_phase(TeslaBLE::OperationPhase phase);
     void send_command_with_tracking(
         UniversalMessage_Domain domain,
         const std::string &name,
         std::function<int(TeslaBLE::Client *, uint8_t *, size_t *)> builder,
         TeslaBLE::WakePolicy wake_policy = TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
 
-    text_sensor::TextSensor *command_phase_sensor_{nullptr};
-    text_sensor::TextSensor *command_outcome_sensor_{nullptr};
+    text_sensor::TextSensor *last_command_sensor_{nullptr};
+    std::string last_command_name_;
 
     // Friends
     friend class VehicleStateManager;

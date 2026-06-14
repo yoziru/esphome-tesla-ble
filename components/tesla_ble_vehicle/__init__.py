@@ -163,8 +163,7 @@ TEXT_SENSORS = [
     {"id": "iec61851_state", "name": "IEC 61851", "icon": "mdi:ev-plug-type2", "disabled_by_default": True},
     {"id": "shift_state", "name": "Shift State", "icon": "mdi:car-shift-pattern", "disabled_by_default": True},
     {"id": "charge_limit_reason", "name": "Charge Limit Reason", "icon": "mdi:ev-plug-tesla"},
-    {"id": "command_phase", "name": "Command Phase", "icon": "mdi:progress-check", "entity_category": "diagnostic", "disabled_by_default": True, "setter": "set_command_phase_text_sensor"},
-    {"id": "command_outcome", "name": "Command Outcome", "icon": "mdi:check-circle-outline", "entity_category": "diagnostic", "disabled_by_default": True, "setter": "set_command_outcome_text_sensor"},
+    {"id": "last_command", "name": "Last Command", "icon": "mdi:history", "entity_category": "diagnostic", "disabled_by_default": True, "setter": "set_last_command_text_sensor"},
 ]
 
 BUTTONS = [
