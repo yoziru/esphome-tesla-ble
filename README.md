@@ -1,159 +1,132 @@
 # ESPHome Tesla BLE
 
-This project lets you use an ESP32 device to manage charging a Tesla vehicle over BLE, using the [yoziru/tesla-ble](http://github.com/yoziru/tesla-ble) library.
-Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
+Manage your Tesla vehicle over BLE using an ESP32 device and [yoziru/tesla-ble](http://github.com/yoziru/tesla-ble).
 
 | Controls | Sensors | Diagnostic |
 | - | - | - |
 | <img src="./docs/ha-controls.png"> | <img src="./docs/ha-sensors.png"> | <img src="./docs/ha-diagnostic.png"> |
 
+## Quick Start
+
+Set up your `secrets.yaml` with WiFi, VIN, and BLE MAC, then pick an install method:
+
+| Method | Command | Best for |
+|--------|---------|----------|
+| **ESPHome Dashboard** | Paste a dashboard URL into the add-on | Users with HA + ESPHome add-on |
+| **CLI** | `make compile && make upload` | Devs with Python/uv installed |
+| **Docker** | `make compile_docker` | Users without Python on their machine |
+
+Select your board's `.dashboard.yml` file:
+- [`tesla-ble-m5stack-nanoc6.dashboard.yml`](./tesla-ble-m5stack-nanoc6.dashboard.yml) — M5Stack NanoC6 (ESP32-C6)
+- [`tesla-ble-m5stack-atoms3.dashboard.yml`](./tesla-ble-m5stack-atoms3.dashboard.yml) — M5Stack AtomS3 (ESP32-S3)
+- [`tesla-ble-esp32-generic.dashboard.yml`](./tesla-ble-esp32-generic.dashboard.yml) — Generic ESP32
 
 ## Features
-- [x] Pair BLE key with vehicle
-- [x] Wake up vehicle
-  - [ ] Use [Charging Manager](https://github.com/teslamotors/vehicle-command/blob/main/pkg/protocol/protocol.md#roles) role (wake command [not yet supported](https://github.com/teslamotors/vehicle-command/issues/232#issuecomment-2181503570) as of 2024.26.3.1)
-- [x] Set charging amps
-- [x] Set charging limit (percent)
-- [x] Turn on/off charging
-- [x] BLE information sensors
-  - [x] Asleep / awake
-  - [x] Doors locked / unlocked
-  - [x] User present / not present
-  - [x] Charging flap open / closed (only when vehicle is awake)
-  - [x] BLE signal strength
-  - [x] IEC 61851 state (A/B/C/D/E/F)
+
+- [x] Pair BLE key with vehicle (supports DRIVER and CHARGING_MANAGER roles)
+- [x] Wake vehicle, set charging amps/limit, start/stop charging
+- [x] Sensors: asleep/awake, locked/unlocked, user presence, charge port, BLE signal, IEC 61851
+- [x] Charging sensors: battery level, charge rate, energy added, time to full, charger phases
+
+## Installation
+
+### ESPHome Dashboard (recommended)
+
+If you run the ESPHome add-on in Home Assistant:
+
+1. Go to the ESPHome dashboard → "New Device" → "Continue"
+2. Paste the **dashboard import URL** for your board (see Quick Start table above)
+3. The dashboard will pull the config from this repo
+4. Add your secrets (WiFi, VIN, BLE MAC) in the dashboard's Secrets screen
+
+> Example URL: `github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml@main`
+
+Or use the example config as a starting point for your own modifications: [`tesla-ble.example.yml`](./tesla-ble.example.yml)
+
+### CLI (local)
+
+Requires Python 3.10+, GNU Make, and [uv](https://docs.astral.sh/uv/).
+
+```sh
+cp secrets.yaml.example secrets.yaml  # edit with your details
+make compile BOARD=m5stack-nanoc6     # adjust BOARD for your hardware
+make upload BOARD=m5stack-nanoc6      # flash via USB
+make logs                             # view device logs
+```
+
+For OTA updates after initial flash:
+```sh
+make upload HOST_SUFFIX=-5b2ac7      # suffix from device name
+```
+
+Available boards: `m5stack-nanoc6`, `m5stack-atoms3`, `esp32-generic`. Add your own in `boards/`.
+
+### Docker
+
+Same as CLI but no Python install needed:
+
+```sh
+make compile_docker BOARD=m5stack-nanoc6
+```
+
+Uses `ghcr.io/esphome/esphome` image directly. Output lands in `.esphome/`.
 
 ## Configuration
 
-### Polling Intervals
+### BLE Key Role
 
-The component supports configurable polling intervals to balance responsiveness and battery life:
+The `role` setting determines what the paired BLE key is allowed to do (set during pairing, change requires re-pair):
+
+- **DRIVER** (default) — full access: lock/unlock, frunk/trunk, windows, honk, climate, charging
+- **CHARGING_MANAGER** — charging only: start/stop, set amps, set limit, open charge port, basic info
+
+The Tesla backend enforces these restrictions, not the component. Choose **CHARGING_MANAGER** if you only need charging control and want to limit the key's capabilities.
+
+### Polling Intervals
 
 ```yaml
 tesla_ble_vehicle:
-  # ... other configuration ...
-  
-  # Polling intervals (in seconds)
-  vcsec_poll_interval: 10                      # Vehicle status polling (default: 10s, range: 5-300s)
-  infotainment_poll_interval_awake: 30         # Data polling when awake (default: 30s, range: 10-600s)
-  infotainment_poll_interval_active: 10        # Data polling when active (default: 10s, range: 5-120s)
-  infotainment_sleep_timeout: 660              # Wake window duration (default: 11min, range: 1-60min)
+  vcsec_poll_interval: 10               # Status: sleep, lock, user presence (always safe to poll)
+  infotainment_poll_interval_awake: 30  # Battery/charging data when awake but not active
+  infotainment_poll_interval_active: 10 # Same, but when charging/unlocked/user present
+  infotainment_sleep_timeout: 660       # Minutes before allowing sleep (default: 11)
 ```
 
-**Polling Types:**
-- **VCSEC**: Basic vehicle status (sleep/awake, locked/unlocked, user presence) - safe to poll when asleep
-- **Infotainment Awake**: Detailed data (battery, charging state) when awake but not active
-- **Infotainment Active**: Frequent updates when charging, unlocked, or user present
-
-
-**IEC 61851 text sensor**
-
-The component exposes a text sensor that maps Tesla infotainment charge states to IEC 61851 states:
-
-- A: Standby (EVSE ready, vehicle not connected) — `Disconnected`
-- B: Vehicle detected (connected, not charging) — `Complete`, `Stopped`
-- C: Charging (energy flowing / charging sequence) — `Starting`, `Charging`, `Calibrating`
-- D: Ventilation required — not exposed via infotainment; treated as C when charging
-- E: No power (connected but no power available) — `NoPower`
-- F: Error / Unknown — `Unknown` or fallback
-
-This sensor appears as `IEC 61851` in Home Assistant and updates alongside the Tesla charging state.
-
-
-**Smart Wake Management:**
-The system respects Tesla's sleep behavior by polling infotainment data only during an 11-minute wake window, then allowing the vehicle to sleep. Active states (charging/unlocked/user present) override this timeout for continuous monitoring.
+The system only polls infotainment data during an 11-minute wake window after the car becomes idle, then lets it sleep. Active states (charging, unlocked, user present) override this timeout for continuous monitoring. VCSEC status polling runs at low power and does not affect vehicle sleep.
 
 ## Usage
 
-> For ESPHome dashboard, see [`tesla-ble-example.yml`](./tesla-ble.example.yml)
+### Finding the BLE MAC
 
-### Pre-requisites
-- Python 3.10+
-- GNU Make
+1. Copy `secrets.yaml.example` → `secrets.yaml`, set your WiFi and VIN
+2. Uncomment `listener: !include listener.yml` in `packages/base.yml`
+3. Build and flash
+4. Open the logs, wake your car (Tesla app), watch for:
+   ```
+   [I][tesla_ble_listener:054]: Found Tesla vehicle | Name: S1a87a5a75f3df858C | MAC: A0:B1:C2:D3:E4:F5
+   ```
+5. Disable the listener package and run `make clean` before flashing your final build
 
-### Finding the BLE MAC address of your vehicle
+### Pairing the BLE Key
 
-1. Copy and rename `secrets.yaml.example` to `secrets.yaml` and update it with your WiFi credentials (`wifi_ssid` and `wifi_password`) and vehicle VIN (`tesla_vin`).
-1. Enable the `tesla_ble_listener` package in `packages/base.yml` by uncommenting the `listener: !include listener.yml` line.
-1. Build and flash the firmware to your ESP32 device. See the 'Building and flashing ESP32 firmware' section below.
-1. Open the ESPHome logs in Home Assistant and wake it up. Watch for the "Found Tesla vehicle" message, which will contain the BLE MAC address of your vehicle.
-    > Note: The vehicle must be in range and awake for the BLE MAC address to be discovered. If the vehicle is not awake, open the Tesla app and run any command
-    ```log
-    [00:00:00][D][tesla_ble_listener:044]: Parsing device: [CC:BB:D1:E2:34:F0]: BLE Device name 1
-    [00:00:00][D][tesla_ble_listener:044]: Parsing device: [19:8A:BB:C3:D2:1F]: 
-    [00:00:00][D][tesla_ble_listener:044]: Parsing device: [19:8A:BB:C3:D2:1F]:
-    [00:00:00][D][tesla_ble_listener:044]: Parsing device: [F5:4E:3D:C2:1B:A0]: BLE Device name 2
-    [00:00:00][D][tesla_ble_listener:044]: Parsing device: [A0:B1:C2:D3:E4:F5]: S1a87a5a75f3df858C
-    [00:00:00][I][tesla_ble_listener:054]: Found Tesla vehicle | Name: S1a87a5a75f3df858C | MAC: A0:B1:C2:D3:E4:F5
-    ```
-1. Clean up your environment before the next step by disabling the `tesla_ble_listener` package in `packages/base.yml` and running
-    ```sh
-    make clean
-    ```
+1. Sit in your car with the ESP32 powered and in range
+2. In Home Assistant: Settings → Devices & Services → ESPHome → your device → "Pair BLE key"
+3. Immediately tap your NFC key card to the center console
+4. A pairing prompt appears on the car's screen — tap **confirm**
+5. [Optional] Rename the new key in Controls → Locks (it shows as "Unknown device")
 
-### Building firmware using ESPHome dashboard
+> If the popup doesn't appear, press "Pair BLE key" and tap your card again.
 
-If you are already running an instance of ESPHome, you can also include this repository directly by including it as a package. The main benefit here is having centralized management of all your ESPhome devices. To do this, you can use the following config for your device:
-```
-substitutions:
-  wifi_ssid: !secret wifi_ssid
-  wifi_password: !secret wifi_password
-  wifi_hotspot_password: !secret wifi_hotspot_password
-  ota_password: !secret ota_password
-  api_encryption_key: !secret api_encryption_key
-  ble_mac_address: !secret ble_mac_address
-  tesla_vin: !secret tesla_vin
+### Adding to Home Assistant
 
-packages:
-  remote_package_shorthand: github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml@main
-```
+Go to Settings → Devices & Services → Add Integration → **ESPHome**. Enter the device's IP address and your API encryption key. The device and all its entities appear automatically.
 
-Be sure to use the correct `.dashboard.yml` file for your board. Also make sure you have the secrets defined otherwise it will not work and use defaults from this repository.
+## Troubleshooting
 
-### Building and flashing ESP32 firmware
-1. Connect your ESP32 device to your computer via USB
-1. Copy and rename `secrets.yaml.example` to `secrets.yaml` and update it with your WiFi credentials (`wifi_ssid` and `wifi_password`) and vehicle details (`ble_mac_address` and `tesla_vin`)
-1. Build the image with [ESPHome](https://esphome.io/guides/getting_started_command_line.html). Alternate boards are listed in the `boards/` directory.
-
-    ```sh
-    make compile BOARD=m5stack-nanoc6
-    ```
-
-1. Upload/flash the firmware to the board.
-
-    ```sh
-    make upload BOARD=m5stack-nanoc6
-    ```
-
-1. After flashing, you can use the log command to monitor the logs from the device. The host suffix is the last part of the device name in the ESPHome dashboard (e.g. `5b2ac7`).
-    ```sh
-    make logs HOST_SUFFIX=-5b2ac7
-    ```
-
-1. For updating your device, you can OTA update over local WiFi using the same host suffix:
-    ```sh
-    make upload HOST_SUFFIX=-5b2ac7
-    ```
-
-> Note: the make commands are just a wrapper around the `esphome` command. You can also use the `esphome` commands directly if you prefer (e.g. `esphome compile tesla-ble-m5stack-nanoc6.yml`)
-
-### Adding the device to Home Assistant
-
-1. In Home Assistant, go to Settings > Devices & Services. If your device is discovered automatically, you can add it by clicking the "Configure" button by the discovered device. If not, click the "+ Add integration" button and select "ESPHome" as the integration and enter the IP address of your device.
-2. Enter the API encryption key from the `secrets.yaml` file when prompted.
-3. That's it! You should now see the device in Home Assistant and be able to control it.
-
-
-### Pairing the BLE key with your vehicle
-1. Make sure your ESP32 device is close to the car (check the "BLE Signal" sensor) and the BLE MAC address and VIN in `secrets.yaml` is correct.
-1. Get into your vehicle
-1. In Home Assistant, go to Settings > Devices & Services > ESPHome, choose your Tesla BLE device and click "Pair BLE key"
-1. Tap your NFC card to your car's center console
-1. A prompt will appear on the screen of your car asking if you want to pair the key
-    > Note: if the popup does not appear, you may need to press "Pair BLE key" and tap your card again
-
-    <img src="./docs/vehicle-pair-request.png" width="500">
-1. Hit confirm on the screen
-1. To verify the key was added, tap Controls > Locks, and you should see a new key named "Unknown device" in the list
-1. [optional] Rename your key to "ESPHome BLE" to make it easier to identify
-    <img src="./docs/vehicle-locks.png" width="500">
+| Symptom | Likely cause |
+|---------|-------------|
+| "Found Tesla vehicle" never appears | Car not awake. Open the Tesla app to wake it, then re-check logs. |
+| Pairing fails with HMAC error | BLE MAC or VIN is wrong. Verify both in `secrets.yaml`. |
+| Car stays awake | Car is in Sentry Mode, recently driven, or state is flapping. The 11-min timeout only counts idle time. |
+| `Unknown` on boot | Normal for some sensors until the first VCSEC response arrives (~10s). |
+| Compile errors | Check your board variant matches your hardware. Run `make clean` first. |
