@@ -132,11 +132,6 @@ public:
     int get_charging_amps_max() const { return charging_amps_max_; }
     void set_charging_amps_max(int max) { charging_amps_max_ = max; }
     
-    // ==========================================================================
-    // ==========================================================================
-    // Command tracking
-    // ==========================================================================
-    void track_command_issued();
     
 private:
     TeslaBLEVehicle* parent_;

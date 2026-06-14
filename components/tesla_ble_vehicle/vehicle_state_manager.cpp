@@ -627,14 +627,6 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 }
 
 // =============================================================================
-// Command tracking
-// =============================================================================
-
-void VehicleStateManager::track_command_issued() {
-    ESP_LOGD(STATE_MANAGER_TAG, "Command issued - state updates will sync immediately");
-}
-
-// =============================================================================
 // Private helper methods
 // =============================================================================
 
