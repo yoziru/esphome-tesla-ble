@@ -3,6 +3,10 @@ name: CI
 on:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     name: Building ${{ matrix.file }}
@@ -20,12 +24,19 @@ jobs:
         run: cp secrets.yaml.example secrets.yaml
       - name: Get ESPHome version
         id: get_esphome_version
-        # read esphome version from requirements.txt
         run: |
           esphome_version=$(grep esphome requirements.txt | cut -d'=' -f3)
           echo "esphome_version=$esphome_version" >> "$GITHUB_OUTPUT"
+      - name: Cache PlatformIO packages
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.platformio
+          key: platformio-${{ matrix.file }}-${{ steps.get_esphome_version.outputs.esphome_version }}
+          restore-keys: |
+            platformio-${{ matrix.file }}-
       - name: Build ESPHome firmware to verify configuration
         uses: esphome/build-action@4ef4722a2935eac47b7e227fe0e1f8e0f8afcc42 # v7.3.0
         with:
           yaml-file: ${{ matrix.file }}
           version: ${{ steps.get_esphome_version.outputs.esphome_version }}
+
