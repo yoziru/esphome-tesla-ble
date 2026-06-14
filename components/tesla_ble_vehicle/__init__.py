@@ -13,6 +13,7 @@ from esphome.const import (
     CONF_NAME,
     CONF_RESTORE_MODE,
     CONF_UNIT_OF_MEASUREMENT,
+    ENTITY_CATEGORY_DIAGNOSTIC,
 )
 from esphome import automation
 
@@ -303,6 +304,9 @@ async def create_sensor(var, definition):
         dc = get_device_class_const(sensor, definition["device_class"])
         if dc:
             config[CONF_DEVICE_CLASS] = dc
+    if "entity_category" in definition:
+        if definition["entity_category"] == "diagnostic":
+            config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
     
     sens = await sensor.new_sensor(config)
     # Use generic setter with sensor ID
@@ -322,7 +326,7 @@ async def create_text_sensor(var, definition):
         config[CONF_ICON] = definition["icon"]
     if "entity_category" in definition:
         if definition["entity_category"] == "diagnostic":
-            config[CONF_ENTITY_CATEGORY] = cg.EntityCategory.ENTITY_CATEGORY_DIAGNOSTIC
+            config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
     
     sens = await text_sensor.new_text_sensor(config)
     if definition.get("setter"):
@@ -343,7 +347,7 @@ async def create_button(var, definition):
         config[CONF_ICON] = definition["icon"]
     if "entity_category" in definition:
         if definition["entity_category"] == "diagnostic":
-            config[CONF_ENTITY_CATEGORY] = cg.EntityCategory.ENTITY_CATEGORY_DIAGNOSTIC
+            config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
     
     btn = await button.new_button(config)
     cg.add(btn.set_parent(var))
