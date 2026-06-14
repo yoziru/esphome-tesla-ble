@@ -1,0 +1,3 @@
+<<: !include tesla-ble-finder-m5stack-nanoc6.yml
+
+external_components: !include packages/external_components.dashboard.yml

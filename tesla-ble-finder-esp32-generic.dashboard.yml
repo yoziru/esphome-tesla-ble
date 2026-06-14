@@ -1,0 +1,3 @@
+<<: !include tesla-ble-finder-esp32-generic.yml
+
+external_components: !include packages/external_components.dashboard.yml
