@@ -142,6 +142,7 @@ SENSORS = [
     {"id": "evse_max_current", "name": "Charger Max", "icon": "mdi:ev-plug-tesla", "device_class": "current", "unit": "A"},
     {"id": "charge_current_request", "name": "Requested Current", "icon": "mdi:current-ac", "device_class": "current", "unit": "A", "entity_category": "diagnostic", "disabled_by_default": True},
     {"id": "vehicle_max_charge_current", "name": "Car Max Acceptable", "icon": "mdi:car-battery", "device_class": "current", "unit": "A"},
+    {"id": "charger_phases", "name": "Charger Phases", "icon": "mdi:sine-wave", "unit": "", "accuracy_decimals": 0},
     {"id": "charging_rate", "name": "Charging Rate", "icon": "mdi:speedometer", "device_class": "speed", "unit": "mph", "accuracy_decimals": 1},
     {"id": "energy_added", "name": "Energy Added", "icon": "mdi:battery-charging", "device_class": "energy", "unit": "kWh", "accuracy_decimals": 1},
     {"id": "time_to_full", "name": "Time to Full", "icon": "mdi:clock-outline", "device_class": "duration", "unit": "min"},

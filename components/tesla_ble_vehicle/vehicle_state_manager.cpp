@@ -310,6 +310,14 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
+    // Update charger phases (1-phase vs 3-phase)
+    if (charge_state.which_optional_charger_phases) {
+        const float phases = static_cast<float>(charge_state.optional_charger_phases.charger_phases);
+        if (phases >= 1.0f && phases <= 3.0f && std::isfinite(phases)) {
+            publish_sensor("charger_phases", phases);
+        }
+    }
+
     // Update charge port latch lock (cable latch engaged/disengaged)
     if (charge_state.has_charge_port_latch) {
         // Engaged = locked (cable secured), Disengaged = unlocked (cable can be removed)
