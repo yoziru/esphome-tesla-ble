@@ -8,7 +8,7 @@ Manage your Tesla vehicle over BLE using an ESP32 — control charging, check ba
 
 ## Quick Start
 
-1. Copy `secrets.yaml.example` → `secrets.yaml`, fill in your WiFi, VIN, and BLE MAC
+1. Copy `secrets.yaml.example` → `secrets.yaml`, fill in WiFi + VIN (BLE MAC comes later; see [Finding the BLE MAC](#finding-the-ble-mac) below)
 2. Pick your install method:
 
 | Method | How | Best for |
@@ -16,17 +16,15 @@ Manage your Tesla vehicle over BLE using an ESP32 — control charging, check ba
 | **ESPHome Dashboard** | Import a URL into the add-on (below) | HA + ESPHome add-on users |
 | **CLI** | `make compile && make upload` | Users with Python + [uv](https://docs.astral.sh/uv/) |
 
-New to Tesla BLE? Start with [finding your vehicle's BLE MAC](#finding-the-ble-mac).
-
 ## Boards
 
 Pick the config for your hardware:
 
 | Board | Dashboard URL | CLI |
 |-------|--------------|-----|
-| **M5Stack NanoC6** | `tesla-ble-finder-m5stack-nanoc6.dashboard.yml` | `BOARD=m5stack-nanoc6` |
-| **M5Stack AtomS3** | `tesla-ble-finder-m5stack-atoms3.dashboard.yml` | `BOARD=m5stack-atoms3` |
-| **Generic ESP32** | `tesla-ble-finder-esp32-generic.dashboard.yml` | `BOARD=esp32-generic` |
+| **M5Stack NanoC6** | `tesla-ble-m5stack-nanoc6.dashboard.yml` | `BOARD=m5stack-nanoc6` |
+| **M5Stack AtomS3** | `tesla-ble-m5stack-atoms3.dashboard.yml` | `BOARD=m5stack-atoms3` |
+| **Generic ESP32** | `tesla-ble-esp32-generic.dashboard.yml` | `BOARD=esp32-generic` |
 
 Other boards? Copy one from `boards/` and set it with `BOARD=<your-board>`.
 
@@ -44,19 +42,15 @@ Other boards? Copy one from `boards/` and set it with `BOARD=<your-board>`.
 If you run the [ESPHome add-on](https://esphome.io/guides/getting_started_hassio.html) in Home Assistant:
 
 1. Go to **ESPHome dashboard** → **New Device** → **Continue**
-2. Paste the **full URL** for your board's finder config (below) and click **Install**
+2. Paste the **full URL** for your board and click **Install**
 3. The dashboard downloads the config from this repo
-4. Add your secrets (WiFi, VIN) in the dashboard's **Secrets** screen
-
-```
-github://yoziru/esphome-tesla-ble/tesla-ble-finder-m5stack-nanoc6.dashboard.yml@main
-```
-
-After you find the BLE MAC (see below), delete this device and import the main config for your board:
+4. Add secrets (WiFi + VIN to start; BLE MAC comes later)
 
 ```
 github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml@main
 ```
+
+The first flash needs only WiFi + VIN. After you [find the BLE MAC](#finding-the-ble-mac), add `ble_mac_address` to your secrets and re-install (OTA).
 
 Or copy [`tesla-ble.example.yml`](./tesla-ble.example.yml) as a starting point for custom configs.
 
@@ -109,32 +103,43 @@ The system only polls infotainment data during an 11-minute wake window, then le
 
 ### Finding the BLE MAC
 
-Your vehicle advertises via BLE with a name derived from its VIN (format: `S` + 16 hex chars + `C`). You need to find the MAC address on your ESP32's side.
+Your vehicle constantly advertises via BLE with a name derived from its VIN (format: `S` + 16 hex chars + `C`). This advertisement comes from VCSEC (vehicle security controller) which is always powered — no need to wake the car. You need the MAC address of that advertisement to configure the ESP32.
+
+The `tesla_ble_listener` component is included in the firmware but disabled by default. You enable it temporarily, find the MAC, then disable it.
 
 #### Via ESPHome Dashboard
 
-1. **Import** the finder config for your board (see [Installation](#esphome-dashboard-recommended) above)
-2. **Add secrets**: WiFi SSID/password and your VIN (`tesla_vin`)
-3. **Flash** to your ESP32
-4. **Open logs** in the ESPHome dashboard — you'll see:
+After [importing](#esphome-dashboard-recommended) your board's config and adding WiFi + VIN secrets:
+
+1. Click **Edit** to open your device's YAML
+2. Add these lines **at the end**:
+   ```yaml
+   # Enable BLE scanning to find your vehicle's MAC
+   tesla_ble_listener:
+     vin: !secret tesla_vin
+   ```
+3. **Save** and **Install**
+4. Open **Logs** — you'll see:
    ```
    [I][tesla_ble_listener:054]: Found Tesla vehicle | Name: S1a87a5a75f3df858C | MAC: A0:B1:C2:D3:E4:F5
    ```
-5. **Delete** this finder device
-6. **Import** the main config for your board, add `ble_mac_address` to secrets
-
-> Your vehicle must be awake. If nothing appears, open the Tesla app and send a command (e.g., flash lights), then re-check logs.
+5. Click **Edit** again, **remove** the two lines you added, and add `ble_mac_address` to your **Secrets**
+6. **Install** again
 
 #### Via CLI
 
-1. Uncomment `listener: !include listener.yml` in `packages/base.yml`
-2. Build, flash, and check logs:
+In a local checkout of this repo:
+
+1. **Uncomment** `listener: !include listener.yml` in `packages/base.yml`
+2. Add `tesla_vin` to `secrets.yaml`
+3. Build, flash, and watch logs:
    ```sh
    make compile BOARD=m5stack-nanoc6 && make upload BOARD=m5stack-nanoc6
    make logs
    ```
-3. Watch for `Found Tesla vehicle` with the MAC
-4. Re-comment the listener line and run `make clean` before your final build
+4. Note the MAC from the log output
+5. **Re-comment** the line in `packages/base.yml` and run `make clean`
+6. Add `ble_mac_address` to `secrets.yaml`, rebuild, and reflash
 
 #### Via Phone BLE Scanner (alternative)
 
@@ -177,7 +182,7 @@ Install a BLE scanner app (nRF Connect, LightBlue), scan nearby devices, and loo
 
 | Symptom | Likely cause |
 |---------|-------------|
-| "Found Tesla vehicle" never appears | Car not awake. Open Tesla app to wake it. |
+| "Found Tesla vehicle" never appears | The listener isn't enabled. For CLI: uncomment `listener: !include listener.yml` in `packages/base.yml`. For Dashboard: add `tesla_ble_listener:` block to your YAML (see above). VCSEC always advertises — no need to wake the car. |
 | Pairing fails with HMAC error | BLE MAC or VIN is wrong. Verify both in `secrets.yaml`. |
 | Car stays awake | Sentry Mode, recent drive, or state flapping keeps resetting the 11-min sleep timeout. |
 | `Unknown` on boot | Normal for some sensors — VCSEC corrects within ~10s. |
