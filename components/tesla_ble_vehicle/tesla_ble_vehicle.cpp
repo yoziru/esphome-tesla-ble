@@ -518,6 +518,8 @@ int TeslaBLEVehicle::start_pairing() {
   Keys_Role role_enum = Keys_Role_ROLE_OWNER;
   if (role_ == "DRIVER") {
     role_enum = Keys_Role_ROLE_DRIVER;
+  } else if (role_ == "CHARGING_MANAGER") {
+    role_enum = Keys_Role_ROLE_CHARGING_MANAGER;
   }
 
   vehicle_->pair(role_enum);

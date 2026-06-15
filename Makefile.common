@@ -83,5 +83,14 @@ help: ## Show help messages for make targets
 		| sort \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}'
 
-compile_docker: $(TARGET) packages/*.yml $(BOARD_FILES) ## Compile the binary using docker
-	docker run --rm -v $(PWD):/config ghcr.io/esphome/esphome:$(ESPHOME_VERSION) compile /config/$(TARGET)
+DOCKER_PIO_VOL := esphome-piocache-$(ESPHOME_VERSION)
+
+docker-compile: $(TARGET) packages/*.yml $(BOARD_FILES) ## Compile using Docker (works on all platforms)
+	docker run --rm \
+		-v $(PWD):/config \
+		-v $(DOCKER_PIO_VOL):/config/.esphome/platformio \
+		ghcr.io/esphome/esphome:$(ESPHOME_VERSION) \
+		compile /config/$(TARGET)
+
+docker-cache-clean: ## Remove cached PlatformIO packages (forces fresh download next build)
+	docker volume rm -f $(DOCKER_PIO_VOL) 2>/dev/null || true
