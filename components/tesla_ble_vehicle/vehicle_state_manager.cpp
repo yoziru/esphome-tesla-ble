@@ -429,27 +429,37 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
         }
     }
     
-    // Windows - update individual binary sensors and aggregate cover
-    bool window_df = false, window_dr = false, window_pf = false, window_pr = false;
+    // Windows - update individual binary sensors and aggregate cover.
+    // Some vehicle updates only include changed fields; keep the last known
+    // value for each window so the aggregate cover does not flip closed when
+    // an open window is omitted from a partial update.
     if (closures_state.which_optional_window_open_driver_front) {
-        window_df = closures_state.optional_window_open_driver_front.window_open_driver_front;
-        publish_binary_sensor("window_driver_front", window_df);
+        window_driver_front_open_ = closures_state.optional_window_open_driver_front.window_open_driver_front;
+        publish_binary_sensor("window_driver_front", window_driver_front_open_.value());
     }
     if (closures_state.which_optional_window_open_driver_rear) {
-        window_dr = closures_state.optional_window_open_driver_rear.window_open_driver_rear;
-        publish_binary_sensor("window_driver_rear", window_dr);
+        window_driver_rear_open_ = closures_state.optional_window_open_driver_rear.window_open_driver_rear;
+        publish_binary_sensor("window_driver_rear", window_driver_rear_open_.value());
     }
     if (closures_state.which_optional_window_open_passenger_front) {
-        window_pf = closures_state.optional_window_open_passenger_front.window_open_passenger_front;
-        publish_binary_sensor("window_passenger_front", window_pf);
+        window_passenger_front_open_ = closures_state.optional_window_open_passenger_front.window_open_passenger_front;
+        publish_binary_sensor("window_passenger_front", window_passenger_front_open_.value());
     }
     if (closures_state.which_optional_window_open_passenger_rear) {
-        window_pr = closures_state.optional_window_open_passenger_rear.window_open_passenger_rear;
-        publish_binary_sensor("window_passenger_rear", window_pr);
+        window_passenger_rear_open_ = closures_state.optional_window_open_passenger_rear.window_open_passenger_rear;
+        publish_binary_sensor("window_passenger_rear", window_passenger_rear_open_.value());
     }
-    bool any_window_open = window_df || window_dr || window_pf || window_pr;
+
+    bool has_window_state = window_driver_front_open_.has_value() ||
+                            window_driver_rear_open_.has_value() ||
+                            window_passenger_front_open_.has_value() ||
+                            window_passenger_rear_open_.has_value();
+    bool any_window_open = window_driver_front_open_.value_or(false) ||
+                           window_driver_rear_open_.value_or(false) ||
+                           window_passenger_front_open_.value_or(false) ||
+                           window_passenger_rear_open_.value_or(false);
     
-    if (windows_cover_ != nullptr) {
+    if (windows_cover_ != nullptr && has_window_state) {
         windows_cover_->position = any_window_open ? cover::COVER_OPEN : cover::COVER_CLOSED;
         windows_cover_->publish_state();
     }
@@ -540,6 +550,10 @@ void VehicleStateManager::set_sensors_available(bool available) {
 void VehicleStateManager::reset_all_states() {
     ESP_LOGD(STATE_MANAGER_TAG, "Resetting all vehicle states");
     is_charging_ = false;
+    window_driver_front_open_.reset();
+    window_driver_rear_open_.reset();
+    window_passenger_front_open_.reset();
+    window_passenger_rear_open_.reset();
     set_sensors_available(false);
 }
 

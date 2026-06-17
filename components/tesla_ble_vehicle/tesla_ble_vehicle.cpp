@@ -624,6 +624,7 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_i
             this->read_handle_ = 0;
             this->write_handle_ = 0;
             this->node_state = espbt::ClientState::DISCONNECTING;
+            handle_connection_lost();
             break;
             
         case ESP_GATTC_SEARCH_CMPL_EVT: {
@@ -701,6 +702,7 @@ void TeslaBLEVehicle::handle_connection_established() {
 void TeslaBLEVehicle::handle_connection_lost() {
     if (vehicle_) vehicle_->set_connected(false);
     if (ble_adapter_) ble_adapter_->clear_queues();
+    if (state_manager_) state_manager_->reset_all_states();
     
     last_infotainment_poll_ = 0;
     last_vcsec_poll_ = 0;

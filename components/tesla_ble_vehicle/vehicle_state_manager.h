@@ -174,6 +174,10 @@ private:
     bool is_charging_{false};
     bool is_user_present_{false};
     int charging_amps_max_{32};
+    std::optional<bool> window_driver_front_open_;
+    std::optional<bool> window_driver_rear_open_;
+    std::optional<bool> window_passenger_front_open_;
+    std::optional<bool> window_passenger_rear_open_;
     
     // Climate state tracking
     float current_inside_temp_{NAN};
