@@ -200,8 +200,20 @@ void TeslaBLEVehicle::update() {
   const bool is_active = state_manager_->is_charging() ||
                          state_manager_->is_user_present() ||
                          state_manager_->is_unlocked();
+
+  // Infotainment polling with WAKE_IF_NEEDED keeps the car awake, preventing
+  // VCSEC from ever reporting ASLEEP. After infotainment_sleep_timeout_ of idle
+  // time, use NO_WAKE_SKIP to let the car naturally fall asleep.
+  if (is_asleep || is_active) {
+    last_awake_idle_start_ = now;
+  } else if (last_awake_idle_start_ == 0) {
+    last_awake_idle_start_ = now;
+  }
+  const bool effective_asleep = is_asleep ||
+    (!is_active && (now - last_awake_idle_start_ >= infotainment_sleep_timeout_));
+
   uint32_t infotainment_interval = infotainment_poll_interval_awake_;
-  if (is_asleep) {
+  if (effective_asleep) {
     infotainment_interval = infotainment_sleep_timeout_;
   } else if (is_active) {
     infotainment_interval = infotainment_poll_interval_active_;
@@ -209,11 +221,8 @@ void TeslaBLEVehicle::update() {
 
   if (now - last_infotainment_poll_ >= infotainment_interval) {
     ESP_LOGI(TAG, "Polling Infotainment");
-    // Use explicit WakePolicy instead of the legacy bool parameter:
-    // - NoWakeSkip when the vehicle is known asleep (background poll should not wake)
-    // - WakeIfNeeded when the vehicle is known awake (poll normally)
-    auto policy = state_manager_->is_asleep() ? TeslaBLE::WakePolicy::NO_WAKE_SKIP
-                                              : TeslaBLE::WakePolicy::WAKE_IF_NEEDED;
+    auto policy = effective_asleep ? TeslaBLE::WakePolicy::NO_WAKE_SKIP
+                                   : TeslaBLE::WakePolicy::WAKE_IF_NEEDED;
     vehicle_->infotainment_poll(policy);
     last_infotainment_poll_ = now;
   }
@@ -937,6 +946,7 @@ void TeslaBLEVehicle::handle_connection_established() {
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
     last_vcsec_poll_ = millis();
     last_infotainment_poll_ = millis();
+    last_awake_idle_start_ = 0;
   }
 
   // Reset charging amps max to configured value on each connection
@@ -955,6 +965,7 @@ void TeslaBLEVehicle::handle_connection_lost() {
 
   last_infotainment_poll_ = 0;
   last_vcsec_poll_ = 0;
+  last_awake_idle_start_ = 0;
   this->status_set_warning("BLE connection lost");
 }
 
