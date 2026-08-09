@@ -93,11 +93,11 @@ The Tesla backend enforces these restrictions. Change requires re-pairing.
 tesla_ble_vehicle:
   vcsec_poll_interval: 10               # Status updates (always safe, low power)
   infotainment_poll_interval_awake: 30  # Detailed data when idle
-  infotainment_poll_interval_active: 10 # Detailed data when charging/unlocked
-  infotainment_sleep_timeout: 660       # Idle minutes before sleep (default 11)
+  infotainment_poll_interval_active: 10 # Detailed data when charging/sentry mode
+  infotainment_sleep_timeout: 660       # Idle seconds before letting the car sleep (default 11 min)
 ```
 
-The system only polls infotainment data during an 11-minute wake window, then lets the car sleep. Active states (charging, unlocked, user present) keep it awake for continuous updates. VCSEC status polling is low-power and does not affect vehicle sleep.
+The system only polls infotainment data during an 11-minute wake window, then lets the car sleep. Active charging and sentry mode keep it awake for continuous updates. A car that is merely left unlocked, or that reports user presence because a phone is in range, is treated as idle — the integration backs off and lets it sleep regardless. VCSEC status polling is low-power and does not affect vehicle sleep.
 
 ## Usage
 
@@ -184,7 +184,7 @@ Install a BLE scanner app (nRF Connect, LightBlue), scan nearby devices, and loo
 |---------|-------------|
 | "Found Tesla vehicle" never appears | The listener isn't enabled. For CLI: uncomment `listener: !include listener.yml` in `packages/base.yml`. For Dashboard: add `tesla_ble_listener:` block to your YAML (see above). VCSEC always advertises — no need to wake the car. |
 | Pairing fails with HMAC error | BLE MAC or VIN is wrong. Verify both in `secrets.yaml`. |
-| Car stays awake | Sentry Mode, recent drive, or state flapping keeps resetting the 11-min sleep timeout. |
+| Car stays awake | Active charging or sentry mode keep it awake. Otherwise the integration backs off after `infotainment_sleep_timeout` of idle time and lets the car sleep — watch the log for `Polling Infotainment (sleeping - NO_WAKE_SKIP)`. |
 | `Unknown` on boot | Normal for some sensors — VCSEC corrects within ~10s. |
 | Compile errors | Board mismatch? Run `make clean`, then `make compile` again. |
 | `uv: command not found` | Install [uv](https://docs.astral.sh/uv/getting-started/installation/) |

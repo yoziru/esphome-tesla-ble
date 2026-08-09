@@ -540,7 +540,6 @@ void VehicleStateManager::update_user_present(bool present) {
     if (publish_binary_sensor("user_present", present)) {
         ESP_LOGI(STATE_MANAGER_TAG, "User presence: %s", present ? "PRESENT" : "NOT_PRESENT");
     }
-    is_user_present_ = present;
 }
 
 void VehicleStateManager::update_charge_flap_open(bool open) {
@@ -588,17 +587,8 @@ bool VehicleStateManager::is_asleep() const {
     return sensor ? sensor->state : true;
 }
 
-bool VehicleStateManager::is_unlocked() const {
-    // Use doors lock entity state if available, otherwise check binary sensor
-    if (doors_lock_) {
-        return doors_lock_->state == lock::LOCK_STATE_UNLOCKED;
-    }
-    return false;
-}
-
-bool VehicleStateManager::is_user_present() const {
-    auto* sensor = get_binary_sensor("user_present");
-    return sensor ? sensor->state : false;
+bool VehicleStateManager::is_sentry_mode() const {
+    return sentry_mode_switch_ != nullptr && sentry_mode_switch_->state;
 }
 
 bool VehicleStateManager::is_charge_flap_open() const {

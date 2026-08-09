@@ -24,8 +24,8 @@ tesla_ble_vehicle:
   # Polling intervals (in seconds) - adjust based on your battery life vs responsiveness needs
   vcsec_poll_interval: $vcsec_poll_interval        # Vehicle status polling (also sets ESPHome update_interval)
   infotainment_poll_interval_awake: $infotainment_poll_interval_awake    # Data polling when awake but not active
-  infotainment_poll_interval_active: $infotainment_poll_interval_active # Data polling when charging/unlocked/user present (more responsive)
-  infotainment_sleep_timeout: $infotainment_sleep_timeout  # How long to poll before allowing sleep
+  infotainment_poll_interval_active: $infotainment_poll_interval_active # Data polling when charging/sentry mode (more responsive)
+  infotainment_sleep_timeout: $infotainment_sleep_timeout  # Idle time before polls stop waking the car (letting it sleep)
 
 # BLE sensors from the standard ble_client platform
 sensor:
