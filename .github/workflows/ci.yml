@@ -8,6 +8,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  tests:
+    name: Unit tests (C++ + Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - name: Run tests
+        run: make test
+
   ci:
     name: Building ${{ matrix.file }}
     runs-on: ubuntu-latest

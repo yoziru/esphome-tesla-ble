@@ -201,38 +201,20 @@ void TeslaBLEVehicle::update() {
   // that is merely left unlocked, or reports user presence because a phone is
   // in range, can still fall asleep on its own and must be allowed to do so
   // (issues #201/#202). To add faster polling for unlocked/user-present later,
-  // extend this expression (and gate it behind an opt-in config).
-  const bool is_active = state_manager_->is_charging() ||
-                         state_manager_->is_sentry_mode();
+  // extend the decision inputs here (and gate it behind an opt-in config).
+  InfotainmentPollDecision decision =
+      poll_policy_.update(now, is_asleep, state_manager_->is_charging(),
+                          state_manager_->is_sentry_mode());
 
-  // Infotainment polling with WAKE_IF_NEEDED keeps the car awake, preventing
-  // VCSEC from ever reporting ASLEEP. After infotainment_sleep_timeout_ of idle
-  // time, use NO_WAKE_SKIP to let the car naturally fall asleep.
-  //
-  // Only genuine activity resets the idle timer. A car that is merely observed
-  // asleep, or briefly blips awake on its own, must not restart the aggressive
-  // polling window or it would be re-woken every time it tried to sleep.
-  if (is_active) {
-    last_awake_idle_start_ = now;
-  } else if (last_awake_idle_start_ == 0) {
-    last_awake_idle_start_ = now;
-  }
-  const bool effective_asleep = is_asleep ||
-    (!is_active && (now - last_awake_idle_start_ >= infotainment_sleep_timeout_));
-
-  uint32_t infotainment_interval = infotainment_poll_interval_awake_;
-  if (effective_asleep) {
-    infotainment_interval = infotainment_sleep_timeout_;
-  } else if (is_active) {
-    infotainment_interval = infotainment_poll_interval_active_;
-  }
-
-  if (now - last_infotainment_poll_ >= infotainment_interval) {
-    auto policy = effective_asleep ? TeslaBLE::WakePolicy::NO_WAKE_SKIP
-                                   : TeslaBLE::WakePolicy::WAKE_IF_NEEDED;
+  if (now - last_infotainment_poll_ >= decision.interval_ms) {
+    TeslaBLE::WakePolicy policy =
+        decision.wake_policy == WakePolicy::NO_WAKE_SKIP
+            ? TeslaBLE::WakePolicy::NO_WAKE_SKIP
+            : TeslaBLE::WakePolicy::WAKE_IF_NEEDED;
     ESP_LOGI(TAG, "Polling Infotainment (%s)",
-             effective_asleep ? "sleeping - NO_WAKE_SKIP"
-                              : "active - WAKE_IF_NEEDED");
+             decision.wake_policy == WakePolicy::NO_WAKE_SKIP
+                 ? "sleeping - NO_WAKE_SKIP"
+                 : "active - WAKE_IF_NEEDED");
     vehicle_->infotainment_poll(policy);
     last_infotainment_poll_ = now;
   }
@@ -245,8 +227,8 @@ void TeslaBLEVehicle::dump_config() {
   ESP_LOGCONFIG(TAG, "  Max Charging Amps: %d",
                 state_manager_ ? state_manager_->get_charging_amps_max() : 32);
   ESP_LOGCONFIG(TAG, "  Polling: VCSEC=%ums, Awake=%ums, Active=%ums",
-                vcsec_poll_interval_, infotainment_poll_interval_awake_,
-                infotainment_poll_interval_active_);
+                vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
+                poll_policy_.active_interval_ms());
   ESP_LOGCONFIG(TAG, "  Sensors: %d binary, %d numeric, %d text",
                 pending_binary_sensors_.size(), pending_sensors_.size(),
                 pending_text_sensors_.size());
@@ -298,19 +280,19 @@ void TeslaBLEVehicle::set_vcsec_poll_interval(uint32_t interval_ms) {
 void TeslaBLEVehicle::set_infotainment_poll_interval_awake(
     uint32_t interval_ms) {
   ESP_LOGD(TAG, "Setting infotainment poll interval awake: %u ms", interval_ms);
-  infotainment_poll_interval_awake_ = interval_ms;
+  poll_policy_.set_awake_interval_ms(interval_ms);
 }
 
 void TeslaBLEVehicle::set_infotainment_poll_interval_active(
     uint32_t interval_ms) {
   ESP_LOGD(TAG, "Setting infotainment poll interval active: %u ms",
            interval_ms);
-  infotainment_poll_interval_active_ = interval_ms;
+  poll_policy_.set_active_interval_ms(interval_ms);
 }
 
 void TeslaBLEVehicle::set_infotainment_sleep_timeout(uint32_t interval_ms) {
   ESP_LOGD(TAG, "Setting infotainment sleep timeout: %u ms", interval_ms);
-  infotainment_sleep_timeout_ = interval_ms;
+  poll_policy_.set_sleep_timeout_ms(interval_ms);
 }
 
 // =============================================================================
@@ -559,7 +541,7 @@ int TeslaBLEVehicle::regenerate_key() {
 
 void TeslaBLEVehicle::force_update() {
   uint32_t now = millis();
-  if (now - last_infotainment_poll_ < infotainment_poll_interval_active_) {
+  if (now - last_infotainment_poll_ < poll_policy_.active_interval_ms()) {
     ESP_LOGD(TAG, "Force update requested too soon (within active polling "
                   "interval) - ignoring");
     return;
@@ -956,7 +938,7 @@ void TeslaBLEVehicle::handle_connection_established() {
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
     last_vcsec_poll_ = millis();
     last_infotainment_poll_ = millis();
-    last_awake_idle_start_ = 0;
+    poll_policy_.reset();
   }
 
   // Reset charging amps max to configured value on each connection
@@ -975,7 +957,7 @@ void TeslaBLEVehicle::handle_connection_lost() {
 
   last_infotainment_poll_ = 0;
   last_vcsec_poll_ = 0;
-  last_awake_idle_start_ = 0;
+  poll_policy_.reset();
   this->status_set_warning("BLE connection lost");
 }
 

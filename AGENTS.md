@@ -4,6 +4,7 @@ make compile_docker [BOARD=<board>]       # Compile using Docker
 make validate-config [BOARD=<board>]      # Validate YAML without building
 make upload [BOARD=<board>] [HOST_SUFFIX] # Flash firmware to device
 make logs [HOST_SUFFIX]                   # View device logs
+make test                                 # Run unit tests (C++ + Python)
 make clean                                # Remove .esphome build dir
 make help                                 # Show all targets
 
@@ -38,6 +39,16 @@ Error handling: Check pointers before use. Return bool for success/failure helpe
 # Key Conventions
 - VCSEC is always safe to poll (low-power controller, doesn't wake vehicle)
 - Sleep state is detected via VCSEC; infotainment uses NO_WAKE_SKIP when asleep
+- Polling decision logic (idle/awake/charging/sentry cadence + wake policy) lives in
+  components/tesla_ble_vehicle/polling_policy.h (dependency-free, unit-testable); tesla_ble_vehicle.cpp wires it to ESPHome
+- Raw state -> text/flag conversions (sleep/lock/presence/charging/shift/charge-limit) live in
+  components/tesla_ble_vehicle/state_text.h (dependency-free, values static_asserted against the tesla-ble protobuf headers in vehicle_state_manager.cpp)
 - Sensors defined in __init__.py SENSORS/BINARY_SENSORS/TEXT_SENSORS lists
 - Sensor values published in vehicle_state_manager.cpp update methods
 - Commands use TeslaBLEVehicle::send_command() with Command tracking
+
+# Testing
+- make test runs C++ + Python unit tests (fast, no ESPHome/device needed). CI runs it on every PR.
+- C++: tests/test_polling_policy.cpp and tests/test_state_text.cpp (plain compiler, no framework).
+  Add behavior-level test cases there.
+- Python: tests/test_codegen.py (stdlib-only ast checks on entity lists in __init__.py).
