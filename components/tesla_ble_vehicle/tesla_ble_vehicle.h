@@ -189,7 +189,6 @@ private:
     
     // Polling state
     uint32_t last_vcsec_poll_{0};
-    uint32_t last_infotainment_poll_{0};
     InfotainmentPollPolicy poll_policy_;
 
     // BLE state

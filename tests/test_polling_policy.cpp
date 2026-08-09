@@ -190,6 +190,76 @@ static void test_charging_and_sentry_together_stay_awake() {
   CHECK(d.interval_ms == 10000);
 }
 
+// --- poll scheduling (should_poll / on_poll) ---
+
+static void test_poll_due_when_no_poll_fired_yet() {
+  InfotainmentPollPolicy p;
+  configure(p);
+  // last_poll_ms_ starts 0 and millis() is long past the interval after boot:
+  // the first tick is immediately due.
+  CHECK(p.should_poll(50000, 30000));
+  p.on_poll(50000);
+  CHECK(!p.should_poll(50000 + 10000, 30000));
+}
+
+static void test_poll_due_after_interval() {
+  InfotainmentPollPolicy p;
+  configure(p);
+  p.on_poll(1000);
+  CHECK(!p.should_poll(1000 + 29999, 30000));
+  CHECK(p.should_poll(1000 + 30000, 30000));
+}
+
+static void test_poll_tracks_fire_time() {
+  InfotainmentPollPolicy p;
+  configure(p);
+  p.on_poll(1000);
+  // fires again on the next cadence
+  CHECK(p.should_poll(1000 + 30000, 30000));
+  p.on_poll(1000 + 30000);
+  CHECK(!p.should_poll(1000 + 30000 + 1000, 30000));
+}
+
+static void test_force_update_throttled_to_active_interval() {
+  InfotainmentPollPolicy p;
+  configure(p);
+  p.on_poll(1000);
+  // force_update is throttled to the active interval
+  CHECK(!p.should_poll(1000 + 5000, p.active_interval_ms()));
+  CHECK(p.should_poll(1000 + 10000, p.active_interval_ms()));
+}
+
+static void test_poll_stays_correct_across_millis_wraparound() {
+  InfotainmentPollPolicy p;
+  configure(p);
+  // Last poll 10s before the ~49 day millis() wraparound.
+  const uint32_t last_poll = 0xFFFFFFFFu - 10000u;
+  p.on_poll(last_poll);
+  // After the wrap, elapsed time still counts correctly.
+  CHECK(!p.should_poll(5000, 30000));      // elapsed 15s < 30s
+  CHECK(p.should_poll(30000, 30000));      // elapsed 40s >= 30s
+}
+
+static void test_full_tick_cadence_while_charging() {
+  InfotainmentPollPolicy p;
+  configure(p);
+
+  // t=20000: charging; nothing fired yet, so the first poll is due immediately.
+  InfotainmentPollDecision d = p.update(20000, false, true, false);
+  CHECK(d.interval_ms == 10000);
+  CHECK(p.should_poll(20000, d.interval_ms));
+  p.on_poll(20000);
+
+  // t=20000+5000: within the 10s active interval, no poll.
+  d = p.update(20000 + 5000, false, true, false);
+  CHECK(d.interval_ms == 10000);
+  CHECK(!p.should_poll(20000 + 5000, d.interval_ms));
+
+  // t=20000+10000: due again.
+  d = p.update(20000 + 10000, false, true, false);
+  CHECK(p.should_poll(20000 + 10000, d.interval_ms));
+}
+
 int main() {
   test_default_intervals();
   test_idle_polling_backs_off_after_timeout();
@@ -203,6 +273,12 @@ int main() {
   test_idle_timeout_counts_from_sentry_off();
   test_charging_and_sentry_together_stay_awake();
   test_reset_starts_fresh_idle_window();
+  test_poll_due_when_no_poll_fired_yet();
+  test_poll_due_after_interval();
+  test_poll_tracks_fire_time();
+  test_force_update_throttled_to_active_interval();
+  test_poll_stays_correct_across_millis_wraparound();
+  test_full_tick_cadence_while_charging();
 
   if (g_failures > 0) {
     std::printf("FAILED: %d/%d checks\n", g_failures, g_checks);

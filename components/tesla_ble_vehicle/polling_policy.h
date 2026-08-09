@@ -42,6 +42,16 @@ public:
   // fresh idle window.
   void reset() { idle_since_ms_ = 0; }
 
+  // Whether a poll is due: at least interval_ms has elapsed since the last poll
+  // fired (recorded via on_poll()). Unsigned arithmetic stays correct across
+  // the ~49 day millis() wraparound.
+  bool should_poll(uint32_t now_ms, uint32_t interval_ms) const {
+    return now_ms - last_poll_ms_ >= interval_ms;
+  }
+
+  // Record that a poll fired at now_ms.
+  void on_poll(uint32_t now_ms) { last_poll_ms_ = now_ms; }
+
   InfotainmentPollDecision update(uint32_t now_ms, bool is_asleep, bool is_charging, bool is_sentry_mode) {
     const bool active = is_charging || is_sentry_mode;
     if (active) {
@@ -67,6 +77,7 @@ private:
   uint32_t active_interval_ms_{10000};
   uint32_t sleep_timeout_ms_{660000};
   uint32_t idle_since_ms_{0};
+  uint32_t last_poll_ms_{0};
 };
 
 }  // namespace tesla_ble_vehicle

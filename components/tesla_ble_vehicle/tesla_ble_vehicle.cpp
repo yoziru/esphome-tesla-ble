@@ -206,7 +206,7 @@ void TeslaBLEVehicle::update() {
       poll_policy_.update(now, is_asleep, state_manager_->is_charging(),
                           state_manager_->is_sentry_mode());
 
-  if (now - last_infotainment_poll_ >= decision.interval_ms) {
+  if (poll_policy_.should_poll(now, decision.interval_ms)) {
     TeslaBLE::WakePolicy policy =
         decision.wake_policy == WakePolicy::NO_WAKE_SKIP
             ? TeslaBLE::WakePolicy::NO_WAKE_SKIP
@@ -216,7 +216,7 @@ void TeslaBLEVehicle::update() {
                  ? "sleeping - NO_WAKE_SKIP"
                  : "active - WAKE_IF_NEEDED");
     vehicle_->infotainment_poll(policy);
-    last_infotainment_poll_ = now;
+    poll_policy_.on_poll(now);
   }
 }
 
@@ -541,14 +541,14 @@ int TeslaBLEVehicle::regenerate_key() {
 
 void TeslaBLEVehicle::force_update() {
   uint32_t now = millis();
-  if (now - last_infotainment_poll_ < poll_policy_.active_interval_ms()) {
+  if (!poll_policy_.should_poll(now, poll_policy_.active_interval_ms())) {
     ESP_LOGD(TAG, "Force update requested too soon (within active polling "
                   "interval) - ignoring");
     return;
   }
 
   ESP_LOGI(TAG, "Force update requested");
-  last_infotainment_poll_ = now;
+  poll_policy_.on_poll(now);
 
   if (vehicle_) {
     vehicle_->vcsec_poll();
@@ -937,7 +937,7 @@ void TeslaBLEVehicle::handle_connection_established() {
     vehicle_->vcsec_poll();
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
     last_vcsec_poll_ = millis();
-    last_infotainment_poll_ = millis();
+    poll_policy_.on_poll(millis());
     poll_policy_.reset();
   }
 
@@ -955,7 +955,7 @@ void TeslaBLEVehicle::handle_connection_lost() {
   if (ble_adapter_)
     ble_adapter_->clear_queues();
 
-  last_infotainment_poll_ = 0;
+  poll_policy_.on_poll(0);
   last_vcsec_poll_ = 0;
   poll_policy_.reset();
   this->status_set_warning("BLE connection lost");
