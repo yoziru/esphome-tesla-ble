@@ -197,14 +197,22 @@ void TeslaBLEVehicle::update() {
 
   // Infotainment Polling - use faster interval when vehicle is active
   const bool is_asleep = state_manager_->is_asleep();
+  // Only sentry mode and active charging warrant keeping the car awake. A car
+  // that is merely left unlocked, or reports user presence because a phone is
+  // in range, can still fall asleep on its own and must be allowed to do so
+  // (issues #201/#202). To add faster polling for unlocked/user-present later,
+  // extend this expression (and gate it behind an opt-in config).
   const bool is_active = state_manager_->is_charging() ||
-                         state_manager_->is_user_present() ||
-                         state_manager_->is_unlocked();
+                         state_manager_->is_sentry_mode();
 
   // Infotainment polling with WAKE_IF_NEEDED keeps the car awake, preventing
   // VCSEC from ever reporting ASLEEP. After infotainment_sleep_timeout_ of idle
   // time, use NO_WAKE_SKIP to let the car naturally fall asleep.
-  if (is_asleep || is_active) {
+  //
+  // Only genuine activity resets the idle timer. A car that is merely observed
+  // asleep, or briefly blips awake on its own, must not restart the aggressive
+  // polling window or it would be re-woken every time it tried to sleep.
+  if (is_active) {
     last_awake_idle_start_ = now;
   } else if (last_awake_idle_start_ == 0) {
     last_awake_idle_start_ = now;
@@ -220,9 +228,11 @@ void TeslaBLEVehicle::update() {
   }
 
   if (now - last_infotainment_poll_ >= infotainment_interval) {
-    ESP_LOGI(TAG, "Polling Infotainment");
     auto policy = effective_asleep ? TeslaBLE::WakePolicy::NO_WAKE_SKIP
                                    : TeslaBLE::WakePolicy::WAKE_IF_NEEDED;
+    ESP_LOGI(TAG, "Polling Infotainment (%s)",
+             effective_asleep ? "sleeping - NO_WAKE_SKIP"
+                              : "active - WAKE_IF_NEEDED");
     vehicle_->infotainment_poll(policy);
     last_infotainment_poll_ = now;
   }

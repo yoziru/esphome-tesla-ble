@@ -119,8 +119,7 @@ public:
     // State queries
     // ==========================================================================
     bool is_asleep() const;
-    bool is_unlocked() const;
-    bool is_user_present() const;
+    bool is_sentry_mode() const;
     bool is_charge_flap_open() const;
     bool is_charging() const { return is_charging_; }
     float get_charging_amps() const;
@@ -167,7 +166,6 @@ private:
     // Internal state tracking
     // ==========================================================================
     bool is_charging_{false};
-    bool is_user_present_{false};
     int charging_amps_max_{32};
     
     // Climate state tracking
