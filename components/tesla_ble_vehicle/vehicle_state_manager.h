@@ -191,18 +191,7 @@ private:
     
     void set_sensor_available(binary_sensor::BinarySensor* sensor, bool available);
     void set_sensor_available(sensor::Sensor* sensor, bool available);
-    
-    // ==========================================================================
-    // State conversion helpers
-    // ==========================================================================
-    std::optional<bool> convert_sleep_status(VCSEC_VehicleSleepStatus_E status);
-    std::optional<bool> convert_lock_status(VCSEC_VehicleLockState_E status);
-    std::optional<bool> convert_user_presence(VCSEC_UserPresence_E presence);
-    std::string get_charging_state_text(const CarServer_ChargeState_ChargingState& state);
-    bool is_charger_connected_from_state(const CarServer_ChargeState_ChargingState& state);
-    std::string get_iec61851_state_text(const CarServer_ChargeState_ChargingState& state);
-    std::string get_shift_state_text(const CarServer_ShiftState& state);
-    std::string get_charge_limit_reason_text(const CarServer_ChargeState_ChargeLimitReason& reason);
+
 };
 
 } // namespace tesla_ble_vehicle

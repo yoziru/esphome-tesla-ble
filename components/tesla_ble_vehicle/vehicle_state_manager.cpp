@@ -1,4 +1,5 @@
 #include "vehicle_state_manager.h"
+#include "state_text.h"
 #include "tesla_ble_vehicle.h"
 #include <esphome/core/helpers.h>
 #include <cmath>
@@ -6,6 +7,38 @@
 
 namespace esphome {
 namespace tesla_ble_vehicle {
+
+// The raw values duplicated in state_text.h must match the nanopb-generated
+// enums/tags from the tesla-ble library, or every state conversion would be
+// wrong. Compile-time check.
+static_assert(static_cast<int>(VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE) == state_text::kSleepAwake);
+static_assert(static_cast<int>(VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP) == state_text::kSleepAsleep);
+static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED) == state_text::kLockUnlocked);
+static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_LOCKED) == state_text::kLockLocked);
+static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED) == state_text::kLockInternalLocked);
+static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED) == state_text::kLockSelectiveUnlocked);
+static_assert(static_cast<int>(VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_NOT_PRESENT) == state_text::kPresenceNotPresent);
+static_assert(static_cast<int>(VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT) == state_text::kPresencePresent);
+static_assert(CarServer_ChargeState_ChargingState_Unknown_tag == state_text::kChargingStateUnknown);
+static_assert(CarServer_ChargeState_ChargingState_Disconnected_tag == state_text::kChargingStateDisconnected);
+static_assert(CarServer_ChargeState_ChargingState_NoPower_tag == state_text::kChargingStateNoPower);
+static_assert(CarServer_ChargeState_ChargingState_Starting_tag == state_text::kChargingStateStarting);
+static_assert(CarServer_ChargeState_ChargingState_Charging_tag == state_text::kChargingStateCharging);
+static_assert(CarServer_ChargeState_ChargingState_Complete_tag == state_text::kChargingStateComplete);
+static_assert(CarServer_ChargeState_ChargingState_Stopped_tag == state_text::kChargingStateStopped);
+static_assert(CarServer_ChargeState_ChargingState_Calibrating_tag == state_text::kChargingStateCalibrating);
+static_assert(CarServer_ShiftState_Invalid_tag == state_text::kShiftInvalid);
+static_assert(CarServer_ShiftState_P_tag == state_text::kShiftP);
+static_assert(CarServer_ShiftState_R_tag == state_text::kShiftR);
+static_assert(CarServer_ShiftState_N_tag == state_text::kShiftN);
+static_assert(CarServer_ShiftState_D_tag == state_text::kShiftD);
+static_assert(CarServer_ShiftState_SNA_tag == state_text::kShiftSNA);
+static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonUnknown) == state_text::kLimitUnknown);
+static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonNone) == state_text::kLimitNone);
+static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonEvse) == state_text::kLimitEvse);
+static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonBattTempLow) == state_text::kLimitBattTempLow);
+static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonHighSoc) == state_text::kLimitHighSoc);
+static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonCabin) == state_text::kLimitCabin);
 
 VehicleStateManager::VehicleStateManager(TeslaBLEVehicle* parent)
     : parent_(parent) {}
@@ -107,7 +140,7 @@ void VehicleStateManager::update_vehicle_status(const VCSEC_VehicleStatus& statu
 }
 
 void VehicleStateManager::update_sleep_status(VCSEC_VehicleSleepStatus_E status) {
-    auto asleep = convert_sleep_status(status);
+    auto asleep = state_text::sleep_status(static_cast<int>(status));
     if (asleep.has_value()) {
         update_asleep(asleep.value());
     } else {
@@ -116,14 +149,14 @@ void VehicleStateManager::update_sleep_status(VCSEC_VehicleSleepStatus_E status)
 }
 
 void VehicleStateManager::update_lock_status(VCSEC_VehicleLockState_E status) {
-    auto unlocked = convert_lock_status(status);
+    auto unlocked = state_text::lock_status(static_cast<int>(status));
     if (unlocked.has_value()) {
         update_unlocked(unlocked.value());
     }
 }
 
 void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
-    auto present = convert_user_presence(presence);
+    auto present = state_text::user_presence(static_cast<int>(presence));
     if (present.has_value()) {
         update_user_present(present.value());
     } else {
@@ -141,10 +174,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
         const bool was_charging = is_charging_;
-        const bool new_charging_state = (
-            charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Charging_tag ||
-            charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Starting_tag
-        );
+        const bool new_charging_state = state_text::is_charging(charge_state.charging_state.which_type);
         
         ESP_LOGD(STATE_MANAGER_TAG, "Charging state check: was=%s, new=%s, state_type=%d", 
                  was_charging ? "ON" : "OFF", 
@@ -164,11 +194,11 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
         
         // Update text sensors
-        publish_text_sensor("charging_state", get_charging_state_text(charge_state.charging_state));
-        publish_text_sensor("iec61851_state", get_iec61851_state_text(charge_state.charging_state));
+        publish_text_sensor("charging_state", state_text::charging_state(charge_state.charging_state.which_type));
+        publish_text_sensor("iec61851_state", state_text::iec61851_state(charge_state.charging_state.which_type));
         
         // Update charger connected binary sensor
-        const bool charger_connected = is_charger_connected_from_state(charge_state.charging_state);
+        const bool charger_connected = state_text::charger_connected(charge_state.charging_state.which_type);
         publish_binary_sensor("charger", charger_connected);
     }
     
@@ -276,7 +306,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Some BLE responses omit charge_limit_reason even when charging is externally limited.
     if (charge_state.which_optional_charge_limit_reason) {
         const auto reason = charge_state.optional_charge_limit_reason.charge_limit_reason;
-        publish_text_sensor("charge_limit_reason", get_charge_limit_reason_text(reason));
+        publish_text_sensor("charge_limit_reason", state_text::charge_limit_reason(static_cast<int>(reason)));
     } else if (appears_externally_limited) {
         publish_text_sensor("charge_limit_reason", "ExternalLimit");
     } else {
@@ -385,10 +415,10 @@ void VehicleStateManager::update_drive_state(const CarServer_DriveState& drive_s
     
     // Shift state
     if (drive_state.has_shift_state) {
-        publish_text_sensor("shift_state", get_shift_state_text(drive_state.shift_state));
+        publish_text_sensor("shift_state", state_text::shift_state(drive_state.shift_state.which_type));
         
         // Parking brake sensor - true when in P
-        const bool parked = (drive_state.shift_state.which_type == CarServer_ShiftState_P_tag);
+        const bool parked = state_text::is_parked(drive_state.shift_state.which_type);
         publish_binary_sensor("parking_brake", parked);
     }
     
@@ -677,105 +707,6 @@ void VehicleStateManager::set_sensor_available(binary_sensor::BinarySensor* sens
 void VehicleStateManager::set_sensor_available(sensor::Sensor* sensor, bool available) {
     if (sensor != nullptr) {
         sensor->set_has_state(available);
-    }
-}
-
-// =============================================================================
-// State conversion helpers
-// =============================================================================
-
-std::optional<bool> VehicleStateManager::convert_sleep_status(VCSEC_VehicleSleepStatus_E status) {
-    switch (status) {
-        case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE:
-            return false;
-        case VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP:
-            return true;
-        default:
-            return std::nullopt;
-    }
-}
-
-std::optional<bool> VehicleStateManager::convert_lock_status(VCSEC_VehicleLockState_E status) {
-    switch (status) {
-        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED:
-        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED:
-            return true;
-        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_LOCKED:
-        case VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED:
-            return false;
-        default:
-            return std::nullopt;
-    }
-}
-
-std::optional<bool> VehicleStateManager::convert_user_presence(VCSEC_UserPresence_E presence) {
-    switch (presence) {
-        case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT:
-            return true;
-        case VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_NOT_PRESENT:
-            return false;
-        default:
-            return std::nullopt;
-    }
-}
-
-std::string VehicleStateManager::get_charging_state_text(const CarServer_ChargeState_ChargingState& state) {
-    switch (state.which_type) {
-        case CarServer_ChargeState_ChargingState_Disconnected_tag: return "Disconnected";
-        case CarServer_ChargeState_ChargingState_NoPower_tag: return "No Power";
-        case CarServer_ChargeState_ChargingState_Starting_tag: return "Starting";
-        case CarServer_ChargeState_ChargingState_Charging_tag: return "Charging";
-        case CarServer_ChargeState_ChargingState_Complete_tag: return "Complete";
-        case CarServer_ChargeState_ChargingState_Stopped_tag: return "Stopped";
-        case CarServer_ChargeState_ChargingState_Calibrating_tag: return "Calibrating";
-        default: return "Unknown";
-    }
-}
-
-bool VehicleStateManager::is_charger_connected_from_state(const CarServer_ChargeState_ChargingState& state) {
-    switch (state.which_type) {
-        case CarServer_ChargeState_ChargingState_Disconnected_tag:
-        case CarServer_ChargeState_ChargingState_Unknown_tag:
-            return false;
-        default:
-            return true;
-    }
-}
-
-std::string VehicleStateManager::get_iec61851_state_text(const CarServer_ChargeState_ChargingState& state) {
-    switch (state.which_type) {
-        case CarServer_ChargeState_ChargingState_Disconnected_tag: return "A";
-        case CarServer_ChargeState_ChargingState_NoPower_tag: return "E";
-        case CarServer_ChargeState_ChargingState_Starting_tag: return "C";
-        case CarServer_ChargeState_ChargingState_Charging_tag: return "C";
-        case CarServer_ChargeState_ChargingState_Complete_tag: return "B";
-        case CarServer_ChargeState_ChargingState_Stopped_tag: return "B";
-        case CarServer_ChargeState_ChargingState_Calibrating_tag: return "C";
-        default: return "F";
-    }
-}
-
-std::string VehicleStateManager::get_shift_state_text(const CarServer_ShiftState& state) {
-    switch (state.which_type) {
-        case CarServer_ShiftState_P_tag: return "P";
-        case CarServer_ShiftState_R_tag: return "R";
-        case CarServer_ShiftState_N_tag: return "N";
-        case CarServer_ShiftState_D_tag: return "D";
-        case CarServer_ShiftState_SNA_tag: return "SNA";
-        case CarServer_ShiftState_Invalid_tag: return "Invalid";
-        default: return "Unknown";
-    }
-}
-
-std::string VehicleStateManager::get_charge_limit_reason_text(const CarServer_ChargeState_ChargeLimitReason& reason) {
-    switch (reason) {
-        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonUnknown: return "Unknown";
-        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonNone: return "None";
-        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonEvse: return "EVSE";
-        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonBattTempLow: return "BattTempLow";
-        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonHighSoc: return "HighSoc";
-        case CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonCabin: return "Cabin";
-        default: return "Unknown";
     }
 }
 

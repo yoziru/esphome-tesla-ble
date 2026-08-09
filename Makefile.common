@@ -73,8 +73,38 @@ discover: ## Discover ESPHome devices on the network
 	fi'
 
 .PHONY: clean
-clean: ## Remove the esphome build directory
-	rm -rf .esphome .selected_suffix
+clean: ## Remove the esphome build directory and test artifacts
+	rm -rf .esphome .selected_suffix $(TEST_BUILD_DIR)
+
+# ---------------------------------------------------------------------------
+# Tests (unit tests for the C++ logic + Python codegen checks)
+# ---------------------------------------------------------------------------
+CXX ?= c++
+TEST_DIR ?= tests
+TEST_BUILD_DIR ?= $(TEST_DIR)/build
+TEST_INCLUDE_DIRS ?= -Icomponents/tesla_ble_vehicle
+TEST_CXXFLAGS ?= -std=c++17 -Wall -Wextra
+
+# Each tests/test_*.cpp compiles to its own binary.
+TEST_BINS := \
+  $(TEST_BUILD_DIR)/test_polling_policy \
+  $(TEST_BUILD_DIR)/test_state_text
+
+.PHONY: test test-cpp test-python
+test: test-cpp test-python ## Run the unit tests (C++ and Python)
+
+test-cpp: $(TEST_BINS) ## Build and run the C++ unit tests
+	@for bin in $(TEST_BINS); do \
+	  echo "== $$bin =="; \
+	  $$bin || exit 1; \
+	done
+
+$(TEST_BUILD_DIR)/test_%: $(TEST_DIR)/test_%.cpp components/tesla_ble_vehicle/polling_policy.h components/tesla_ble_vehicle/state_text.h
+	mkdir -p $(TEST_BUILD_DIR)
+	$(CXX) $(TEST_CXXFLAGS) $(TEST_INCLUDE_DIRS) $< -o $@
+
+test-python: ## Run the Python codegen checks
+	python3 $(TEST_DIR)/test_codegen.py
 
 .PHONY: help
 help: ## Show help messages for make targets

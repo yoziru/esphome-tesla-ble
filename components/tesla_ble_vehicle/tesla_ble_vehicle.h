@@ -19,6 +19,7 @@
 #include <esphome/core/automation.h>
 
 #include "ble_adapter_impl.h"
+#include "polling_policy.h"
 #include "storage_adapter_impl.h"
 #include <vehicle.h>
 #include "vehicle_state_manager.h"
@@ -185,14 +186,11 @@ private:
     
     // Polling intervals
     uint32_t vcsec_poll_interval_{10000};
-    uint32_t infotainment_poll_interval_awake_{30000};
-    uint32_t infotainment_poll_interval_active_{10000};
-    uint32_t infotainment_sleep_timeout_{660000};
     
     // Polling state
     uint32_t last_vcsec_poll_{0};
     uint32_t last_infotainment_poll_{0};
-    uint32_t last_awake_idle_start_{0};
+    InfotainmentPollPolicy poll_policy_;
 
     // BLE state
     espbt::ESPBTUUID service_uuid_;
