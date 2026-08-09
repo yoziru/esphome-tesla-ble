@@ -480,7 +480,20 @@ async def to_code(config):
     vcsec_interval_seconds = config[CONF_VCSEC_POLL_INTERVAL]
     
     cg.add(var.set_update_interval(vcsec_interval_seconds * 1000))
-    cg.add(var.set_role(TESLA_ROLES[role]))
+    # BUG FIX (2026-08-01), take 2: passing TESLA_ROLES[role] (the full
+    # "Keys_Role_ROLE_*" protobuf enum name) sent a string tesla_ble_vehicle
+    # .cpp's start_pairing() never matches (it compares against the short
+    # words "DRIVER" / "CHARGING_MANAGER"), so every pairing silently fell
+    # through to the Keys_Role_ROLE_OWNER default. Passing bare `role`
+    # wasn't enough on its own: cv.enum() returns an EnumValue (a str
+    # dynamically given an extra base class by add_class_to_obj) whose
+    # hidden .enum_value attribute still holds the long form, and
+    # cpp_generator.py explicitly isinstance()-checks for EnumValue and
+    # substitutes .enum_value when rendering — regardless of what's passed
+    # to cg.add(). str() forces a genuine plain string, stripping that
+    # class and its attribute, so the short word actually reaches the
+    # generated C++ literal.
+    cg.add(var.set_role(str(role)))
     cg.add(var.set_charging_amps_max(charging_amps_max))
     
     # Set polling intervals (convert from seconds to milliseconds)
