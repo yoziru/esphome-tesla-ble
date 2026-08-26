@@ -20,7 +20,7 @@ light:
 
   #G20=RGB WS2812
   - platform: esp32_rmt_led_strip
-    rgb_order: GRB
+    channel_colors: GRB
     pin: GPIO20
     num_leds: 1
     chipset: ws2812
