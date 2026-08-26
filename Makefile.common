@@ -89,7 +89,8 @@ TEST_CXXFLAGS ?= -std=c++17 -Wall -Wextra
 TEST_BINS := \
   $(TEST_BUILD_DIR)/test_connection_reset_policy \
   $(TEST_BUILD_DIR)/test_polling_policy \
-  $(TEST_BUILD_DIR)/test_state_text
+  $(TEST_BUILD_DIR)/test_state_text \
+  $(TEST_BUILD_DIR)/test_write_retry_policy
 
 .PHONY: test test-cpp test-python
 test: test-cpp test-python ## Run the unit tests (C++ and Python)

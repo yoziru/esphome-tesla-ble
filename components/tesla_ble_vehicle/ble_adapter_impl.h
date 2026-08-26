@@ -1,6 +1,7 @@
 #pragma once
 
 #include "adapters.h"
+#include "write_retry_policy.h"
 #include <esphome/components/ble_client/ble_client.h>
 #include <esphome/core/log.h>
 #include <vector>
@@ -16,10 +17,9 @@ struct BLETXChunk {
     std::vector<uint8_t> data;
     esp_gatt_write_type_t write_type;
     esp_gatt_auth_req_t auth_req;
-    uint32_t sent_at;
-    
+
     BLETXChunk(std::vector<uint8_t> d, esp_gatt_write_type_t wt, esp_gatt_auth_req_t ar)
-        : data(std::move(d)), write_type(wt), auth_req(ar), sent_at(millis()) {}
+        : data(std::move(d)), write_type(wt), auth_req(ar) {}
 };
 
 class BleAdapterImpl : public TeslaBLE::BleAdapter {
@@ -39,6 +39,7 @@ public:
 private:
     TeslaBLEVehicle* parent_;
     std::queue<BLETXChunk> write_queue_;
+    WriteRetryPolicy write_retry_policy_;
     
     static const size_t BLOCK_LENGTH = 18; // Safe BLE MTU chunk size
 };
