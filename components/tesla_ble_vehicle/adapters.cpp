@@ -106,11 +106,29 @@ StorageAdapterImpl::~StorageAdapterImpl() {
 bool StorageAdapterImpl::initialize() {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
+        // Standard recovery for a changed/full NVS layout. Must not abort: a
+        // failed erase would boot-loop the device. Degrading to no
+        // persistence keeps the vehicle connection working; the component
+        // already handles initialize() == false.
+        ESP_LOGW(ADAPTER_TAG, "NVS needs erase (0x%x): erasing NVS partition", (int) err);
+        esp_err_t erase_err = nvs_flash_erase();
+        if (erase_err != ESP_OK) {
+            ESP_LOGE(ADAPTER_TAG, "nvs_flash_erase failed: %s - continuing without persistence",
+                     esp_err_to_name(erase_err));
+            return false;
+        }
         err = nvs_flash_init();
+        if (err != ESP_OK) {
+            ESP_LOGE(ADAPTER_TAG, "nvs_flash_init after erase failed: %s - continuing without persistence",
+                     esp_err_to_name(err));
+            return false;
+        }
     }
-    
-    if (err != ESP_OK) return false;
+
+    if (err != ESP_OK) {
+        ESP_LOGE(ADAPTER_TAG, "nvs_flash_init failed: %s - continuing without persistence", esp_err_to_name(err));
+        return false;
+    }
     
     err = nvs_open("storage", NVS_READWRITE, &storage_handle_);
     if (err != ESP_OK) return false;
