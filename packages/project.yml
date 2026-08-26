@@ -2,11 +2,11 @@ esp32_ble_tracker:
   scan_parameters:
     # Depending on the model and state, BLE advertisements come every 20ms or every 150ms.
     interval: 150ms
-    # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
+    # Single-core chips (NanoC6 = ESP32-C6) share one core between WiFi and BLE;
+    # scan only once WiFi is up, see https://esphome.io/components/esp32_ble_tracker/#use-on-single-core-chips
     continuous: false
 
 wifi:
-  # Activate scan only after wifi connect, see https://github.com/esphome/issues/issues/2941#issuecomment-1842369092
   on_connect:
     - esp32_ble_tracker.start_scan:
         continuous: true

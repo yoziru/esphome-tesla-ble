@@ -15,12 +15,14 @@ std::string get_vin_advertisement_name(const char *vin) {
 
 bool TeslaBLEListener::parse_device(
     const esp32_ble_tracker::ESPBTDevice &device) {
-  ESP_LOGD(TAG, "Parsing device: [%s]: %s", device.address_str().c_str(),
+  char addr_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+  const char *addr_str = device.address_str_to(addr_buf);
+  ESP_LOGD(TAG, "Parsing device: [%s]: %s", addr_str,
            device.get_name().c_str());
 
   if (device.get_name() == this->vin_ad_name_) {
     ESP_LOGI(TAG, "Found Tesla vehicle | Name: %s | MAC: %s",
-             device.get_name().c_str(), device.address_str().c_str());
+             device.get_name().c_str(), addr_str);
     return true;
   }
 
