@@ -20,6 +20,7 @@
 
 #include "ble_adapter_impl.h"
 #include "polling_policy.h"
+#include "connection_reset_policy.h"
 #include "storage_adapter_impl.h"
 #include <vehicle.h>
 #include "vehicle_state_manager.h"
@@ -190,6 +191,7 @@ private:
     // Polling state
     uint32_t last_vcsec_poll_{0};
     InfotainmentPollPolicy poll_policy_;
+    ConnectionResetPolicy connection_reset_policy_;
 
     // BLE state
     espbt::ESPBTUUID service_uuid_;
