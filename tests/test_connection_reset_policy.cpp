@@ -129,6 +129,17 @@ static void test_connectivity_blip_restarts_the_window() {
   CHECK(fired_at != 0);
 }
 
+static void test_stalled_setup_triggers_after_grace() {
+  // A link stuck in CONNECTED (service discovery or notify registration
+  // failed - the component maps this into "link up but not ready") must be
+  // force-cycled once it outlives the grace window, instead of sitting
+  // half-initialised forever.
+  ConnectionResetPolicy p;
+  CHECK(!p.should_force_reconnect(1000, true, false));
+  CHECK(!p.should_force_reconnect(10000, true, false));
+  CHECK(p.should_force_reconnect(25000, true, false));
+}
+
 int main() {
   test_healthy_link_never_triggers();
   test_no_gatt_link_never_triggers();
@@ -136,6 +147,7 @@ int main() {
   test_slow_but_successful_setup_does_not_trigger();
   test_wedged_link_triggers_once_then_backs_off();
   test_connectivity_blip_restarts_the_window();
+  test_stalled_setup_triggers_after_grace();
 
   if (g_failures > 0) {
     std::printf("FAILED: %d/%d checks\n", g_failures, g_checks);

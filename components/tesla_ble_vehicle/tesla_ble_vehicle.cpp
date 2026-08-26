@@ -181,13 +181,19 @@ void TeslaBLEVehicle::loop() {
   if (ble_adapter_)
     ble_adapter_->process_write_queue();
 
-  // Detect a wedged link: GATT established but the Vehicle reports
-  // disconnected (e.g. after the library's auth-stuck watchdog reset session
-  // state). Only a fresh connect cycle re-runs service discovery and notify
-  // registration, so force one instead of waiting for a reboot.
+  // Detect wedged links. Two flavours:
+  //  - GATT established but the Vehicle reports disconnected (e.g. after the
+  //    library's auth-stuck watchdog reset session state)
+  //  - setup stalled in CONNECTED: service discovery or notify registration
+  //    failed (gattc_event_handler logs-and-breaks), so ESTABLISHED is never
+  //    reached and nothing else ever retries
+  // Only a fresh connect cycle re-runs discovery / notify registration, so
+  // force one instead of waiting for a reboot.
   const bool gatt_established = is_connected();
+  const bool stalled_setup = this->node_state == espbt::ClientState::CONNECTED;
   const bool vehicle_connected = vehicle_ != nullptr && vehicle_->is_connected();
-  if (connection_reset_policy_.should_force_reconnect(millis(), gatt_established, vehicle_connected)) {
+  if (connection_reset_policy_.should_force_reconnect(millis(), gatt_established || stalled_setup,
+                                                      vehicle_connected)) {
     ESP_LOGW(TAG, "GATT connection up but vehicle is disconnected - forcing reconnect");
     connection_reset_policy_.on_force_reconnect(millis());
     this->parent()->disconnect();
