@@ -4,6 +4,7 @@
 #include <esphome/core/helpers.h>
 #include <cmath>
 #include <algorithm>
+#include <cinttypes>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -286,7 +287,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         if (max_amps > 0 && max_amps <= 100) {
             publish_sensor("vehicle_max_charge_current", static_cast<float>(max_amps));
             if (max_amps != charging_amps_max_) {
-                ESP_LOGI(STATE_MANAGER_TAG, "Received new max charging amps: %d A", max_amps);
+                ESP_LOGI(STATE_MANAGER_TAG, "Received new max charging amps: %" PRId32 " A", max_amps);
                 update_charging_amps_max(max_amps);
             }
         }
@@ -300,7 +301,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
 
-    ESP_LOGD(STATE_MANAGER_TAG, "charge_limit_reason which=%d actual=%ld request=%ld pilot=%ld",
+    ESP_LOGD(STATE_MANAGER_TAG, "charge_limit_reason which=%d actual=%" PRId32 " request=%" PRId32 " pilot=%" PRId32,
              charge_state.which_optional_charge_limit_reason,
              charge_state.optional_charger_actual_current.charger_actual_current,
              charge_state.optional_charge_current_request.charge_current_request,
@@ -683,7 +684,7 @@ float VehicleStateManager::get_charging_amps() const {
 
 void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
     if (new_max <= 0) {
-        ESP_LOGW(STATE_MANAGER_TAG, "Invalid max charging amps: %d A", new_max);
+        ESP_LOGW(STATE_MANAGER_TAG, "Invalid max charging amps: %" PRId32 " A", new_max);
         return;
     }
 
@@ -694,7 +695,7 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
     charging_amps_max_ = new_max;
 
     if (charging_amps_number_) {
-        ESP_LOGD(STATE_MANAGER_TAG, "Updated max charging amps to %d A", new_max);
+        ESP_LOGD(STATE_MANAGER_TAG, "Updated max charging amps to %" PRId32 " A", new_max);
     }
 }
 
