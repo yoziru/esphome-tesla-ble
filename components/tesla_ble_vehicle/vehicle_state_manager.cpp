@@ -170,6 +170,8 @@ void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
 
 void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charge_state) {
     ESP_LOGD(STATE_MANAGER_TAG, "Updating charge state");
+    // Track whether charger is disconnected in this message to avoid stale estimate recomputation.
+    bool charger_was_disconnected = false;
     
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
@@ -200,6 +202,14 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         // Update charger connected binary sensor
         const bool charger_connected = state_text::charger_connected(charge_state.charging_state.which_type);
         publish_binary_sensor("charger", charger_connected);
+        if (!charger_connected) {
+            // No cable: clear cached estimate inputs so a later reconnect without voltage doesn't reuse stale AC voltage.
+            charger_was_disconnected = true;
+            cached_charger_voltage_ = NAN;
+            cached_charger_current_ = 0.0f;
+            cached_charger_phases_ = std::nullopt;
+            publish_sensor("charger_power_estimated", 0.0f);
+        }
     }
     
     // Update battery level
@@ -244,19 +254,21 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update charger voltage
+    // Update charger voltage (cache for estimated power)
     if (charge_state.which_optional_charger_voltage) {
         const float voltage = static_cast<float>(charge_state.optional_charger_voltage.charger_voltage);
         if (voltage >= 0.0f && voltage <= 600.0f && std::isfinite(voltage)) {
             publish_sensor("charger_voltage", voltage);
+            cached_charger_voltage_ = voltage;
         }
     }
     
-    // Update charger current (real-time feedback, never delay)
+    // Update charger current (cached for estimated power)
     if (charge_state.which_optional_charger_actual_current) {
         const float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
         if (current >= 0.0f && current <= 100.0f && std::isfinite(current)) {
             publish_sensor("charger_current", current);
+            cached_charger_current_ = current;
         }
     }
 
@@ -340,11 +352,12 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update charger phases (1-phase vs 3-phase)
+    // Update charger phases (integer 1..3, cached for estimated power)
     if (charge_state.which_optional_charger_phases) {
         const float phases = static_cast<float>(charge_state.optional_charger_phases.charger_phases);
         if (phases >= 1.0f && phases <= 3.0f && std::isfinite(phases)) {
             publish_sensor("charger_phases", phases);
+            cached_charger_phases_ = static_cast<int32_t>(phases);
         }
     }
 
@@ -360,6 +373,12 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
                 ESP_LOGD(STATE_MANAGER_TAG, "Charge port latch: %s", latch_engaged ? "ENGAGED (locked)" : "DISENGAGED (unlocked)");
             }
         }
+    }
+
+    // Deferred estimated power calculation: single publish per poll from cached voltage/current/phases.
+    // Skipped when we already published 0 for disconnected to avoid overwriting with stale cached values.
+    if (!charger_was_disconnected) {
+        update_estimated_power();
     }
 }
 
@@ -588,6 +607,31 @@ void VehicleStateManager::update_charging_amps(float amps) {
 
 void VehicleStateManager::update_charger_connected(bool connected) {
     publish_binary_sensor("charger", connected);
+}
+
+void VehicleStateManager::update_estimated_power() {
+    // Pure helper: compute estimated power (kW) = V * A * phases / 1000.
+    // Using std::optional for explicit missing-data handling (modern C++17) and early returns.
+    if (!cached_charger_phases_.has_value()) {
+        return;
+    }
+    const int32_t phases = cached_charger_phases_.value();
+    if (phases < 1 || phases > 3) {
+        return;
+    }
+    if (!std::isfinite(cached_charger_voltage_) || !std::isfinite(cached_charger_current_)) {
+        return;
+    }
+    if (cached_charger_voltage_ < 0.0f || cached_charger_voltage_ > 600.0f ||
+        cached_charger_current_ < 0.0f || cached_charger_current_ > 100.0f) {
+        return;
+    }
+    const float power_kw = cached_charger_voltage_ * cached_charger_current_ *
+                           static_cast<float>(phases) / 1000.0f;
+    if (!std::isfinite(power_kw) || power_kw < 0.0f || power_kw > 100.0f) {
+        return;
+    }
+    publish_sensor("charger_power_estimated", power_kw);
 }
 
 // =============================================================================

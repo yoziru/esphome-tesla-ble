@@ -172,7 +172,13 @@ private:
     float current_inside_temp_{NAN};
     float target_temp_{21.0f};
     bool climate_on_{false};
-    
+
+    // Cached values for estimated power calculation (V * A * phases / 1000)
+    // Using NAN/optional sentinel pattern consistent with existing climate temps (NAN) and modern optional for phases.
+    float cached_charger_voltage_{NAN};
+    float cached_charger_current_{NAN};
+    std::optional<int32_t> cached_charger_phases_{std::nullopt};
+    void update_estimated_power();
 
     
     // ==========================================================================
