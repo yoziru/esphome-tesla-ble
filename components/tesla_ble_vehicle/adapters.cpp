@@ -43,39 +43,54 @@ bool BleAdapterImpl::write(const std::vector<uint8_t>& data) {
 void BleAdapterImpl::process_write_queue() {
     if (write_queue_.empty()) return;
     if (!parent_->is_connected()) return;
-    
-    // Rate limit? Or just send one per loop?
-    // BLEManager sent one per loop (implied by just popping front)
-    
+
+    // Back off a failing chunk instead of retrying every loop() iteration,
+    // and drop it after repeated failures so it cannot block newer traffic.
+    switch (write_retry_policy_.next_action(millis())) {
+        case WriteAttemptDecision::WAIT:
+            return;
+        case WriteAttemptDecision::DROP:
+            ESP_LOGE(ADAPTER_TAG, "Dropping TX chunk after %u consecutive failures (%u bytes)",
+                     (unsigned) WriteRetryPolicy::MAX_CONSECUTIVE_FAILURES,
+                     (unsigned) write_queue_.front().data.size());
+            write_queue_.pop();
+            write_retry_policy_.on_drop();
+            return;
+        case WriteAttemptDecision::ATTEMPT:
+            break;
+    }
+
     BLETXChunk& chunk = write_queue_.front();
-    
+
     auto* client = parent_->parent();
     int gattc_if = client->get_gattc_if();
     uint16_t conn_id = client->get_conn_id();
     uint16_t handle = parent_->get_write_handle(); // Need public getter on Vehicle
-    
+
     if (handle == 0) {
         // Not ready
         return;
     }
-    
+
     esp_err_t err = esp_ble_gattc_write_char(
         gattc_if, conn_id, handle,
         chunk.data.size(), chunk.data.data(),
         chunk.write_type, chunk.auth_req
     );
-    
+
     if (err == ESP_OK) {
+        write_retry_policy_.on_success(millis());
         write_queue_.pop();
     } else {
+        write_retry_policy_.on_failure(millis());
         ESP_LOGW(ADAPTER_TAG, "BLE write failed: %s", esp_err_to_name(err));
-        // Retry? 
     }
 }
 
 void BleAdapterImpl::clear_queues() {
     std::queue<BLETXChunk> empty;
     write_queue_.swap(empty);
+    write_retry_policy_.reset();
 }
 
 // --- StorageAdapterImpl ---
