@@ -2,5 +2,5 @@
   source:
     type: git
     url: https://github.com/yoziru/esphome-tesla-ble.git
-    ref: main
+    ref: ${tesla_ble_ref}
     path: components

@@ -1,5 +1,7 @@
-# Mirrors the configuration materialized by ESPHome Dashboard for an adopted device.
+# Mirrors the configuration materialized by ESPHome Device Builder for an adopted device.
 substitutions:
+  # Exercise an immutable ref used for both the remote package and components.
+  tesla_ble_ref: a38ccb337763c0921c853ee29b9da1c44f036469
   name: tesla-ble-dashboard-test
   friendly_name: Tesla BLE Dashboard Test
   charging_amps_max: "32"

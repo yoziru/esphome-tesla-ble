@@ -22,7 +22,7 @@ Structure:
 - components/: C++ + Python codegen (tesla_ble_vehicle, tesla_ble_listener)
 - docs/: Screenshots for README
 
-Install methods: ESPHome Dashboard (paste dashboard.yml URL), CLI with uv, or Docker.
+Install methods: ESPHome Device Builder (create a project, then add the board package), CLI with uv, or Docker.
 
 # Code Style
 Python: Imports grouped (esphome, then stdlib). snake_case functions/vars, PascalCase classes.
