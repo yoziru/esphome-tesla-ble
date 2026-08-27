@@ -1,0 +1,23 @@
+# Mirrors the configuration materialized by ESPHome Dashboard for an adopted device.
+substitutions:
+  name: tesla-ble-dashboard-test
+  friendly_name: Tesla BLE Dashboard Test
+  charging_amps_max: "32"
+  ble_mac_address: !secret test_vehicle_ble_mac
+  tesla_vin: !secret test_vehicle_vin
+
+packages:
+  tesla_ble: !include ../tesla-ble-m5stack-nanoc6.dashboard.yml
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+
+api:
+  encryption:
+    key: !secret test_api_encryption_key
+
+wifi:
+  ssid: !secret test_wifi_ssid
+  password: !secret test_wifi_password

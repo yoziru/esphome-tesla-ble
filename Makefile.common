@@ -92,7 +92,7 @@ TEST_BINS := \
   $(TEST_BUILD_DIR)/test_state_text \
   $(TEST_BUILD_DIR)/test_write_retry_policy
 
-.PHONY: test test-cpp test-python
+.PHONY: test test-cpp test-python validate-dashboard-config
 test: test-cpp test-python ## Run the unit tests (C++ and Python)
 
 test-cpp: $(TEST_BINS) ## Build and run the C++ unit tests
@@ -107,6 +107,9 @@ $(TEST_BUILD_DIR)/test_%: $(TEST_DIR)/test_%.cpp components/tesla_ble_vehicle/po
 
 test-python: ## Run the Python codegen checks
 	python3 $(TEST_DIR)/test_codegen.py
+
+validate-dashboard-config: check-uv ## Validate the generated-style ESPHome Dashboard configuration
+	uvx --with pip esphome==$(ESPHOME_VERSION) config $(TEST_DIR)/dashboard_config.yml
 
 .PHONY: help
 help: ## Show help messages for make targets
