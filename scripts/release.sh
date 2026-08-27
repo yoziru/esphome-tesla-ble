@@ -40,9 +40,9 @@ fi
 git fetch origin --tags
 git pull --ff-only origin main
 
-current_version=$(sed -n 's/^    version: "\(.*\)"$/\1/p' packages/base.yml)
+current_version=$(sed -n 's/^    version: "\(.*\)"$/\1/p' packages/project.yml)
 if [ -z "$current_version" ]; then
-    echo "Error: could not read version from packages/base.yml" >&2
+    echo "Error: could not read version from packages/project.yml" >&2
     exit 1
 fi
 
@@ -79,11 +79,11 @@ if git rev-parse -q --verify "refs/tags/v$next_version" >/dev/null 2>&1; then
     exit 1
 fi
 
-# Update version in packages/base.yml (portable: works on macOS and Linux)
-sed "s/^    version: \"$current_version\"$/    version: \"$next_version\"/" packages/base.yml > packages/base.yml.tmp
-mv packages/base.yml.tmp packages/base.yml
+# Update version in packages/project.yml (portable: works on macOS and Linux)
+sed "s/^    version: \"$current_version\"$/    version: \"$next_version\"/" packages/project.yml > packages/project.yml.tmp
+mv packages/project.yml.tmp packages/project.yml
 
-git add packages/base.yml
+git add packages/project.yml
 if git diff --cached --quiet; then
     echo "Error: no version changes to commit" >&2
     exit 1

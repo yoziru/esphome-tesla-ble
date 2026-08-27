@@ -1,6 +1,7 @@
 __pycache__
 .esphome
 secrets.yaml
+!tests/secrets.yaml
 .vscode
 .DS_Store
 .venv

@@ -1,0 +1,26 @@
+# Mirrors the configuration materialized by ESPHome Device Builder for an adopted device.
+substitutions:
+  # Exercise an immutable ref used for both the remote package and components.
+  tesla_ble_ref: a38ccb337763c0921c853ee29b9da1c44f036469
+  name: tesla-ble-dashboard-test
+  friendly_name: Tesla BLE Dashboard Test
+  charging_amps_max: "32"
+  ble_mac_address: !secret test_vehicle_ble_mac
+  tesla_vin: !secret test_vehicle_vin
+  ota_password: !secret test_ota_password
+
+packages:
+  tesla_ble: !include ../tesla-ble-m5stack-nanoc6.dashboard.yml
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+
+api:
+  encryption:
+    key: !secret test_api_encryption_key
+
+wifi:
+  ssid: !secret test_wifi_ssid
+  password: !secret test_wifi_password
