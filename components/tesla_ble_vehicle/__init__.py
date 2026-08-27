@@ -71,6 +71,7 @@ SetChargingLimitAction = tesla_ble_vehicle_ns.class_("SetChargingLimitAction", a
 # Configuration constants
 CONF_VIN = "vin"
 CONF_CHARGING_AMPS_MAX = "charging_amps_max"
+DEFAULT_CHARGING_AMPS_MAX = 32
 CONF_ROLE = "role"
 
 # Polling configuration constants
@@ -243,7 +244,7 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(CONF_ID): cv.declare_id(TeslaBLEVehicle),
             cv.Required(CONF_VIN): cv.string,
-            cv.Optional(CONF_CHARGING_AMPS_MAX, default=32): cv.int_range(min=1, max=48),
+            cv.Optional(CONF_CHARGING_AMPS_MAX, default=DEFAULT_CHARGING_AMPS_MAX): cv.int_range(min=1, max=48),
             cv.Optional(CONF_ROLE, default="DRIVER"): cv.enum(TESLA_ROLES, upper=True),
             # Polling intervals (in seconds)
             cv.Optional(CONF_VCSEC_POLL_INTERVAL, default=10): cv.int_range(min=5, max=300),
@@ -381,7 +382,7 @@ async def create_number(var, definition, config):
     # Handle dynamic max value from config
     max_val = definition["max"]
     if max_val == "config":
-        max_val = config.get(CONF_CHARGING_AMPS_MAX, 32)
+        max_val = config.get(CONF_CHARGING_AMPS_MAX, DEFAULT_CHARGING_AMPS_MAX)
     
     num_config = {
         CONF_ID: cv.declare_id(definition["class"])(f"tesla_{definition['id']}_number"),

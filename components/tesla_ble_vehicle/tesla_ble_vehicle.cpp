@@ -48,6 +48,7 @@ void TeslaBLEVehicle::setup() {
   ESP_LOGCONFIG(TAG, "Setting up TeslaBLEVehicle");
   initialize_ble_uuids();
   initialize_managers();
+  restore_charging_amps_max_();
   configure_pending_sensors();
 
   if (vin_.empty()) {
@@ -243,7 +244,8 @@ void TeslaBLEVehicle::dump_config() {
   ESP_LOGCONFIG(TAG, "  VIN: %s", vin_.empty() ? "Not set" : vin_.c_str());
   ESP_LOGCONFIG(TAG, "  Role: %s", role_.c_str());
   ESP_LOGCONFIG(TAG, "  Max Charging Amps: %d",
-                state_manager_ ? state_manager_->get_charging_amps_max() : 32);
+                state_manager_ ? state_manager_->get_charging_amps_max()
+                               : DEFAULT_CHARGING_AMPS_MAX);
   ESP_LOGCONFIG(TAG, "  Polling: VCSEC=%ums, Awake=%ums, Active=%ums",
                 vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
                 poll_policy_.active_interval_ms());
@@ -287,6 +289,31 @@ void TeslaBLEVehicle::set_charging_amps_max(int amps_max) {
 
   if (state_manager_) {
     state_manager_->set_charging_amps_max(amps_max);
+  }
+}
+
+void TeslaBLEVehicle::restore_charging_amps_max_() {
+  if (!state_manager_) return;
+  auto pref = global_preferences->make_preference<int32_t>(charging_amps_max_pref_hash_());
+  int32_t stored = 0;
+  if (pref.load(&stored) && stored > 0 && stored <= 80) {
+    ESP_LOGI(TAG, "Restored charging amps max from NVS: %" PRId32 " A", stored);
+    state_manager_->set_charging_amps_max(stored);
+    return;
+  }
+  state_manager_->set_charging_amps_max(configured_charging_amps_max_);
+}
+
+uint32_t TeslaBLEVehicle::charging_amps_max_pref_hash_() const {
+  return fnv1_hash_extend(fnv1_hash("tesla_ble_vehicle.charging_amps_max"), vin_);
+}
+
+void TeslaBLEVehicle::save_charging_amps_max_(int max) {
+  if (max <= 0 || max > 80) return;
+  auto pref = global_preferences->make_preference<int32_t>(charging_amps_max_pref_hash_());
+  const int32_t value = max;
+  if (pref.save(&value)) {
+    ESP_LOGD(TAG, "Persisted charging amps max %d A", max);
   }
 }
 
@@ -959,9 +986,7 @@ void TeslaBLEVehicle::handle_connection_established() {
     poll_policy_.reset();
   }
 
-  // Reset charging amps max to configured value on each connection
   if (state_manager_) {
-    state_manager_->set_charging_amps_max(configured_charging_amps_max_);
     state_manager_->set_sensors_available(true);
   }
   this->status_clear_warning();

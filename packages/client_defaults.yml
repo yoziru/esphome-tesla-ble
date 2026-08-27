@@ -1,7 +1,6 @@
 substitutions:
   ble_mac_address: !secret ble_mac_address
   tesla_vin: !secret tesla_vin
-  charging_amps_max: "32"
   # Polling interval defaults (can be overridden in the main config).
   vcsec_poll_interval: "10"
   infotainment_poll_interval_awake: "30"

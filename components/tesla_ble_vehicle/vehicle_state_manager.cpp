@@ -1,6 +1,9 @@
 #include "vehicle_state_manager.h"
 #include "state_text.h"
 #include "tesla_ble_vehicle.h"
+#ifdef USE_API
+#include <esphome/components/api/api_server.h>
+#endif
 #include <esphome/core/helpers.h>
 #include <cmath>
 #include <algorithm>
@@ -694,9 +697,23 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 
     charging_amps_max_ = new_max;
 
-    if (charging_amps_number_) {
-        ESP_LOGD(STATE_MANAGER_TAG, "Updated max charging amps to %" PRId32 " A", new_max);
+    if (parent_) {
+        parent_->save_charging_amps_max_(new_max);
     }
+
+    if (charging_amps_number_) {
+        charging_amps_number_->traits.set_max_value(static_cast<float>(new_max));
+#ifdef USE_API
+        if (api::global_api_server != nullptr) {
+            // ESPHome sends number traits only during API entity discovery.
+            ESP_LOGI(STATE_MANAGER_TAG, "Reconnecting API clients to refresh charging amps limit");
+            for (const auto &client : api::global_api_server->active_clients()) {
+                client->on_fatal_error();
+            }
+        }
+#endif
+    }
+    ESP_LOGI(STATE_MANAGER_TAG, "Updated max charging amps to %" PRId32 " A", new_max);
 }
 
 // =============================================================================
