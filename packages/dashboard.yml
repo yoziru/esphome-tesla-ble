@@ -1,0 +1,15 @@
+# This package deliberately excludes esphome identity, API, and Wi-Fi credentials.
+# ESPHome Dashboard owns those settings in each device's local configuration.
+packages:
+  board: !include board.yml
+  common: !include common.yml
+  project: !include project.yml
+  client: !include client.yml
+
+external_components: !include external_components.dashboard.yml
+
+logger:
+  level: INFO
+
+ota:
+  - platform: esphome

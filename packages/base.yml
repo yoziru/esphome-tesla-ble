@@ -14,9 +14,6 @@ esphome:
   name_add_mac_suffix: true
   friendly_name: ${friendly_name}
   comment: ${device_description}
-  project:
-    name: yoziru.esphome-tesla-ble
-    version: "2026.7.0"
 
 logger:
   level: INFO

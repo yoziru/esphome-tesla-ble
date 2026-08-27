@@ -1,3 +1,8 @@
+esphome:
+  project:
+    name: yoziru.esphome-tesla-ble
+    version: "2026.7.0"
+
 esp32_ble_tracker:
   scan_parameters:
     # Depending on the model and state, BLE advertisements come every 20ms or every 150ms.
