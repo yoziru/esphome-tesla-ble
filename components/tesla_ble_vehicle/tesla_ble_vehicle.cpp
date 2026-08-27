@@ -986,9 +986,6 @@ void TeslaBLEVehicle::handle_connection_established() {
     poll_policy_.reset();
   }
 
-  if (state_manager_) {
-    state_manager_->set_sensors_available(true);
-  }
   this->status_clear_warning();
 }
 
