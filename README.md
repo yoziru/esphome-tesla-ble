@@ -93,6 +93,8 @@ wifi:
 
 Secret names are local to each user's dashboard. If yours differ, keep `ble_mac_address` and `tesla_vin` on the left and change only the names after `!secret`.
 
+For multiple vehicles, create one ESPHome device per vehicle and map each device's substitutions to distinct secrets. For example, the second device can use `ble_mac_address: !secret model_y_ble_mac_address` and `tesla_vin: !secret model_y_tesla_vin`; the package and board configuration stay the same.
+
 Or copy [`tesla-ble.example.yml`](./tesla-ble.example.yml) as a starting point for custom configs.
 
 ### CLI

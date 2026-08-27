@@ -1,5 +1,12 @@
 # This package deliberately excludes esphome identity, API, and Wi-Fi credentials.
 # ESPHome Dashboard owns those settings in each device's local configuration.
+substitutions:
+  charging_amps_max: "32"
+  vcsec_poll_interval: "10"
+  infotainment_poll_interval_awake: "30"
+  infotainment_poll_interval_active: "10"
+  infotainment_sleep_timeout: "660"
+
 packages:
   board: !include board.yml
   common: !include common.yml
