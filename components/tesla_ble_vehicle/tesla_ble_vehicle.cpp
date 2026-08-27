@@ -479,8 +479,9 @@ void TeslaBLEVehicle::set_force_update_button(button::Button *button) {
 // Command tracking (v5.1.0 OperationResult + phase callbacks)
 // =============================================================================
 
-void TeslaBLEVehicle::handle_command_result(TeslaBLE::OperationResult result) {
-  std::string value = last_command_name_;
+void TeslaBLEVehicle::handle_command_result(const std::string &name,
+                                            TeslaBLE::OperationResult result) {
+  std::string value = name;
 
   if (result.is_success()) {
     value += " → Success";
@@ -506,19 +507,56 @@ void TeslaBLEVehicle::send_command_with_tracking(
     UniversalMessage_Domain domain,
     const std::string &name,
     std::function<int(TeslaBLE::Client *, uint8_t *, size_t *)> builder,
-    TeslaBLE::WakePolicy wake_policy) {
+    TeslaBLE::WakePolicy wake_policy, std::function<void(bool)> on_result) {
   if (!vehicle_) {
     ESP_LOGE(TAG, "Cannot send command '%s': vehicle not initialized", name.c_str());
     return;
   }
 
-  last_command_name_ = name;
   vehicle_->send_command_result(
       domain, name, std::move(builder),
-      [this](TeslaBLE::OperationResult result) {
-        handle_command_result(std::move(result));
+      [this, name, on_result = std::move(on_result)](TeslaBLE::OperationResult result) {
+        const bool succeeded = result.is_success();
+        handle_command_result(name, std::move(result));
+        if (on_result) on_result(succeeded);
       },
       wake_policy);
+}
+
+void TeslaBLEVehicle::schedule_state_refresh_(ControlStateRefresh refresh) {
+  if (!vehicle_ || refresh == ControlStateRefresh::NONE) return;
+
+  const char *timeout_name = nullptr;
+  switch (refresh) {
+    case ControlStateRefresh::CHARGE_STATE:
+      timeout_name = "charge-state-refresh";
+      break;
+    case ControlStateRefresh::CLIMATE_STATE:
+      timeout_name = "climate-state-refresh";
+      break;
+    case ControlStateRefresh::CLOSURES_STATE:
+      timeout_name = "closures-state-refresh";
+      break;
+    case ControlStateRefresh::NONE:
+      return;
+  }
+
+  this->set_timeout(timeout_name, 1500, [this, refresh]() {
+    if (!vehicle_ || !vehicle_->is_connected()) return;
+    switch (refresh) {
+      case ControlStateRefresh::CHARGE_STATE:
+        vehicle_->charge_state_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+        break;
+      case ControlStateRefresh::CLIMATE_STATE:
+        vehicle_->climate_state_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+        break;
+      case ControlStateRefresh::CLOSURES_STATE:
+        vehicle_->closures_state_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+        break;
+      case ControlStateRefresh::NONE:
+        break;
+    }
+  });
 }
 
 // =============================================================================
@@ -615,6 +653,11 @@ int TeslaBLEVehicle::set_charging_state(bool charging) {
       [charging](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
         return client->build_car_server_vehicle_action_message(
             buff, len, CarServer_VehicleAction_chargingStartStopAction_tag, &charging);
+      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
+      [this, charging](bool succeeded) {
+        const auto decision = control_state_decision(ControlStateCommand::CHARGING_STATE, succeeded);
+        if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_control_state(charging);
+        schedule_state_refresh_(decision.refresh);
       });
   return 0;
 }
@@ -640,6 +683,12 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
       [clamped](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
         return client->build_car_server_vehicle_action_message(
             buff, len, CarServer_VehicleAction_setChargingAmpsAction_tag, &clamped);
+      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
+      [this, clamped](bool succeeded) {
+        const auto decision = control_state_decision(ControlStateCommand::SET_AMPS, succeeded);
+        if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_amps(static_cast<float>(clamped));
+        if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_amps();
+        schedule_state_refresh_(decision.refresh);
       });
   return clamped;
 }
@@ -657,6 +706,12 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
       [limit](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
         return client->build_car_server_vehicle_action_message(
             buff, len, CarServer_VehicleAction_chargingSetLimitAction_tag, &limit);
+      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
+      [this, limit](bool succeeded) {
+        const auto decision = control_state_decision(ControlStateCommand::SET_LIMIT, succeeded);
+        if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_limit(static_cast<float>(limit));
+        if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_limit();
+        schedule_state_refresh_(decision.refresh);
       });
   return 0;
 }
@@ -827,6 +882,11 @@ void TeslaBLEVehicle::set_steering_wheel_heat(bool enable) {
       [enable](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
         return client->build_car_server_vehicle_action_message(
             buff, len, CarServer_VehicleAction_hvacSteeringWheelHeaterAction_tag, &enable);
+      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
+      [this, enable](bool succeeded) {
+        const auto decision = control_state_decision(ControlStateCommand::SET_STEERING_WHEEL_HEAT, succeeded);
+        if (decision.publish_requested_state && state_manager_) state_manager_->update_steering_wheel_heat(enable);
+        schedule_state_refresh_(decision.refresh);
       });
 }
 
@@ -862,6 +922,11 @@ void TeslaBLEVehicle::set_sentry_mode(bool enable) {
       [enable](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
         return client->build_car_server_vehicle_action_message(
             buff, len, CarServer_VehicleAction_vehicleControlSetSentryModeAction_tag, &enable);
+      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
+      [this, enable](bool succeeded) {
+        const auto decision = control_state_decision(ControlStateCommand::SET_SENTRY_MODE, succeeded);
+        if (decision.publish_requested_state && state_manager_) state_manager_->update_sentry_mode(enable);
+        schedule_state_refresh_(decision.refresh);
       });
 }
 
@@ -1020,8 +1085,7 @@ void TeslaChargingAmpsNumber::control(float value) {
     return;
   }
 
-  int clamped = parent_->set_charging_amps(static_cast<int>(value));
-  publish_state(static_cast<float>(clamped));
+  parent_->set_charging_amps(static_cast<int>(value));
 }
 
 void TeslaChargingLimitNumber::control(float value) {
@@ -1037,7 +1101,6 @@ void TeslaChargingLimitNumber::control(float value) {
   }
 
   parent_->set_charging_limit(static_cast<int>(value));
-  publish_state(value);
 }
 
 // =============================================================================

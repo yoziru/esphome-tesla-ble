@@ -88,6 +88,7 @@ TEST_CXXFLAGS ?= -std=c++17 -Wall -Wextra
 # Each tests/test_*.cpp compiles to its own binary.
 TEST_BINS := \
   $(TEST_BUILD_DIR)/test_connection_reset_policy \
+  $(TEST_BUILD_DIR)/test_control_state_policy \
   $(TEST_BUILD_DIR)/test_polling_policy \
   $(TEST_BUILD_DIR)/test_state_text \
   $(TEST_BUILD_DIR)/test_write_retry_policy
@@ -101,7 +102,7 @@ test-cpp: $(TEST_BINS) ## Build and run the C++ unit tests
 	  $$bin || exit 1; \
 	done
 
-$(TEST_BUILD_DIR)/test_%: $(TEST_DIR)/test_%.cpp components/tesla_ble_vehicle/polling_policy.h components/tesla_ble_vehicle/state_text.h
+$(TEST_BUILD_DIR)/test_%: $(TEST_DIR)/test_%.cpp components/tesla_ble_vehicle/control_state_policy.h components/tesla_ble_vehicle/polling_policy.h components/tesla_ble_vehicle/state_text.h
 	mkdir -p $(TEST_BUILD_DIR)
 	$(CXX) $(TEST_CXXFLAGS) $(TEST_INCLUDE_DIRS) $< -o $@
 
