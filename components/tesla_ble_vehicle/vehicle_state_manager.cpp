@@ -344,7 +344,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charge limit
     if (charge_state.which_optional_charge_limit_soc && charging_limit_number_) {
         const float limit = static_cast<float>(charge_state.optional_charge_limit_soc.charge_limit_soc);
-        publish_sensor_state(charging_limit_number_, limit);
+        update_charging_limit(limit);
     }
     
     // Update charge port door cover (physical door open/closed)
@@ -607,6 +607,34 @@ void VehicleStateManager::update_charge_flap_open(bool open) {
 void VehicleStateManager::update_charging_amps(float amps) {
     ESP_LOGD(STATE_MANAGER_TAG, "Charging amps setpoint from vehicle: %.1f A", amps);
     publish_sensor_state(charging_amps_number_, amps);
+}
+
+void VehicleStateManager::update_charging_limit(float limit) {
+    publish_sensor_state(charging_limit_number_, limit);
+}
+
+void VehicleStateManager::update_charging_control_state(bool charging) {
+    publish_sensor_state(charging_switch_, charging);
+}
+
+void VehicleStateManager::update_steering_wheel_heat(bool enabled) {
+    publish_sensor_state(steering_wheel_heat_switch_, enabled);
+}
+
+void VehicleStateManager::update_sentry_mode(bool enabled) {
+    publish_sensor_state(sentry_mode_switch_, enabled);
+}
+
+void VehicleStateManager::republish_charging_amps() {
+    if (charging_amps_number_ != nullptr && charging_amps_number_->has_state()) {
+        charging_amps_number_->publish_state(charging_amps_number_->state);
+    }
+}
+
+void VehicleStateManager::republish_charging_limit() {
+    if (charging_limit_number_ != nullptr && charging_limit_number_->has_state()) {
+        charging_limit_number_->publish_state(charging_limit_number_->state);
+    }
 }
 
 void VehicleStateManager::update_charger_connected(bool connected) {

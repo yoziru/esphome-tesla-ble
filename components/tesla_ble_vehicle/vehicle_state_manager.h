@@ -112,6 +112,12 @@ public:
     void update_user_present(bool present);
     void update_charge_flap_open(bool open);
     void update_charging_amps(float amps);
+    void update_charging_limit(float limit);
+    void update_charging_control_state(bool charging);
+    void update_steering_wheel_heat(bool enabled);
+    void update_sentry_mode(bool enabled);
+    void republish_charging_amps();
+    void republish_charging_limit();
     void update_charger_connected(bool connected);
     
     // ==========================================================================

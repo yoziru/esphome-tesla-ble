@@ -20,6 +20,7 @@
 #include <esphome/core/preferences.h>
 
 #include "ble_adapter_impl.h"
+#include "control_state_policy.h"
 #include "polling_policy.h"
 #include "connection_reset_policy.h"
 #include "storage_adapter_impl.h"
@@ -241,15 +242,16 @@ private:
     void save_charging_amps_max_(int max);
 
     // Command tracking
-    void handle_command_result(TeslaBLE::OperationResult result);
+    void handle_command_result(const std::string &name, TeslaBLE::OperationResult result);
+    void schedule_state_refresh_(ControlStateRefresh refresh);
     void send_command_with_tracking(
         UniversalMessage_Domain domain,
         const std::string &name,
         std::function<int(TeslaBLE::Client *, uint8_t *, size_t *)> builder,
-        TeslaBLE::WakePolicy wake_policy = TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+        TeslaBLE::WakePolicy wake_policy = TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
+        std::function<void(bool)> on_result = nullptr);
 
     text_sensor::TextSensor *last_command_sensor_{nullptr};
-    std::string last_command_name_;
 
     // Friends
     friend class VehicleStateManager;
@@ -296,7 +298,7 @@ DEFINE_TESLA_BUTTON(TeslaUnlatchDriverDoorButton, unlatch_driver_door)
  * @brief Generic Tesla switch base that calls a parent method on state change
  * 
  * Each switch type is defined using the DEFINE_TESLA_SWITCH macro below.
- * The macro generates a switch that calls parent->Method(state) and publishes state.
+ * The vehicle method publishes state only after the command result succeeds.
  */
 class TeslaSwitchBase : public switch_::Switch {
 public:
@@ -305,17 +307,23 @@ protected:
     TeslaBLEVehicle *parent_{nullptr};
 };
 
-// Macro to define a Tesla switch that calls a specific parent method with bool state
+// Macro to define a Tesla switch that calls a specific parent method with bool state.
 #define DEFINE_TESLA_SWITCH(ClassName, ParentMethod) \
     class ClassName : public TeslaSwitchBase { \
     protected: \
         void write_state(bool state) override { \
-            if (parent_) { parent_->ParentMethod(state); publish_state(state); } \
+            if (parent_) parent_->ParentMethod(state); \
         } \
     };
 
 // Define all switch types using the macro
-DEFINE_TESLA_SWITCH(TeslaChargingSwitch, set_charging_state)
+class TeslaChargingSwitch : public TeslaSwitchBase {
+ protected:
+  void write_state(bool state) override {
+    if (parent_) parent_->set_charging_state(state);
+  }
+};
+
 DEFINE_TESLA_SWITCH(TeslaSteeringWheelHeatSwitch, set_steering_wheel_heat)
 DEFINE_TESLA_SWITCH(TeslaSentryModeSwitch, set_sentry_mode)
 
