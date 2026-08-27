@@ -59,7 +59,12 @@ public:
     void set_charging_switch(switch_::Switch* sw) { charging_switch_ = sw; }
     void set_sentry_mode_switch(switch_::Switch* sw) { sentry_mode_switch_ = sw; }
     void set_steering_wheel_heat_switch(switch_::Switch* sw) { steering_wheel_heat_switch_ = sw; }
-    void set_charging_amps_number(number::Number* number) { charging_amps_number_ = number; }
+    void set_charging_amps_number(number::Number* number) {
+        charging_amps_number_ = number;
+        if (number != nullptr && charging_amps_max_ > 0) {
+            number->traits.set_max_value(static_cast<float>(charging_amps_max_));
+        }
+    }
     void set_charging_limit_number(number::Number* number) { charging_limit_number_ = number; }
     
     // ==========================================================================
@@ -129,7 +134,13 @@ public:
     // ==========================================================================
     void update_charging_amps_max(int32_t new_max);
     int get_charging_amps_max() const { return charging_amps_max_; }
-    void set_charging_amps_max(int max) { charging_amps_max_ = max; }
+    void set_charging_amps_max(int max) {
+        if (max <= 0) return;
+        charging_amps_max_ = max;
+        if (charging_amps_number_) {
+            charging_amps_number_->traits.set_max_value(static_cast<float>(max));
+        }
+    }
     
     
 private:
@@ -166,7 +177,7 @@ private:
     // Internal state tracking
     // ==========================================================================
     bool is_charging_{false};
-    int charging_amps_max_{32};
+    int charging_amps_max_{0};
     
     // Climate state tracking
     float current_inside_temp_{NAN};

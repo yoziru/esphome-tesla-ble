@@ -17,6 +17,7 @@
 #include <esphome/components/climate/climate.h>
 #include <esphome/core/component.h>
 #include <esphome/core/automation.h>
+#include <esphome/core/preferences.h>
 
 #include "ble_adapter_impl.h"
 #include "polling_policy.h"
@@ -31,6 +32,7 @@ namespace tesla_ble_vehicle {
 namespace espbt = esphome::esp32_ble_tracker;
 
 static const char *const TAG = "tesla_ble_vehicle";
+constexpr int DEFAULT_CHARGING_AMPS_MAX = 32;
 
 // Tesla BLE service UUIDs
 static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";
@@ -231,8 +233,12 @@ private:
     
     std::string last_rx_hex_;
 
-    // Configured max (stored before state_manager is initialized)
-    int configured_charging_amps_max_{32};
+    // Fallback until the vehicle reports its maximum.
+    int configured_charging_amps_max_{DEFAULT_CHARGING_AMPS_MAX};
+
+    uint32_t charging_amps_max_pref_hash_() const;
+    void restore_charging_amps_max_();
+    void save_charging_amps_max_(int max);
 
     // Command tracking
     void handle_command_result(TeslaBLE::OperationResult result);

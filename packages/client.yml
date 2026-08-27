@@ -8,7 +8,6 @@ tesla_ble_vehicle:
   id: tesla_ble_vehicle_id
   vin: $tesla_vin
   # update_interval is automatically set to match vcsec_poll_interval
-  charging_amps_max: $charging_amps_max
   role: DRIVER  # Options: DRIVER (all controls) or CHARGING_MANAGER (charging + basic controls only)
   
   # Polling intervals (in seconds) - adjust based on your battery life vs responsiveness needs

@@ -3,7 +3,6 @@
 substitutions:
   # Set by the Device Builder configuration to a branch, tag, or commit SHA.
   tesla_ble_ref: main
-  charging_amps_max: "32"
   vcsec_poll_interval: "10"
   infotainment_poll_interval_awake: "30"
   infotainment_poll_interval_active: "10"
