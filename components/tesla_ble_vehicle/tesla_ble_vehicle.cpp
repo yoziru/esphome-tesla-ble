@@ -1,6 +1,7 @@
 #include "tesla_ble_vehicle.h"
 #include "common.h"
 #include <client.h>
+#include <cinttypes>
 #include <cstring>
 #include <defs.h>
 #include <esp_log.h>
@@ -246,9 +247,10 @@ void TeslaBLEVehicle::dump_config() {
   ESP_LOGCONFIG(TAG, "  Max Charging Amps: %d",
                 state_manager_ ? state_manager_->get_charging_amps_max()
                                : DEFAULT_CHARGING_AMPS_MAX);
-  ESP_LOGCONFIG(TAG, "  Polling: VCSEC=%ums, Awake=%ums, Active=%ums",
-                vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
-                poll_policy_.active_interval_ms());
+  ESP_LOGCONFIG(TAG, "  Polling: VCSEC=%" PRIu32 "ms, Awake=%" PRIu32
+                     "ms, Active=%" PRIu32 "ms",
+                 vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
+                 poll_policy_.active_interval_ms());
   ESP_LOGCONFIG(TAG, "  Sensors: %d binary, %d numeric, %d text",
                 pending_binary_sensors_.size(), pending_sensors_.size(),
                 pending_text_sensors_.size());
@@ -318,25 +320,27 @@ void TeslaBLEVehicle::save_charging_amps_max_(int max) {
 }
 
 void TeslaBLEVehicle::set_vcsec_poll_interval(uint32_t interval_ms) {
-  ESP_LOGD(TAG, "Setting VCSEC poll interval: %u ms", interval_ms);
+  ESP_LOGD(TAG, "Setting VCSEC poll interval: %" PRIu32 " ms", interval_ms);
   vcsec_poll_interval_ = interval_ms;
 }
 
 void TeslaBLEVehicle::set_infotainment_poll_interval_awake(
     uint32_t interval_ms) {
-  ESP_LOGD(TAG, "Setting infotainment poll interval awake: %u ms", interval_ms);
+  ESP_LOGD(TAG, "Setting infotainment poll interval awake: %" PRIu32 " ms",
+           interval_ms);
   poll_policy_.set_awake_interval_ms(interval_ms);
 }
 
 void TeslaBLEVehicle::set_infotainment_poll_interval_active(
     uint32_t interval_ms) {
-  ESP_LOGD(TAG, "Setting infotainment poll interval active: %u ms",
-           interval_ms);
+  ESP_LOGD(TAG, "Setting infotainment poll interval active: %" PRIu32 " ms",
+            interval_ms);
   poll_policy_.set_active_interval_ms(interval_ms);
 }
 
 void TeslaBLEVehicle::set_infotainment_sleep_timeout(uint32_t interval_ms) {
-  ESP_LOGD(TAG, "Setting infotainment sleep timeout: %u ms", interval_ms);
+  ESP_LOGD(TAG, "Setting infotainment sleep timeout: %" PRIu32 " ms",
+           interval_ms);
   poll_policy_.set_sleep_timeout_ms(interval_ms);
 }
 
