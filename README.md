@@ -73,6 +73,7 @@ substitutions:
   charging_amps_max: "32"
   ble_mac_address: !secret tesla_ble_mac_address
   tesla_vin: !secret tesla_vin
+  ota_password: !secret ota_password
 
 packages:
   yoziru.esphome-tesla-ble: github://yoziru/esphome-tesla-ble/tesla-ble-m5stack-nanoc6.dashboard.yml@main
@@ -92,6 +93,8 @@ wifi:
 ```
 
 Secret names are local to each user's dashboard. If yours differ, keep `ble_mac_address` and `tesla_vin` on the left and change only the names after `!secret`.
+
+Add an `ota_password` secret before installing. Use a unique, high-entropy password; it protects the device's OTA update endpoint.
 
 For multiple vehicles, create one ESPHome device per vehicle and map each device's substitutions to distinct secrets. For example, the second device can use `ble_mac_address: !secret model_y_ble_mac_address` and `tesla_vin: !secret model_y_tesla_vin`; the package and board configuration stay the same.
 

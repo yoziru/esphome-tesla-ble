@@ -5,6 +5,7 @@ substitutions:
   charging_amps_max: "32"
   ble_mac_address: !secret test_vehicle_ble_mac
   tesla_vin: !secret test_vehicle_vin
+  ota_password: !secret test_ota_password
 
 packages:
   tesla_ble: !include ../tesla-ble-m5stack-nanoc6.dashboard.yml

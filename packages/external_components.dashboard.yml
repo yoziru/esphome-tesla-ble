@@ -1,2 +1,6 @@
 - components: [tesla_ble_vehicle, tesla_ble_listener]
-  source: github://yoziru/esphome-tesla-ble/components@main
+  source:
+    type: git
+    url: https://github.com/yoziru/esphome-tesla-ble.git
+    ref: main
+    path: components
