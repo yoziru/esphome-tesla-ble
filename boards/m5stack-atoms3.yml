@@ -28,12 +28,13 @@ light:
   - platform: status_led
     output: status_output
     name: "Status Led"
+    internal: true
     entity_category: diagnostic
 
-  #G35=RGB WS2812C-2020
+  #G35=RGB WS2812C-2020 (4x LEDs under the button)
   - platform: esp32_rmt_led_strip
     channel_colors: GRB
-    pin: 35
+    pin: GPIO35
     num_leds: 4
     chipset: ws2812
     id: led
@@ -53,3 +54,6 @@ binary_sensor:
         pullup: true
     filters:
       - delayed_off: 10ms
+    on_press:
+      then:
+        - logger.log: Button Pressed
