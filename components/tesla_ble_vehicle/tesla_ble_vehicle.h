@@ -261,18 +261,14 @@ private:
 // Generic Tesla Button - use DEFINE_TESLA_BUTTON macro for each button type
 // =============================================================================
 
-/**
- * @brief Generic Tesla button base that calls a parent method on press
- * 
- * Each button type is defined using the DEFINE_TESLA_BUTTON macro below.
- * This eliminates boilerplate and makes adding new buttons trivial.
- */
-class TeslaButtonBase : public button::Button {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-protected:
-    TeslaBLEVehicle *parent_{nullptr};
+template<typename T> class WithParent : public T {
+ public:
+  void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+ protected:
+  TeslaBLEVehicle *parent_{nullptr};
 };
+
+using TeslaButtonBase = WithParent<button::Button>;
 
 // Macro to define a Tesla button that calls a specific parent method
 #define DEFINE_TESLA_BUTTON(ClassName, ParentMethod) \
@@ -294,18 +290,7 @@ DEFINE_TESLA_BUTTON(TeslaUnlatchDriverDoorButton, unlatch_driver_door)
 // Generic Tesla Switch - use DEFINE_TESLA_SWITCH macro for each switch type
 // =============================================================================
 
-/**
- * @brief Generic Tesla switch base that calls a parent method on state change
- * 
- * Each switch type is defined using the DEFINE_TESLA_SWITCH macro below.
- * The vehicle method publishes state only after the command result succeeds.
- */
-class TeslaSwitchBase : public switch_::Switch {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-protected:
-    TeslaBLEVehicle *parent_{nullptr};
-};
+using TeslaSwitchBase = WithParent<switch_::Switch>;
 
 // Macro to define a Tesla switch that calls a specific parent method with bool state.
 #define DEFINE_TESLA_SWITCH(ClassName, ParentMethod) \
@@ -317,42 +302,25 @@ protected:
     };
 
 // Define all switch types using the macro
-class TeslaChargingSwitch : public TeslaSwitchBase {
- protected:
-  void write_state(bool state) override {
-    if (parent_) parent_->set_charging_state(state);
-  }
-};
-
+DEFINE_TESLA_SWITCH(TeslaChargingSwitch, set_charging_state)
 DEFINE_TESLA_SWITCH(TeslaSteeringWheelHeatSwitch, set_steering_wheel_heat)
 DEFINE_TESLA_SWITCH(TeslaSentryModeSwitch, set_sentry_mode)
 
-class TeslaChargingAmpsNumber : public number::Number {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+class TeslaChargingAmpsNumber : public WithParent<number::Number> {
 protected:
     void control(float value) override;
-    TeslaBLEVehicle *parent_{nullptr};
 };
 
-class TeslaChargingLimitNumber : public number::Number {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+class TeslaChargingLimitNumber : public WithParent<number::Number> {
 protected:
     void control(float value) override;
-    TeslaBLEVehicle *parent_{nullptr};
 };
 
 // =============================================================================
 // Lock classes - combined sensor + control for doors and charge port
 // =============================================================================
 
-class TeslaLockBase : public lock::Lock {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-protected:
-    TeslaBLEVehicle *parent_{nullptr};
-};
+using TeslaLockBase = WithParent<lock::Lock>;
 
 class TeslaDoorsLock : public TeslaLockBase {
 protected:
@@ -368,12 +336,9 @@ protected:
 // Cover classes - combined sensor + control for trunk, frunk, windows
 // =============================================================================
 
-class TeslaCoverBase : public cover::Cover {
-public:
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
-    cover::CoverTraits get_traits() override;
-protected:
-    TeslaBLEVehicle *parent_{nullptr};
+class TeslaCoverBase : public WithParent<cover::Cover> {
+ public:
+  cover::CoverTraits get_traits() override;
 };
 
 class TeslaTrunkCover : public TeslaCoverBase {
@@ -400,18 +365,14 @@ protected:
 // Climate class - HVAC control with temperature
 // =============================================================================
 
-class TeslaClimate : public climate::Climate {
+class TeslaClimate : public WithParent<climate::Climate> {
 public:
     TeslaClimate();
-    void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
     climate::ClimateTraits traits() override;
     void control(const climate::ClimateCall &call) override;
     
     // Called by state manager to update current state
     void update_state(bool is_on, float current_temp, float target_temp);
-    
-protected:
-    TeslaBLEVehicle *parent_{nullptr};
 };
 
 // =============================================================================
