@@ -269,68 +269,62 @@ def get_device_class_const(component_module, device_class_str):
     return getattr(component_module, f"DEVICE_CLASS_{device_class_str.upper()}", None)
 
 
-async def create_binary_sensor(var, definition):
-    """Create a binary sensor and register with TeslaBLEVehicle using generic setter."""
+def _base_config(definition, id_type, suffix):
     config = {
-        CONF_ID: cv.declare_id(binary_sensor.BinarySensor)(f"tesla_{definition['id']}_sensor"),
+        CONF_ID: cv.declare_id(id_type)(f"tesla_{definition['id']}_{suffix}"),
         CONF_NAME: definition["name"],
         CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
     }
     if "icon" in definition:
         config[CONF_ICON] = definition["icon"]
+    if definition.get("entity_category") == "diagnostic":
+        config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
+    return config
+
+
+def _with_device_class(config, module, definition):
     if "device_class" in definition:
-        dc = get_device_class_const(binary_sensor, definition["device_class"])
+        dc = get_device_class_const(module, definition["device_class"])
         if dc:
             config[CONF_DEVICE_CLASS] = dc
-    
+    return config
+
+
+def _attach(var, entity, definition):
+    cg.add(entity.set_parent(var))
+    if definition.get("setter"):
+        cg.add(getattr(var, definition["setter"])(entity))
+    return entity
+
+
+async def create_binary_sensor(var, definition):
+    """Create a binary sensor and register with TeslaBLEVehicle using generic setter."""
+    config = _with_device_class(
+        _base_config(definition, binary_sensor.BinarySensor, "sensor"),
+        binary_sensor, definition)
     sens = await binary_sensor.new_binary_sensor(config)
-    # Use generic setter with sensor ID
     cg.add(var.set_binary_sensor(definition["id"], sens))
     return sens
 
 
 async def create_sensor(var, definition):
     """Create a sensor and register with TeslaBLEVehicle using generic setter."""
-    config = {
-        CONF_ID: cv.declare_id(sensor.Sensor)(f"tesla_{definition['id']}_sensor"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
-        CONF_FORCE_UPDATE: False,
-    }
-    if "icon" in definition:
-        config[CONF_ICON] = definition["icon"]
+    config = _base_config(definition, sensor.Sensor, "sensor")
+    config[CONF_FORCE_UPDATE] = False
     if "unit" in definition:
         config[CONF_UNIT_OF_MEASUREMENT] = definition["unit"]
     if "accuracy_decimals" in definition:
         config[CONF_ACCURACY_DECIMALS] = definition["accuracy_decimals"]
-    if "device_class" in definition:
-        dc = get_device_class_const(sensor, definition["device_class"])
-        if dc:
-            config[CONF_DEVICE_CLASS] = dc
-    if "entity_category" in definition:
-        if definition["entity_category"] == "diagnostic":
-            config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
-    
+    config = _with_device_class(config, sensor, definition)
     sens = await sensor.new_sensor(config)
-    # Use generic setter with sensor ID
     cg.add(var.set_sensor(definition["id"], sens))
     return sens
 
 
 async def create_text_sensor(var, definition):
     """Create a text sensor and register with TeslaBLEVehicle using generic setter."""
-    config = {
-        CONF_ID: cv.declare_id(text_sensor.TextSensor)(f"tesla_{definition['id']}_sensor"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
-        CONF_FORCE_UPDATE: False,
-    }
-    if "icon" in definition:
-        config[CONF_ICON] = definition["icon"]
-    if "entity_category" in definition:
-        if definition["entity_category"] == "diagnostic":
-            config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
-    
+    config = _base_config(definition, text_sensor.TextSensor, "sensor")
+    config[CONF_FORCE_UPDATE] = False
     sens = await text_sensor.new_text_sensor(config)
     if definition.get("setter"):
         cg.add(getattr(var, definition["setter"])(sens))
@@ -341,129 +335,61 @@ async def create_text_sensor(var, definition):
 
 async def create_button(var, definition):
     """Create a button and register with TeslaBLEVehicle."""
-    config = {
-        CONF_ID: cv.declare_id(definition["class"])(f"tesla_{definition['id']}_button"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
-    }
-    if "icon" in definition:
-        config[CONF_ICON] = definition["icon"]
-    if "entity_category" in definition:
-        if definition["entity_category"] == "diagnostic":
-            config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
-    
-    btn = await button.new_button(config)
-    cg.add(btn.set_parent(var))
-    if definition.get("setter"):
-        cg.add(getattr(var, definition["setter"])(btn))
-    return btn
+    return _attach(var, await button.new_button(
+        _base_config(definition, definition["class"], "button")), definition)
 
 
 async def create_switch(var, definition):
     """Create a switch and register with TeslaBLEVehicle."""
-    config = {
-        CONF_ID: cv.declare_id(definition["class"])(f"tesla_{definition['id']}_switch"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
-        CONF_RESTORE_MODE: switch.RESTORE_MODES['RESTORE_DEFAULT_OFF'],
-    }
-    if "icon" in definition:
-        config[CONF_ICON] = definition["icon"]
-    
-    sw = await switch.new_switch(config)
-    cg.add(sw.set_parent(var))
-    if definition.get("setter"):
-        cg.add(getattr(var, definition["setter"])(sw))
-    return sw
+    config = _base_config(definition, definition["class"], "switch")
+    config[CONF_RESTORE_MODE] = switch.RESTORE_MODES['RESTORE_DEFAULT_OFF']
+    return _attach(var, await switch.new_switch(config), definition)
 
 
 async def create_number(var, definition, config):
     """Create a number and register with TeslaBLEVehicle."""
-    # Handle dynamic max value from config
     max_val = definition["max"]
     if max_val == "config":
         max_val = config.get(CONF_CHARGING_AMPS_MAX, DEFAULT_CHARGING_AMPS_MAX)
-    
-    num_config = {
-        CONF_ID: cv.declare_id(definition["class"])(f"tesla_{definition['id']}_number"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
-        CONF_MODE: number.NUMBER_MODES['AUTO'],
-    }
-    if "icon" in definition:
-        num_config[CONF_ICON] = definition["icon"]
+    num_config = _base_config(definition, definition["class"], "number")
+    num_config[CONF_MODE] = number.NUMBER_MODES['AUTO']
     if "unit" in definition:
         num_config[CONF_UNIT_OF_MEASUREMENT] = definition["unit"]
-    
     num = await number.new_number(
         num_config,
         min_value=definition["min"],
         max_value=max_val,
         step=definition["step"]
     )
-    cg.add(num.set_parent(var))
-    if definition.get("setter"):
-        cg.add(getattr(var, definition["setter"])(num))
-    return num
+    return _attach(var, num, definition)
 
 
 async def create_lock(var, definition):
     """Create a lock and register with TeslaBLEVehicle."""
-    config = {
-        CONF_ID: cv.declare_id(definition["class"])(f"tesla_{definition['id']}_lock"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
-    }
-    if "icon" in definition:
-        config[CONF_ICON] = definition["icon"]
-    
+    config = _base_config(definition, definition["class"], "lock")
     lck = cg.new_Pvariable(config[CONF_ID])
     await lock.register_lock(lck, config)
-    cg.add(lck.set_parent(var))
-    if definition.get("setter"):
-        cg.add(getattr(var, definition["setter"])(lck))
-    return lck
+    return _attach(var, lck, definition)
 
 
 async def create_cover(var, definition):
     """Create a cover and register with TeslaBLEVehicle."""
-    config = {
-        CONF_ID: cv.declare_id(definition["class"])(f"tesla_{definition['id']}_cover"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: definition.get("disabled_by_default", False),
-    }
-    if "icon" in definition:
-        config[CONF_ICON] = definition["icon"]
+    config = _base_config(definition, definition["class"], "cover")
     if "device_class" in definition:
         config[CONF_DEVICE_CLASS] = definition["device_class"]
-    
     cvr = cg.new_Pvariable(config[CONF_ID])
     await cover.register_cover(cvr, config)
-    cg.add(cvr.set_parent(var))
-    if definition.get("setter"):
-        cg.add(getattr(var, definition["setter"])(cvr))
-    return cvr
+    return _attach(var, cvr, definition)
 
 
 async def create_climate_entity(var, definition):
     """Create a climate entity and register with TeslaBLEVehicle."""
     from esphome.components.climate import CONF_VISUAL
-    
-    config = {
-        CONF_ID: cv.declare_id(definition["class"])(f"tesla_{definition['id']}_climate"),
-        CONF_NAME: definition["name"],
-        CONF_DISABLED_BY_DEFAULT: False,
-        # Visual settings for the climate entity UI
-        CONF_VISUAL: {},
-        CONF_ACCURACY_DECIMALS: 1,
-    }
-    
+    config = _base_config(definition, definition["class"], "climate")
+    config.update({CONF_VISUAL: {}, CONF_ACCURACY_DECIMALS: 1})
     clm = cg.new_Pvariable(config[CONF_ID])
     await climate.register_climate(clm, config)
-    cg.add(clm.set_parent(var))
-    if definition.get("setter"):
-        cg.add(getattr(var, definition["setter"])(clm))
-    return clm
+    return _attach(var, clm, definition)
 
 
 # =============================================================================
