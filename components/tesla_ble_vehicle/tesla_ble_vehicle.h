@@ -34,6 +34,8 @@ namespace espbt = esphome::esp32_ble_tracker;
 
 static const char *const TAG = "tesla_ble_vehicle";
 constexpr int DEFAULT_CHARGING_AMPS_MAX = 32;
+constexpr int MIN_CHARGING_LIMIT = 50;
+constexpr int MAX_CHARGING_LIMIT = 100;
 
 // Tesla BLE service UUIDs
 static const char *const SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e";

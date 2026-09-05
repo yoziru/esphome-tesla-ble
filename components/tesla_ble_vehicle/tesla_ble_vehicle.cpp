@@ -1,6 +1,5 @@
 #include "tesla_ble_vehicle.h"
 #include "command_warning_policy.h"
-#include "common.h"
 #include <client.h>
 #include <cinttypes>
 #include <cstring>
