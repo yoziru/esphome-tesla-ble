@@ -467,21 +467,14 @@ async def to_code(config):
 # ACTION SCHEMAS
 # =============================================================================
 
-TESLA_WAKE_ACTION_SCHEMA = cv.Schema({
+_SIMPLE_ACTION_SCHEMA = cv.Schema({
     cv.Required(CONF_ID): cv.use_id(TeslaBLEVehicle),
 })
 
-TESLA_PAIR_ACTION_SCHEMA = cv.Schema({
-    cv.Required(CONF_ID): cv.use_id(TeslaBLEVehicle),
-})
-
-TESLA_REGENERATE_KEY_ACTION_SCHEMA = cv.Schema({
-    cv.Required(CONF_ID): cv.use_id(TeslaBLEVehicle),
-})
-
-TESLA_FORCE_UPDATE_ACTION_SCHEMA = cv.Schema({
-    cv.Required(CONF_ID): cv.use_id(TeslaBLEVehicle),
-})
+TESLA_WAKE_ACTION_SCHEMA = _SIMPLE_ACTION_SCHEMA
+TESLA_PAIR_ACTION_SCHEMA = _SIMPLE_ACTION_SCHEMA
+TESLA_REGENERATE_KEY_ACTION_SCHEMA = _SIMPLE_ACTION_SCHEMA
+TESLA_FORCE_UPDATE_ACTION_SCHEMA = _SIMPLE_ACTION_SCHEMA
 
 TESLA_SET_CHARGING_ACTION_SCHEMA = cv.Schema({
     cv.Required(CONF_ID): cv.use_id(TeslaBLEVehicle),
@@ -503,66 +496,63 @@ TESLA_SET_CHARGING_LIMIT_ACTION_SCHEMA = cv.Schema({
 # ACTION REGISTRATION
 # =============================================================================
 
+async def _simple_to_code(config, action_id, template_arg):
+    paren = await cg.get_variable(config[CONF_ID])
+    return cg.new_Pvariable(action_id, template_arg, paren)
+
+
+async def _param_to_code(config, action_id, template_arg, args, key, setter, ctype):
+    paren = await cg.get_variable(config[CONF_ID])
+    var = cg.new_Pvariable(action_id, template_arg, paren)
+    template_ = await cg.templatable(config[key], args, ctype)
+    cg.add(getattr(var, setter)(template_))
+    return var
+
+
 @automation.register_action(
     "tesla_ble_vehicle.wake", WakeAction, TESLA_WAKE_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_wake_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    return cg.new_Pvariable(action_id, template_arg, paren)
+    return await _simple_to_code(config, action_id, template_arg)
 
 
 @automation.register_action(
     "tesla_ble_vehicle.pair", PairAction, TESLA_PAIR_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_pair_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    return cg.new_Pvariable(action_id, template_arg, paren)
+    return await _simple_to_code(config, action_id, template_arg)
 
 
 @automation.register_action(
     "tesla_ble_vehicle.regenerate_key", RegenerateKeyAction, TESLA_REGENERATE_KEY_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_regenerate_key_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    return cg.new_Pvariable(action_id, template_arg, paren)
+    return await _simple_to_code(config, action_id, template_arg)
 
 
 @automation.register_action(
     "tesla_ble_vehicle.force_update", ForceUpdateAction, TESLA_FORCE_UPDATE_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_force_update_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    return cg.new_Pvariable(action_id, template_arg, paren)
+    return await _simple_to_code(config, action_id, template_arg)
 
 
 @automation.register_action(
     "tesla_ble_vehicle.set_charging", SetChargingAction, TESLA_SET_CHARGING_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_set_charging_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    var = cg.new_Pvariable(action_id, template_arg, paren)
-    template_ = await cg.templatable(config["state"], args, bool)
-    cg.add(var.set_state(template_))
-    return var
+    return await _param_to_code(config, action_id, template_arg, args, "state", "set_state", bool)
 
 
 @automation.register_action(
     "tesla_ble_vehicle.set_charging_amps", SetChargingAmpsAction, TESLA_SET_CHARGING_AMPS_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_set_charging_amps_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    var = cg.new_Pvariable(action_id, template_arg, paren)
-    template_ = await cg.templatable(config["amps"], args, int)
-    cg.add(var.set_amps(template_))
-    return var
+    return await _param_to_code(config, action_id, template_arg, args, "amps", "set_amps", int)
 
 
 @automation.register_action(
     "tesla_ble_vehicle.set_charging_limit", SetChargingLimitAction, TESLA_SET_CHARGING_LIMIT_ACTION_SCHEMA, synchronous=True
 )
 async def tesla_set_charging_limit_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    var = cg.new_Pvariable(action_id, template_arg, paren)
-    template_ = await cg.templatable(config["limit"], args, int)
-    cg.add(var.set_limit(template_))
-    return var
+    return await _param_to_code(config, action_id, template_arg, args, "limit", "set_limit", int)
