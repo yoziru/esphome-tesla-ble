@@ -1,12 +1,10 @@
 sensor:
   - platform: wifi_signal
     name: "WiFi Signal"
-    update_interval: 60s
     icon: mdi:wifi
 
   - platform: uptime
     name: "Uptime"
-    update_interval: 60s
     icon: mdi:clock-outline
 
 binary_sensor:
