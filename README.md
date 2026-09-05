@@ -141,6 +141,8 @@ api:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  ap:
+    password: !secret wifi_hotspot_password
 ```
 
 Secret names are local to each user's dashboard. If yours differ, keep `ble_mac_address` and `tesla_vin` on the left and change only the names after `!secret`.
