@@ -25,3 +25,10 @@ ota:
 
 # Same as CLI builds (base.yml): makes the Wi-Fi fallback AP usable.
 captive_portal:
+
+wifi:
+  # Device Builder owns ssid/password; the package only ensures the fallback
+  # AP exists so captive_portal has something to serve on (otherwise config
+  # validation warns "no WiFi AP is configured"). Open hotspot named after
+  # the device - set wifi.ap.password in the device YAML to secure it.
+  ap: {}
