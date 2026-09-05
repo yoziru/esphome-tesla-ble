@@ -10,3 +10,4 @@ foo
 *.log
 .selected_suffix
 tests/build/
+compile_flags.txt
