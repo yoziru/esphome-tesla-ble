@@ -23,3 +23,5 @@ api:
 wifi:
   ssid: !secret test_wifi_ssid
   password: !secret test_wifi_password
+  ap:
+    password: !secret test_wifi_hotspot_password
