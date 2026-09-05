@@ -26,9 +26,15 @@ ota:
   - platform: esphome
     password: !secret ota_password
 
+# Serial provisioning for first-time onboarding
+improv_serial:
+
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # 802.11k/v roaming assistance (inert on networks without k/v support)
+  enable_rrm: true
+  enable_btm: true
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     password: !secret wifi_hotspot_password
