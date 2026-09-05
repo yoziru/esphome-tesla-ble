@@ -22,3 +22,6 @@ logger:
 ota:
   - platform: esphome
     password: $ota_password
+
+# Same as CLI builds (base.yml): makes the Wi-Fi fallback AP usable.
+captive_portal:
