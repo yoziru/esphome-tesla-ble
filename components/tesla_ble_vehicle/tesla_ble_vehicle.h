@@ -170,9 +170,7 @@ public:
 private:
     // Initialization helpers
     void initialize_managers();
-    void initialize_ble_uuids();
     void configure_pending_sensors();
-    void setup_button_callbacks();
 
     // Connection handlers
     void handle_connection_established();
