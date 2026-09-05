@@ -1,21 +1,9 @@
-#include <cstdio>
+#include "test_helper.h"
 #include <initializer_list>
 
 #include "control_state_policy.h"
 
 using namespace esphome::tesla_ble_vehicle;
-
-static int g_checks = 0;
-static int g_failures = 0;
-
-#define CHECK(cond)                                                      \
-  do {                                                                   \
-    ++g_checks;                                                          \
-    if (!(cond)) {                                                       \
-      ++g_failures;                                                      \
-      std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);    \
-    }                                                                    \
-  } while (0)
 
 static void test_failed_commands_do_not_change_control_state() {
   for (const auto command : {ControlStateCommand::CHARGING_STATE,
@@ -63,10 +51,5 @@ int main() {
   test_failed_number_commands_republish_the_last_confirmed_state();
   test_successful_commands_publish_and_refresh_authoritative_state();
 
-  if (g_failures > 0) {
-    std::printf("FAILED: %d/%d checks\n", g_failures, g_checks);
-    return 1;
-  }
-  std::printf("OK: %d checks passed\n", g_checks);
-  return 0;
+  return test_summary();
 }

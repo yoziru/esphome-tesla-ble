@@ -13,23 +13,11 @@
 //  - a successful write forgets all failure history
 //  - persistently failing chunks are dropped so newer traffic can proceed
 
-#include <cstdio>
+#include "test_helper.h"
 
 #include "write_retry_policy.h"
 
 using namespace esphome::tesla_ble_vehicle;
-
-static int g_checks = 0;
-static int g_failures = 0;
-
-#define CHECK(cond)                                                      \
-  do {                                                                   \
-    ++g_checks;                                                          \
-    if (!(cond)) {                                                       \
-      ++g_failures;                                                      \
-      std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);      \
-    }                                                                    \
-  } while (0)
 
 static void test_fresh_chunk_attempts_immediately() {
   WriteRetryPolicy p;
@@ -108,10 +96,5 @@ int main() {
   test_persistent_failures_drop_the_chunk();
   test_reset_clears_everything();
 
-  if (g_failures > 0) {
-    std::printf("FAILED: %d/%d checks\n", g_failures, g_checks);
-    return 1;
-  }
-  std::printf("OK: %d checks passed\n", g_checks);
-  return 0;
+  return test_summary();
 }

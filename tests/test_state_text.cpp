@@ -5,23 +5,11 @@
 // These tests describe desired behaviour of the raw state -> text/flag
 // conversions that feed the sensors: what each VCSEC/CarServer state maps to.
 
-#include <cstdio>
+#include "test_helper.h"
 
 #include "state_text.h"
 
 using namespace esphome::tesla_ble_vehicle::state_text;
-
-static int g_checks = 0;
-static int g_failures = 0;
-
-#define CHECK(cond)                                                      \
-  do {                                                                   \
-    ++g_checks;                                                          \
-    if (!(cond)) {                                                       \
-      ++g_failures;                                                      \
-      std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);      \
-    }                                                                    \
-  } while (0)
 
 #define CHECK_OPT(opt, expected) CHECK((opt).has_value() && (opt).value() == (expected))
 #define CHECK_STR(actual, expected) CHECK((actual) == (expected))
@@ -134,10 +122,5 @@ int main() {
   test_is_parked();
   test_charge_limit_reason_text();
 
-  if (g_failures > 0) {
-    std::printf("FAILED: %d/%d checks\n", g_failures, g_checks);
-    return 1;
-  }
-  std::printf("OK: %d checks passed\n", g_checks);
-  return 0;
+  return test_summary();
 }

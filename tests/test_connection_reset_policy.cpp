@@ -16,23 +16,11 @@
 //    period, then backs off before trying again
 //  - connectivity blips restart the grace window
 
-#include <cstdio>
+#include "test_helper.h"
 
 #include "connection_reset_policy.h"
 
 using namespace esphome::tesla_ble_vehicle;
-
-static int g_checks = 0;
-static int g_failures = 0;
-
-#define CHECK(cond)                                                      \
-  do {                                                                   \
-    ++g_checks;                                                          \
-    if (!(cond)) {                                                       \
-      ++g_failures;                                                      \
-      std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);      \
-    }                                                                    \
-  } while (0)
 
 static void test_healthy_link_never_triggers() {
   ConnectionResetPolicy p;
@@ -149,10 +137,5 @@ int main() {
   test_connectivity_blip_restarts_the_window();
   test_stalled_setup_triggers_after_grace();
 
-  if (g_failures > 0) {
-    std::printf("FAILED: %d/%d checks\n", g_failures, g_checks);
-    return 1;
-  }
-  std::printf("OK: %d checks passed\n", g_checks);
-  return 0;
+  return test_summary();
 }
