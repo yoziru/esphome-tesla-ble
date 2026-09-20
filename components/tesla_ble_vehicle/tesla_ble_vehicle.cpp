@@ -488,11 +488,13 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
                                             TeslaBLE::OperationResult result) {
   std::string value = name;
 
-  const auto warning_action = command_warning_action(result.is_success(), result.is_skipped());
-  if (warning_action == CommandWarningAction::CLEAR) {
-    value += (result.is_success() ? " → Success" : " → Skipped");
-    this->cancel_timeout(COMMAND_WARNING_TIMEOUT);
-    this->status_clear_warning();
+  const auto outcome = result.is_success()
+                           ? CommandOutcome::SUCCESS
+                           : result.is_skipped() ? CommandOutcome::SKIPPED : CommandOutcome::FAILED;
+  if (outcome == CommandOutcome::SUCCESS) {
+    value += " → Success";
+  } else if (outcome == CommandOutcome::SKIPPED) {
+    value += " → Skipped";
   } else {
     value += " → Failed";
     if (result.error()) {
@@ -500,8 +502,8 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
       value += result.error()->message();
     }
     ESP_LOGW(TAG, "Command failed: %s", value.c_str());
-    this->status_momentary_warning(COMMAND_WARNING_TIMEOUT);
   }
+  apply_command_warning(*this, outcome);
 
   if (last_command_sensor_)
     last_command_sensor_->publish_state(value);
@@ -1064,7 +1066,7 @@ void TeslaBLEVehicle::handle_connection_lost() {
   if (ble_adapter_)
     ble_adapter_->clear_queues();
 
-  this->cancel_timeout(COMMAND_WARNING_TIMEOUT);
+  cancel_command_warning(*this);
 
   poll_policy_.on_poll(0);
   last_vcsec_poll_ = 0;
