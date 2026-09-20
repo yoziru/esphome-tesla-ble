@@ -1,4 +1,5 @@
 #include "tesla_ble_vehicle.h"
+#include "command_warning_policy.h"
 #include "common.h"
 #include <client.h>
 #include <cinttypes>
@@ -487,12 +488,13 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
                                             TeslaBLE::OperationResult result) {
   std::string value = name;
 
-  if (result.is_success()) {
+  const auto outcome = result.is_success()
+                           ? CommandOutcome::SUCCESS
+                           : result.is_skipped() ? CommandOutcome::SKIPPED : CommandOutcome::FAILED;
+  if (outcome == CommandOutcome::SUCCESS) {
     value += " → Success";
-    this->status_clear_warning();
-  } else if (result.is_skipped()) {
+  } else if (outcome == CommandOutcome::SKIPPED) {
     value += " → Skipped";
-    this->status_clear_warning();
   } else {
     value += " → Failed";
     if (result.error()) {
@@ -500,8 +502,10 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
       value += result.error()->message();
     }
     ESP_LOGW(TAG, "Command failed: %s", value.c_str());
-    this->status_set_warning("Command failed");
   }
+  apply_command_warning(*this, outcome, [this]() {
+    this->cancel_timeout(COMMAND_WARNING_TIMEOUT);
+  });
 
   if (last_command_sensor_)
     last_command_sensor_->publish_state(value);
@@ -1063,6 +1067,10 @@ void TeslaBLEVehicle::handle_connection_lost() {
     vehicle_->set_connected(false);
   if (ble_adapter_)
     ble_adapter_->clear_queues();
+
+  cancel_command_warning([this]() {
+    this->cancel_timeout(COMMAND_WARNING_TIMEOUT);
+  });
 
   poll_policy_.on_poll(0);
   last_vcsec_poll_ = 0;
