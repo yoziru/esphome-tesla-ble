@@ -24,7 +24,7 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    encryption:
 
 # Serial provisioning for first-time onboarding
 improv_serial:

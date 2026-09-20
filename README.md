@@ -49,10 +49,9 @@ If you run the [ESPHome add-on](https://esphome.io/guides/getting_started_hassio
 ```yaml
 tesla_ble_mac_address: "A0:B1:C2:D3:E4:F5"
 tesla_vin: "5YJ30123456789ABC"
-ota_password: "a-unique-high-entropy-password"
 ```
 
-4. Add the vehicle, OTA, and version settings to the top-level `substitutions` section:
+4. Add the vehicle and version settings to the top-level `substitutions` section:
 ```yaml
 substitutions:
   # The left-hand names are fixed. Change only the secret names on the right.
@@ -60,10 +59,9 @@ substitutions:
   tesla_ble_ref: main
   ble_mac_address: !secret tesla_ble_mac_address
   tesla_vin: !secret tesla_vin
-  ota_password: !secret ota_password
 ```
 
-5. Add the board package under the top-level `packages` section. It provides the matching `esp32:` target, custom components, and required current ESPHome OTA configuration (`ota: - platform: esphome`). Do not add separate `esp32:`, `external_components:`, or `ota:` sections. For an M5Stack NanoC6:
+5. Add the board package under the top-level `packages` section. It provides the matching `esp32:` target, custom components, and encrypted ESPHome OTA updates using the API encryption key. Do not add separate `esp32:`, `external_components:`, or `ota:` sections. For an M5Stack NanoC6:
 
 ```yaml
 packages:
@@ -81,7 +79,7 @@ Use `tesla-ble-m5stack-atoms3.dashboard.yml` for an AtomS3 or `tesla-ble-esp32-g
 
 Set `tesla_ble_ref` once to test a branch, tag, or commit SHA. It selects both the YAML package and the custom C++ components. Local CLI builds need no override because they use the current checkout's `components/` directory.
 
-The first flash needs the generated name, Wi-Fi, and API settings plus the three secrets above. See [Finding the BLE MAC](#finding-the-ble-mac) if you do not have the MAC yet.
+The first flash needs the generated name, Wi-Fi, and API settings plus the two vehicle secrets above. See [Finding the BLE MAC](#finding-the-ble-mac) if you do not have the MAC yet.
 
 #### Different board
 
@@ -95,7 +93,6 @@ substitutions:
   flash_size: 4MB
   ble_mac_address: !secret tesla_ble_mac_address
   tesla_vin: !secret tesla_vin
-  ota_password: !secret ota_password
 
 packages:
   yoziru.esphome-tesla-ble:
@@ -121,7 +118,6 @@ substitutions:
   charging_amps_max: "32"
   ble_mac_address: !secret tesla_ble_mac_address
   tesla_vin: !secret tesla_vin
-  ota_password: !secret ota_password
 
 packages:
   yoziru.esphome-tesla-ble:
