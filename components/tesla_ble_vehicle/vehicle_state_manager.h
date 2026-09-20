@@ -12,6 +12,8 @@
 #include <optional>
 #include <map>
 #include <string>
+#include <cmath>
+#include <type_traits>
 #include <car_server.pb.h>
 #include <vcsec.pb.h>
 
@@ -204,16 +206,26 @@ private:
     bool publish_binary_sensor(const std::string& id, bool state);
     bool publish_sensor(const std::string& id, float state);
     bool publish_text_sensor(const std::string& id, const std::string& state);
-    
-    // Overloads for direct pointer access (used internally)
-    bool publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state);
-    bool publish_sensor_state(sensor::Sensor* sensor, float state);
-    bool publish_sensor_state(switch_::Switch* switch_comp, bool state);
-    bool publish_sensor_state(number::Number* number_comp, float state);
-    bool publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state);
-    
-    void set_sensor_available(binary_sensor::BinarySensor* sensor, bool available);
-    void set_sensor_available(sensor::Sensor* sensor, bool available);
+
+    template<typename T, typename V> static bool publish_sensor_state(T *entity, V state) {
+      if (entity == nullptr) return false;
+      if constexpr (std::is_floating_point<V>::value) {
+        if (!entity->has_state() || std::abs(entity->state - state) > 0.001f) {
+          entity->publish_state(state);
+          return true;
+        }
+      } else {
+        if (!entity->has_state() || entity->state != state) {
+          entity->publish_state(state);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    template<typename T> static void set_sensor_available(T *entity, bool available) {
+      if (entity != nullptr) entity->set_has_state(available);
+    }
 
 };
 

@@ -748,57 +748,5 @@ void VehicleStateManager::update_charging_amps_max(int32_t new_max) {
 // Private helper methods
 // =============================================================================
 
-bool VehicleStateManager::publish_sensor_state(binary_sensor::BinarySensor* sensor, bool state) {
-    if (sensor != nullptr && (!sensor->has_state() || sensor->state != state)) {
-        sensor->publish_state(state);
-        return true;
-    }
-    return false;
-}
-
-bool VehicleStateManager::publish_sensor_state(sensor::Sensor* sensor, float state) {
-    if (sensor != nullptr && (!sensor->has_state() || std::abs(sensor->state - state) > 0.001f)) {
-        sensor->publish_state(state);
-        return true;
-    }
-    return false;
-}
-
-bool VehicleStateManager::publish_sensor_state(switch_::Switch* switch_comp, bool state) {
-    if (switch_comp != nullptr && (!switch_comp->has_state() || switch_comp->state != state)) {
-        switch_comp->publish_state(state);
-        return true;
-    }
-    return false;
-}
-
-bool VehicleStateManager::publish_sensor_state(number::Number* number_comp, float state) {
-    if (number_comp != nullptr && (!number_comp->has_state() || std::abs(number_comp->state - state) > 0.001f)) {
-        number_comp->publish_state(state);
-        return true;
-    }
-    return false;
-}
-
-bool VehicleStateManager::publish_sensor_state(text_sensor::TextSensor* sensor, const std::string& state) {
-    if (sensor != nullptr && (!sensor->has_state() || sensor->state != state)) {
-        sensor->publish_state(state);
-        return true;
-    }
-    return false;
-}
-
-void VehicleStateManager::set_sensor_available(binary_sensor::BinarySensor* sensor, bool available) {
-    if (sensor != nullptr) {
-        sensor->set_has_state(available);
-    }
-}
-
-void VehicleStateManager::set_sensor_available(sensor::Sensor* sensor, bool available) {
-    if (sensor != nullptr) {
-        sensor->set_has_state(available);
-    }
-}
-
 } // namespace tesla_ble_vehicle
 } // namespace esphome
