@@ -1,6 +1,5 @@
 #include "tesla_ble_vehicle.h"
 #include "command_warning_policy.h"
-#include "common.h"
 #include <client.h>
 #include <cinttypes>
 #include <cstring>
@@ -48,7 +47,9 @@ TeslaBLEVehicle::TeslaBLEVehicle() : vin_(""), role_("DRIVER") {
 
 void TeslaBLEVehicle::setup() {
   ESP_LOGCONFIG(TAG, "Setting up TeslaBLEVehicle");
-  initialize_ble_uuids();
+  service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
+  read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
+  write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
   initialize_managers();
   restore_charging_amps_max_();
   configure_pending_sensors();
@@ -60,8 +61,6 @@ void TeslaBLEVehicle::setup() {
   }
 
   vehicle_->set_vin(vin_);
-
-  setup_button_callbacks();
 }
 
 void TeslaBLEVehicle::initialize_managers() {
@@ -122,16 +121,6 @@ void TeslaBLEVehicle::initialize_managers() {
       });
 
   ESP_LOGD(TAG, "All components initialized");
-}
-
-void TeslaBLEVehicle::initialize_ble_uuids() {
-  service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
-  read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
-  write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
-}
-
-void TeslaBLEVehicle::setup_button_callbacks() {
-  ESP_LOGD(TAG, "Button callbacks configured");
 }
 
 void TeslaBLEVehicle::configure_pending_sensors() {
