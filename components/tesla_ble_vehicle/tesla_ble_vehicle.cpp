@@ -500,7 +500,7 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
       value += result.error()->message();
     }
     ESP_LOGW(TAG, "Command failed: %s", value.c_str());
-    this->status_set_warning("Command failed");
+    this->status_momentary_warning("command-failed-warning");
   }
 
   if (last_command_sensor_)
@@ -1063,6 +1063,8 @@ void TeslaBLEVehicle::handle_connection_lost() {
     vehicle_->set_connected(false);
   if (ble_adapter_)
     ble_adapter_->clear_queues();
+
+  this->cancel_timeout("command-failed-warning");
 
   poll_policy_.on_poll(0);
   last_vcsec_poll_ = 0;

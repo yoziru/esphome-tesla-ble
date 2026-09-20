@@ -108,6 +108,7 @@ $(TEST_BUILD_DIR)/test_%: $(TEST_DIR)/test_%.cpp components/tesla_ble_vehicle/co
 
 test-python: ## Run the Python codegen checks
 	python3 $(TEST_DIR)/test_codegen.py
+	python3 $(TEST_DIR)/test_warning_status.py
 
 validate-dashboard-config: check-uv ## Validate the generated-style ESPHome Dashboard configuration
 	uvx --with pip esphome==$(ESPHOME_VERSION) config $(TEST_DIR)/dashboard_config.yml
