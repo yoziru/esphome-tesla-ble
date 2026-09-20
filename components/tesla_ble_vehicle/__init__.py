@@ -408,19 +408,8 @@ async def to_code(config):
     vcsec_interval_seconds = config[CONF_VCSEC_POLL_INTERVAL]
     
     cg.add(var.set_update_interval(vcsec_interval_seconds * 1000))
-    # BUG FIX (2026-08-01), take 2: passing TESLA_ROLES[role] (the full
-    # "Keys_Role_ROLE_*" protobuf enum name) sent a string tesla_ble_vehicle
-    # .cpp's start_pairing() never matches (it compares against the short
-    # words "DRIVER" / "CHARGING_MANAGER"), so every pairing silently fell
-    # through to the Keys_Role_ROLE_OWNER default. Passing bare `role`
-    # wasn't enough on its own: cv.enum() returns an EnumValue (a str
-    # dynamically given an extra base class by add_class_to_obj) whose
-    # hidden .enum_value attribute still holds the long form, and
-    # cpp_generator.py explicitly isinstance()-checks for EnumValue and
-    # substitutes .enum_value when rendering — regardless of what's passed
-    # to cg.add(). str() forces a genuine plain string, stripping that
-    # class and its attribute, so the short word actually reaches the
-    # generated C++ literal.
+    # str() strips cv.enum()'s EnumValue subclass so the short role word
+    # ("DRIVER"/"CHARGING_MANAGER") reaches C++ instead of the long protobuf name.
     cg.add(var.set_role(str(role)))
     cg.add(var.set_charging_amps_max(charging_amps_max))
     
@@ -430,36 +419,21 @@ async def to_code(config):
     cg.add(var.set_infotainment_poll_interval_active(config[CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE] * 1000))
     cg.add(var.set_infotainment_sleep_timeout(config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000))
     
-    # Create all sensors using data-driven approach with generic setters
-    for definition in BINARY_SENSORS:
-        await create_binary_sensor(var, definition)
-    
-    for definition in SENSORS:
-        await create_sensor(var, definition)
-    
-    for definition in TEXT_SENSORS:
-        await create_text_sensor(var, definition)
-    
-    for definition in BUTTONS:
-        await create_button(var, definition)
-    
-    # Switches - data-driven approach
-    for definition in SWITCHES:
-        await create_switch(var, definition)
+    for creators in (
+        (BINARY_SENSORS, create_binary_sensor),
+        (SENSORS, create_sensor),
+        (TEXT_SENSORS, create_text_sensor),
+        (BUTTONS, create_button),
+        (SWITCHES, create_switch),
+        (LOCKS, create_lock),
+        (COVERS, create_cover),
+    ):
+        for definition in creators[0]:
+            await creators[1](var, definition)
 
-    # Numbers - data-driven approach
     for definition in NUMBERS:
         await create_number(var, definition, config)
 
-    # Locks - combined entities for doors and charge port
-    for definition in LOCKS:
-        await create_lock(var, definition)
-
-    # Covers - combined entities for trunk, frunk, windows
-    for definition in COVERS:
-        await create_cover(var, definition)
-
-    # Climate - HVAC control
     await create_climate_entity(var, CLIMATE)
 
 
