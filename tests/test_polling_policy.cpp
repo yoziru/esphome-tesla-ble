@@ -8,23 +8,11 @@
 //  - natural awake blips must not restart the aggressive polling window
 //  - genuine activity after sleep resumes fast, wake-enabled polling
 
-#include <cstdio>
+#include "test_helper.h"
 
 #include "polling_policy.h"
 
 using namespace esphome::tesla_ble_vehicle;
-
-static int g_checks = 0;
-static int g_failures = 0;
-
-#define CHECK(cond)                                                      \
-  do {                                                                   \
-    ++g_checks;                                                          \
-    if (!(cond)) {                                                       \
-      ++g_failures;                                                      \
-      std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);      \
-    }                                                                    \
-  } while (0)
 
 // Defaults used across tests: 30s awake, 10s active, 11 min sleep timeout.
 static void configure(InfotainmentPollPolicy &p) {
@@ -280,10 +268,5 @@ int main() {
   test_poll_stays_correct_across_millis_wraparound();
   test_full_tick_cadence_while_charging();
 
-  if (g_failures > 0) {
-    std::printf("FAILED: %d/%d checks\n", g_failures, g_checks);
-    return 1;
-  }
-  std::printf("OK: %d checks passed\n", g_checks);
-  return 0;
+  return test_summary();
 }
