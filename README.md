@@ -61,7 +61,7 @@ substitutions:
   tesla_vin: !secret tesla_vin
 ```
 
-5. Add the board package under the top-level `packages` section. It provides the matching `esp32:` target, custom components, and encrypted ESPHome OTA updates using the API encryption key. Do not add separate `esp32:`, `external_components:`, or `ota:` sections. For an M5Stack NanoC6:
+5. Add the board package under the top-level `packages` section. It provides the matching `esp32:` target, custom components, and encrypted ESPHome OTA updates using the API encryption key (ESPHome 2026.9.0 or newer). Do not add separate `esp32:`, `external_components:`, or `ota:` sections. For an M5Stack NanoC6:
 
 ```yaml
 packages:
