@@ -37,9 +37,12 @@ struct FakeWarningStatus {
 
 static void test_already_set_command_warning_expires() {
   FakeWarningStatus status;
+  const auto cancel_timeout = [&status]() {
+    status.cancel_timeout(COMMAND_WARNING_TIMEOUT);
+  };
 
   // Tesla may report Set Charging Limit as already_set even though BLE is healthy.
-  apply_command_warning(status, CommandOutcome::FAILED);
+  apply_command_warning(status, CommandOutcome::FAILED, cancel_timeout);
   assert(status.warning_active);
   assert(status.timeout_armed);
   status.run_timeout();
@@ -48,21 +51,29 @@ static void test_already_set_command_warning_expires() {
 
 static void test_healthy_command_results_clear_a_previous_warning() {
   FakeWarningStatus status;
-  apply_command_warning(status, CommandOutcome::FAILED);
-  apply_command_warning(status, CommandOutcome::SUCCESS);
+  const auto cancel_timeout = [&status]() {
+    status.cancel_timeout(COMMAND_WARNING_TIMEOUT);
+  };
+
+  apply_command_warning(status, CommandOutcome::FAILED, cancel_timeout);
+  apply_command_warning(status, CommandOutcome::SUCCESS, cancel_timeout);
   assert(!status.warning_active);
   assert(!status.timeout_armed);
 
-  apply_command_warning(status, CommandOutcome::FAILED);
-  apply_command_warning(status, CommandOutcome::SKIPPED);
+  apply_command_warning(status, CommandOutcome::FAILED, cancel_timeout);
+  apply_command_warning(status, CommandOutcome::SKIPPED, cancel_timeout);
   assert(!status.warning_active);
   assert(!status.timeout_armed);
 }
 
 static void test_connection_loss_preserves_persistent_warning() {
   FakeWarningStatus status;
-  apply_command_warning(status, CommandOutcome::FAILED);
-  cancel_command_warning(status);
+  const auto cancel_timeout = [&status]() {
+    status.cancel_timeout(COMMAND_WARNING_TIMEOUT);
+  };
+
+  apply_command_warning(status, CommandOutcome::FAILED, cancel_timeout);
+  cancel_command_warning(cancel_timeout);
   status.status_set_warning("BLE connection lost");
   status.run_timeout();
   assert(status.warning_active);

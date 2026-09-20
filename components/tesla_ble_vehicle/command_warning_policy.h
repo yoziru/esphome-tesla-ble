@@ -9,20 +9,21 @@ inline constexpr char COMMAND_WARNING_TIMEOUT[] = "command-failed-warning";
 
 // A command failure is an event; a healthy completion or an intentional skip
 // means a previous command warning no longer represents current state.
-template <typename WarningSink>
-void apply_command_warning(WarningSink &sink, CommandOutcome outcome) {
+template <typename WarningSink, typename CancelTimeout>
+void apply_command_warning(WarningSink &sink, CommandOutcome outcome,
+                           CancelTimeout cancel_timeout) {
   if (outcome == CommandOutcome::FAILED) {
     sink.status_momentary_warning(COMMAND_WARNING_TIMEOUT);
     return;
   }
 
-  sink.cancel_timeout(COMMAND_WARNING_TIMEOUT);
+  cancel_timeout();
   sink.status_clear_warning();
 }
 
-template <typename WarningSink>
-void cancel_command_warning(WarningSink &sink) {
-  sink.cancel_timeout(COMMAND_WARNING_TIMEOUT);
+template <typename CancelTimeout>
+void cancel_command_warning(CancelTimeout cancel_timeout) {
+  cancel_timeout();
 }
 
 }  // namespace tesla_ble_vehicle
