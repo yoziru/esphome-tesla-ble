@@ -45,6 +45,7 @@ light:
 binary_sensor:
   - platform: gpio
     name: Button
+    id: case_button
     entity_category: diagnostic
     pin:
       number: GPIO41
