@@ -21,9 +21,9 @@
 
 #include "ble_adapter_impl.h"
 #include "control_state_policy.h"
-#include "polling_policy.h"
 #include "connection_reset_policy.h"
 #include "storage_adapter_impl.h"
+#include <polling_policy.h>
 #include <vehicle.h>
 #include "vehicle_state_manager.h"
 
@@ -189,7 +189,7 @@ private:
     
     // Polling state
     uint32_t last_vcsec_poll_{0};
-    InfotainmentPollPolicy poll_policy_;
+    TeslaBLE::InfotainmentPollPolicy poll_policy_;
     ConnectionResetPolicy connection_reset_policy_;
 
     // BLE state
@@ -239,13 +239,11 @@ private:
 
     // Command tracking
     void handle_command_result(const std::string &name, TeslaBLE::OperationResult result);
-    void schedule_state_refresh_(ControlStateRefresh refresh);
-    void send_command_with_tracking(
-        UniversalMessage_Domain domain,
-        const std::string &name,
-        std::function<int(TeslaBLE::Client *, uint8_t *, size_t *)> builder,
-        TeslaBLE::WakePolicy wake_policy = TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
-        std::function<void(bool)> on_result = nullptr);
+    // Runs a library action and reports its outcome to the last-command
+    // sensor. `send` receives the result callback to hand to the action.
+    void track(const std::string &name,
+               std::function<void(TeslaBLE::Command::OperationResultCallback)> send,
+               std::function<void(bool)> on_result = nullptr);
 
     text_sensor::TextSensor *last_command_sensor_{nullptr};
 

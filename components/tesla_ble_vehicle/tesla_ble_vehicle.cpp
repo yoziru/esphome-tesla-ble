@@ -212,20 +212,16 @@ void TeslaBLEVehicle::update() {
   // in range, can still fall asleep on its own and must be allowed to do so
   // (issues #201/#202). To add faster polling for unlocked/user-present later,
   // extend the decision inputs here (and gate it behind an opt-in config).
-  InfotainmentPollDecision decision =
+  TeslaBLE::InfotainmentPollDecision decision =
       poll_policy_.update(now, is_asleep, state_manager_->is_charging(),
                           state_manager_->is_sentry_mode());
 
   if (poll_policy_.should_poll(now, decision.interval_ms)) {
-    TeslaBLE::WakePolicy policy =
-        decision.wake_policy == WakePolicy::NO_WAKE_SKIP
-            ? TeslaBLE::WakePolicy::NO_WAKE_SKIP
-            : TeslaBLE::WakePolicy::WAKE_IF_NEEDED;
     ESP_LOGI(TAG, "Polling Infotainment (%s)",
-             decision.wake_policy == WakePolicy::NO_WAKE_SKIP
+             decision.wake_policy == TeslaBLE::WakePolicy::NO_WAKE_SKIP
                  ? "sleeping - NO_WAKE_SKIP"
                  : "active - WAKE_IF_NEEDED");
-    vehicle_->infotainment_poll(policy);
+    vehicle_->infotainment_poll(decision.wake_policy);
     poll_policy_.on_poll(now);
   }
 }
@@ -500,59 +496,18 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
     last_command_sensor_->publish_state(value);
 }
 
-void TeslaBLEVehicle::send_command_with_tracking(
-    UniversalMessage_Domain domain,
-    const std::string &name,
-    std::function<int(TeslaBLE::Client *, uint8_t *, size_t *)> builder,
-    TeslaBLE::WakePolicy wake_policy, std::function<void(bool)> on_result) {
+void TeslaBLEVehicle::track(const std::string &name,
+                            std::function<void(TeslaBLE::Command::OperationResultCallback)> send,
+                            std::function<void(bool)> on_result) {
   if (!vehicle_) {
     ESP_LOGE(TAG, "Cannot send command '%s': vehicle not initialized", name.c_str());
     return;
   }
 
-  vehicle_->send_command_result(
-      domain, name, std::move(builder),
-      [this, name, on_result = std::move(on_result)](TeslaBLE::OperationResult result) {
-        const bool succeeded = result.is_success();
-        handle_command_result(name, std::move(result));
-        if (on_result) on_result(succeeded);
-      },
-      wake_policy);
-}
-
-void TeslaBLEVehicle::schedule_state_refresh_(ControlStateRefresh refresh) {
-  if (!vehicle_ || refresh == ControlStateRefresh::NONE) return;
-
-  const char *timeout_name = nullptr;
-  switch (refresh) {
-    case ControlStateRefresh::CHARGE_STATE:
-      timeout_name = "charge-state-refresh";
-      break;
-    case ControlStateRefresh::CLIMATE_STATE:
-      timeout_name = "climate-state-refresh";
-      break;
-    case ControlStateRefresh::CLOSURES_STATE:
-      timeout_name = "closures-state-refresh";
-      break;
-    case ControlStateRefresh::NONE:
-      return;
-  }
-
-  this->set_timeout(timeout_name, 1500, [this, refresh]() {
-    if (!vehicle_ || !vehicle_->is_connected()) return;
-    switch (refresh) {
-      case ControlStateRefresh::CHARGE_STATE:
-        vehicle_->charge_state_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
-        break;
-      case ControlStateRefresh::CLIMATE_STATE:
-        vehicle_->climate_state_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
-        break;
-      case ControlStateRefresh::CLOSURES_STATE:
-        vehicle_->closures_state_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
-        break;
-      case ControlStateRefresh::NONE:
-        break;
-    }
+  send([this, name, on_result = std::move(on_result)](TeslaBLE::OperationResult result) {
+    const bool succeeded = result.is_success();
+    handle_command_result(name, std::move(result));
+    if (on_result) on_result(succeeded);
   });
 }
 
@@ -568,23 +523,12 @@ int TeslaBLEVehicle::wake_vehicle() {
 
   if (state_manager_ && !state_manager_->is_asleep()) {
     ESP_LOGI(TAG, "Vehicle already awake - sending VCSEC poll instead");
-    send_command_with_tracking(
-        UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "VCSEC Poll",
-        [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-          return client->build_vcsec_information_request_message(
-              VCSEC_InformationRequestType_INFORMATION_REQUEST_TYPE_GET_STATUS, buff, len);
-        },
-        TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+    vehicle_->vcsec_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     return 0;
   }
 
   ESP_LOGI(TAG, "Sending wake command");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Wake",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_vcsec_action_message(VCSEC_RKEAction_E_RKE_ACTION_WAKE_VEHICLE, buff, len);
-      },
-      TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+  track("Wake", [this](auto cb) { vehicle_->wake(std::move(cb)); });
   return 0;
 }
 
@@ -644,17 +588,12 @@ int TeslaBLEVehicle::set_charging_state(bool charging) {
     return -1;
   }
 
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
+  track(
       charging ? "Start Charging" : "Stop Charging",
-      [charging](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_chargingStartStopAction_tag, &charging);
-      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
+      [this, charging](auto cb) { vehicle_->set_charging_state(charging, std::move(cb)); },
       [this, charging](bool succeeded) {
         const auto decision = control_state_decision(ControlStateCommand::CHARGING_STATE, succeeded);
         if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_control_state(charging);
-        schedule_state_refresh_(decision.refresh);
       });
   return 0;
 }
@@ -674,19 +613,14 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
     amps = max_amps;
   }
 
-  int clamped = amps;
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Set Charging Amps",
-      [clamped](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_setChargingAmpsAction_tag, &clamped);
-      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
-      [this, clamped](bool succeeded) {
-        const auto decision = control_state_decision(ControlStateCommand::SET_AMPS, succeeded);
-        if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_amps(static_cast<float>(clamped));
-        if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_amps();
-        schedule_state_refresh_(decision.refresh);
-      });
+  const int clamped = amps;
+  track("Set Charging Amps",
+        [this, clamped](auto cb) { vehicle_->set_charging_amps(clamped, std::move(cb)); },
+        [this, clamped](bool succeeded) {
+          const auto decision = control_state_decision(ControlStateCommand::SET_AMPS, succeeded);
+          if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_amps(static_cast<float>(clamped));
+          if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_amps();
+        });
   return clamped;
 }
 
@@ -698,18 +632,13 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
     return -1;
   }
 
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Set Charging Limit",
-      [limit](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_chargingSetLimitAction_tag, &limit);
-      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
-      [this, limit](bool succeeded) {
-        const auto decision = control_state_decision(ControlStateCommand::SET_LIMIT, succeeded);
-        if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_limit(static_cast<float>(limit));
-        if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_limit();
-        schedule_state_refresh_(decision.refresh);
-      });
+  track("Set Charging Limit",
+        [this, limit](auto cb) { vehicle_->set_charging_limit(limit, std::move(cb)); },
+        [this, limit](bool succeeded) {
+          const auto decision = control_state_decision(ControlStateCommand::SET_LIMIT, succeeded);
+          if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_limit(static_cast<float>(limit));
+          if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_limit();
+        });
   return 0;
 }
 
@@ -719,96 +648,47 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
 
 void TeslaBLEVehicle::lock_vehicle() {
   ESP_LOGI(TAG, "Lock vehicle requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Lock",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_vcsec_action_message(VCSEC_RKEAction_E_RKE_ACTION_LOCK, buff, len);
-      });
+  track("Lock", [this](auto cb) { vehicle_->lock(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::unlock_vehicle() {
   ESP_LOGI(TAG, "Unlock vehicle requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Unlock",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_vcsec_action_message(VCSEC_RKEAction_E_RKE_ACTION_UNLOCK, buff, len);
-      });
+  track("Unlock", [this](auto cb) { vehicle_->unlock(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::open_trunk() {
   ESP_LOGI(TAG, "Open trunk requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Open Trunk",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
-        request.rearTrunk = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
-        return client->build_vcsec_closure_message(&request, buff, len);
-      });
+  track("Open Trunk", [this](auto cb) { vehicle_->open_trunk(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::close_trunk() {
   ESP_LOGI(TAG, "Close trunk requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Close Trunk",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
-        request.rearTrunk = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE;
-        return client->build_vcsec_closure_message(&request, buff, len);
-      });
+  track("Close Trunk", [this](auto cb) { vehicle_->close_trunk(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::open_frunk() {
   ESP_LOGI(TAG, "Open frunk requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Open Frunk",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
-        request.frontTrunk = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
-        return client->build_vcsec_closure_message(&request, buff, len);
-      });
+  track("Open Frunk", [this](auto cb) { vehicle_->open_frunk(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::open_charge_port() {
   ESP_LOGI(TAG, "Open charge port requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Open Charge Port",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
-        request.chargePort = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
-        return client->build_vcsec_closure_message(&request, buff, len);
-      });
+  track("Open Charge Port", [this](auto cb) { vehicle_->open_charge_port(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::close_charge_port() {
   ESP_LOGI(TAG, "Close charge port requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Close Charge Port",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
-        request.chargePort = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE;
-        return client->build_vcsec_closure_message(&request, buff, len);
-      });
+  track("Close Charge Port", [this](auto cb) { vehicle_->close_charge_port(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::unlock_charge_port() {
   ESP_LOGI(TAG, "Unlock charge port latch requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Unlock Charge Port",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_chargePortDoorOpen_tag, nullptr);
-      });
+  track("Unlock Charge Port", [this](auto cb) { vehicle_->unlock_charge_port(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::unlatch_driver_door() {
   ESP_LOGI(TAG, "Unlatch driver door requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_VEHICLE_SECURITY, "Unlatch Driver Door",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        VCSEC_ClosureMoveRequest request = VCSEC_ClosureMoveRequest_init_zero;
-        request.frontDriverDoor = VCSEC_ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN;
-        return client->build_vcsec_closure_message(&request, buff, len);
-      });
+  track("Unlatch Driver Door", [this](auto cb) { vehicle_->unlatch_driver_door(std::move(cb)); });
 }
 
 // =============================================================================
@@ -817,74 +697,45 @@ void TeslaBLEVehicle::unlatch_driver_door() {
 
 void TeslaBLEVehicle::set_climate_on(bool enable) {
   ESP_LOGI(TAG, "Climate %s requested", enable ? "ON" : "OFF");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-      enable ? "Climate On" : "Climate Off",
-      [enable](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_hvacAutoAction_tag, &enable);
-      });
+  track(enable ? "Climate On" : "Climate Off",
+        [this, enable](auto cb) { vehicle_->set_climate(enable, std::move(cb)); });
 }
 
 void TeslaBLEVehicle::set_climate_temp(float temp) {
   ESP_LOGI(TAG, "Climate temperature %.1f°C requested", temp);
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Set Climate Temp",
-      [temp](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_hvacTemperatureAdjustmentAction_tag, &temp);
-      });
+  track("Set Climate Temp", [this, temp](auto cb) { vehicle_->set_climate_temp(temp, std::move(cb)); });
 }
 
 void TeslaBLEVehicle::set_climate_keeper(int mode) {
   const char *mode_names[] = {"Off", "On", "Dog", "Camp"};
   ESP_LOGI(TAG, "Climate keeper %s requested",
            (mode >= 0 && mode <= 3) ? mode_names[mode] : "Unknown");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Climate Keeper",
-      [mode](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_hvacClimateKeeperAction_tag, &mode);
-      });
+  std::string name = std::string("Climate Keeper ") +
+                     ((mode >= 0 && mode <= 3) ? mode_names[mode] : "Unknown");
+  track(name, [this, mode](auto cb) { vehicle_->set_climate_keeper(mode, std::move(cb)); });
 }
 
 void TeslaBLEVehicle::set_bioweapon_mode(bool enable) {
   ESP_LOGI(TAG, "Bioweapon mode %s requested", enable ? "ON" : "OFF");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-      enable ? "Bioweapon On" : "Bioweapon Off",
-      [enable](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_hvacBioweaponModeAction_tag, &enable);
-      });
+  track(enable ? "Bioweapon On" : "Bioweapon Off",
+        [this, enable](auto cb) { vehicle_->set_bioweapon_mode(enable, std::move(cb)); });
 }
 
 void TeslaBLEVehicle::set_preconditioning_max(bool enable) {
   ESP_LOGI(TAG, "Preconditioning max (defrost) %s requested",
            enable ? "ON" : "OFF");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-      enable ? "Defrost On" : "Defrost Off",
-      [enable](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_hvacSetPreconditioningMaxAction_tag, &enable);
-      });
+  track(enable ? "Defrost On" : "Defrost Off",
+        [this, enable](auto cb) { vehicle_->set_preconditioning_max(enable, std::move(cb)); });
 }
 
 void TeslaBLEVehicle::set_steering_wheel_heat(bool enable) {
   ESP_LOGI(TAG, "Steering wheel heat %s requested", enable ? "ON" : "OFF");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-      enable ? "Steering Heat On" : "Steering Heat Off",
-      [enable](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_hvacSteeringWheelHeaterAction_tag, &enable);
-      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
-      [this, enable](bool succeeded) {
-        const auto decision = control_state_decision(ControlStateCommand::SET_STEERING_WHEEL_HEAT, succeeded);
-        if (decision.publish_requested_state && state_manager_) state_manager_->update_steering_wheel_heat(enable);
-        schedule_state_refresh_(decision.refresh);
-      });
+  track(enable ? "Steering Heat On" : "Steering Heat Off",
+        [this, enable](auto cb) { vehicle_->set_steering_wheel_heat(enable, std::move(cb)); },
+        [this, enable](bool succeeded) {
+          const auto decision = control_state_decision(ControlStateCommand::SET_STEERING_WHEEL_HEAT, succeeded);
+          if (decision.publish_requested_state && state_manager_) state_manager_->update_steering_wheel_heat(enable);
+        });
 }
 
 // =============================================================================
@@ -893,60 +744,32 @@ void TeslaBLEVehicle::set_steering_wheel_heat(bool enable) {
 
 void TeslaBLEVehicle::flash_lights() {
   ESP_LOGI(TAG, "Flash lights requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Flash Lights",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_vehicleControlFlashLightsAction_tag, nullptr);
-      });
+  track("Flash Lights", [this](auto cb) { vehicle_->flash_lights(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::honk_horn() {
   ESP_LOGI(TAG, "Honk horn requested");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Honk Horn",
-      [](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_vehicleControlHonkHornAction_tag, nullptr);
-      });
+  track("Honk Horn", [this](auto cb) { vehicle_->honk_horn(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::set_sentry_mode(bool enable) {
   ESP_LOGI(TAG, "Sentry mode %s requested", enable ? "ON" : "OFF");
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT,
-      enable ? "Sentry On" : "Sentry Off",
-      [enable](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_vehicleControlSetSentryModeAction_tag, &enable);
-      }, TeslaBLE::WakePolicy::WAKE_IF_NEEDED,
-      [this, enable](bool succeeded) {
-        const auto decision = control_state_decision(ControlStateCommand::SET_SENTRY_MODE, succeeded);
-        if (decision.publish_requested_state && state_manager_) state_manager_->update_sentry_mode(enable);
-        schedule_state_refresh_(decision.refresh);
-      });
+  track(enable ? "Sentry On" : "Sentry Off",
+        [this, enable](auto cb) { vehicle_->set_sentry_mode(enable, std::move(cb)); },
+        [this, enable](bool succeeded) {
+          const auto decision = control_state_decision(ControlStateCommand::SET_SENTRY_MODE, succeeded);
+          if (decision.publish_requested_state && state_manager_) state_manager_->update_sentry_mode(enable);
+        });
 }
 
 void TeslaBLEVehicle::vent_windows() {
   ESP_LOGI(TAG, "Vent windows requested");
-  int32_t window_action = 0;
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Vent Windows",
-      [window_action](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_vehicleControlWindowAction_tag, &window_action);
-      });
+  track("Vent Windows", [this](auto cb) { vehicle_->vent_windows(std::move(cb)); });
 }
 
 void TeslaBLEVehicle::close_windows() {
   ESP_LOGI(TAG, "Close windows requested");
-  int32_t window_action = 1;
-  send_command_with_tracking(
-      UniversalMessage_Domain_DOMAIN_INFOTAINMENT, "Close Windows",
-      [window_action](TeslaBLE::Client *client, uint8_t *buff, size_t *len) {
-        return client->build_car_server_vehicle_action_message(
-            buff, len, CarServer_VehicleAction_vehicleControlWindowAction_tag, &window_action);
-      });
+  track("Close Windows", [this](auto cb) { vehicle_->close_windows(std::move(cb)); });
 }
 
 // =============================================================================

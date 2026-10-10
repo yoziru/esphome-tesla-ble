@@ -1,5 +1,5 @@
 #include "vehicle_state_manager.h"
-#include "state_text.h"
+#include <state_text.h>
 #include "tesla_ble_vehicle.h"
 #ifdef USE_API
 #include <esphome/components/api/api_server.h>
@@ -11,38 +11,6 @@
 
 namespace esphome {
 namespace tesla_ble_vehicle {
-
-// The raw values duplicated in state_text.h must match the nanopb-generated
-// enums/tags from the tesla-ble library, or every state conversion would be
-// wrong. Compile-time check.
-static_assert(static_cast<int>(VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_AWAKE) == state_text::kSleepAwake);
-static_assert(static_cast<int>(VCSEC_VehicleSleepStatus_E_VEHICLE_SLEEP_STATUS_ASLEEP) == state_text::kSleepAsleep);
-static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_UNLOCKED) == state_text::kLockUnlocked);
-static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_LOCKED) == state_text::kLockLocked);
-static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_INTERNAL_LOCKED) == state_text::kLockInternalLocked);
-static_assert(static_cast<int>(VCSEC_VehicleLockState_E_VEHICLELOCKSTATE_SELECTIVE_UNLOCKED) == state_text::kLockSelectiveUnlocked);
-static_assert(static_cast<int>(VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_NOT_PRESENT) == state_text::kPresenceNotPresent);
-static_assert(static_cast<int>(VCSEC_UserPresence_E_VEHICLE_USER_PRESENCE_PRESENT) == state_text::kPresencePresent);
-static_assert(CarServer_ChargeState_ChargingState_Unknown_tag == state_text::kChargingStateUnknown);
-static_assert(CarServer_ChargeState_ChargingState_Disconnected_tag == state_text::kChargingStateDisconnected);
-static_assert(CarServer_ChargeState_ChargingState_NoPower_tag == state_text::kChargingStateNoPower);
-static_assert(CarServer_ChargeState_ChargingState_Starting_tag == state_text::kChargingStateStarting);
-static_assert(CarServer_ChargeState_ChargingState_Charging_tag == state_text::kChargingStateCharging);
-static_assert(CarServer_ChargeState_ChargingState_Complete_tag == state_text::kChargingStateComplete);
-static_assert(CarServer_ChargeState_ChargingState_Stopped_tag == state_text::kChargingStateStopped);
-static_assert(CarServer_ChargeState_ChargingState_Calibrating_tag == state_text::kChargingStateCalibrating);
-static_assert(CarServer_ShiftState_Invalid_tag == state_text::kShiftInvalid);
-static_assert(CarServer_ShiftState_P_tag == state_text::kShiftP);
-static_assert(CarServer_ShiftState_R_tag == state_text::kShiftR);
-static_assert(CarServer_ShiftState_N_tag == state_text::kShiftN);
-static_assert(CarServer_ShiftState_D_tag == state_text::kShiftD);
-static_assert(CarServer_ShiftState_SNA_tag == state_text::kShiftSNA);
-static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonUnknown) == state_text::kLimitUnknown);
-static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonNone) == state_text::kLimitNone);
-static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonEvse) == state_text::kLimitEvse);
-static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonBattTempLow) == state_text::kLimitBattTempLow);
-static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonHighSoc) == state_text::kLimitHighSoc);
-static_assert(static_cast<int>(CarServer_ChargeState_ChargeLimitReason_ChargeLimitReasonCabin) == state_text::kLimitCabin);
 
 VehicleStateManager::VehicleStateManager(TeslaBLEVehicle* parent)
     : parent_(parent) {}
@@ -134,7 +102,7 @@ void VehicleStateManager::update_vehicle_status(const VCSEC_VehicleStatus& statu
 }
 
 void VehicleStateManager::update_sleep_status(VCSEC_VehicleSleepStatus_E status) {
-    auto asleep = state_text::sleep_status(static_cast<int>(status));
+    auto asleep = TeslaBLE::state_text::sleep_status(static_cast<int>(status));
     if (asleep.has_value()) {
         update_asleep(asleep.value());
     } else {
@@ -143,14 +111,14 @@ void VehicleStateManager::update_sleep_status(VCSEC_VehicleSleepStatus_E status)
 }
 
 void VehicleStateManager::update_lock_status(VCSEC_VehicleLockState_E status) {
-    auto unlocked = state_text::lock_status(static_cast<int>(status));
+    auto unlocked = TeslaBLE::state_text::lock_status(static_cast<int>(status));
     if (unlocked.has_value()) {
         update_unlocked(unlocked.value());
     }
 }
 
 void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
-    auto present = state_text::user_presence(static_cast<int>(presence));
+    auto present = TeslaBLE::state_text::user_presence(static_cast<int>(presence));
     if (present.has_value()) {
         update_user_present(present.value());
     } else {
@@ -170,7 +138,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
         const bool was_charging = is_charging_;
-        const bool new_charging_state = state_text::is_charging(charge_state.charging_state.which_type);
+        const bool new_charging_state = TeslaBLE::state_text::is_charging(charge_state.charging_state.which_type);
         
         ESP_LOGD(STATE_MANAGER_TAG, "Charging state check: was=%s, new=%s, state_type=%d", 
                  was_charging ? "ON" : "OFF", 
@@ -190,11 +158,11 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
         
         // Update text sensors
-        publish_text_sensor("charging_state", state_text::charging_state(charge_state.charging_state.which_type));
-        publish_text_sensor("iec61851_state", state_text::iec61851_state(charge_state.charging_state.which_type));
+        publish_text_sensor("charging_state", TeslaBLE::state_text::charging_state(charge_state.charging_state.which_type));
+        publish_text_sensor("iec61851_state", TeslaBLE::state_text::iec61851_state(charge_state.charging_state.which_type));
         
         // Update charger connected binary sensor
-        const bool charger_connected = state_text::charger_connected(charge_state.charging_state.which_type);
+        const bool charger_connected = TeslaBLE::state_text::charger_connected(charge_state.charging_state.which_type);
         publish_binary_sensor("charger", charger_connected);
         if (!charger_connected) {
             // No cable: clear cached estimate inputs so a later reconnect without voltage doesn't reuse stale AC voltage.
@@ -312,7 +280,7 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     // Some BLE responses omit charge_limit_reason even when charging is externally limited.
     if (charge_state.which_optional_charge_limit_reason) {
         const auto reason = charge_state.optional_charge_limit_reason.charge_limit_reason;
-        publish_text_sensor("charge_limit_reason", state_text::charge_limit_reason(static_cast<int>(reason)));
+        publish_text_sensor("charge_limit_reason", TeslaBLE::state_text::charge_limit_reason(static_cast<int>(reason)));
     } else if (appears_externally_limited) {
         publish_text_sensor("charge_limit_reason", "ExternalLimit");
     } else {
@@ -428,10 +396,10 @@ void VehicleStateManager::update_drive_state(const CarServer_DriveState& drive_s
     
     // Shift state
     if (drive_state.has_shift_state) {
-        publish_text_sensor("shift_state", state_text::shift_state(drive_state.shift_state.which_type));
+        publish_text_sensor("shift_state", TeslaBLE::state_text::shift_state(drive_state.shift_state.which_type));
         
         // Parking brake sensor - true when in P
-        const bool parked = state_text::is_parked(drive_state.shift_state.which_type);
+        const bool parked = TeslaBLE::state_text::is_parked(drive_state.shift_state.which_type);
         publish_binary_sensor("parking_brake", parked);
     }
     
