@@ -6,7 +6,7 @@ turned into ESPHome entities at build time. This script parses those lists with
 the stdlib `ast` module (no esphome import needed) and checks that:
 
 - every entity entry is well-formed: required keys present, entity ids unique
-  across all lists
+  across all lists (sensor, control, and climate definitions)
 - the sensor ids used from C++ (publish_* calls in vehicle_state_manager.cpp,
   or a dedicated setter method) match the ids defined in the Python lists, in
   both directions - a typo on either side would silently produce a dead sensor
@@ -31,6 +31,10 @@ ENTITY_LISTS = {
     "TEXT_SENSORS": {"required": ("id", "name")},
     "BUTTONS": {"required": ("id", "name", "class", "setter")},
     "SWITCHES": {"required": ("id", "name", "class", "setter")},
+    "LOCKS": {"required": ("id", "name", "class", "setter")},
+    "COVERS": {"required": ("id", "name", "class", "setter")},
+    "NUMBERS": {"required": ("id", "name", "class", "setter")},
+    "CLIMATE": {"required": ("id", "name", "class", "setter")},
 }
 
 # These lists are published from C++; the other lists are controls created by
@@ -41,21 +45,27 @@ SENSOR_LISTS = ("BINARY_SENSORS", "SENSORS", "TEXT_SENSORS")
 PUBLISH_CALL = re.compile(r'publish_(?:binary_|text_)?sensor\("([a-z0-9_]+)"')
 
 
-def find_list(tree: ast.Module, name: str):
+def find_entries(tree: ast.Module, name: str):
+    """Return the entry nodes of a module-level entity definition.
+
+    Entity definitions are lists, except CLIMATE which is a single dict.
+    """
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
             isinstance(target, ast.Name) and target.id == name for target in node.targets
         ):
             if isinstance(node.value, ast.List):
                 return node.value.elts
-    raise AssertionError(f"list '{name}' not found in {COMPONENT}")
+            if isinstance(node.value, ast.Dict):
+                return [node.value]
+    raise AssertionError(f"definition '{name}' not found in {COMPONENT}")
 
 
 def collect_sensor_ids(tree: ast.Module):
     """Map each defined sensor id to its dedicated setter method name (or None)."""
     sensors = {}
     for list_name in SENSOR_LISTS:
-        for entry in find_list(tree, list_name):
+        for entry in find_entries(tree, list_name):
             if not isinstance(entry, ast.Dict):
                 continue
             values = {
@@ -114,7 +124,7 @@ def main() -> int:
     seen_ids = {}
 
     for list_name, spec in ENTITY_LISTS.items():
-        for entry in find_list(tree, list_name):
+        for entry in find_entries(tree, list_name):
             if not isinstance(entry, ast.Dict):
                 continue
             keys = {
