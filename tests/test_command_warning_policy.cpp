@@ -1,9 +1,19 @@
-#include <cassert>
+// Behavioural tests for apply_command_warning (components/tesla_ble_vehicle/
+// command_warning_policy.h). No ESPHome or tesla-ble dependency - builds with
+// a plain C++ compiler:  make test-cpp  (or just  make test).
+//
+// A command failure is an event: it arms a momentary warning that expires on
+// its own. A healthy completion or an intentional skip means a previous
+// warning no longer represents current state. Connection loss cancels the
+// pending expiry but preserves the persistent warning that takes over.
+
+#include "test_helper.h"
 
 #include "command_warning_policy.h"
 
 using namespace esphome::tesla_ble_vehicle;
 
+// Mirrors the ESPHome Component status/timeout API that the policy drives.
 struct FakeWarningStatus {
   bool warning_active = false;
   bool timeout_armed = false;
@@ -35,7 +45,7 @@ struct FakeWarningStatus {
   }
 };
 
-static void test_already_set_command_warning_expires() {
+static void test_failed_command_arms_expiring_warning() {
   FakeWarningStatus status;
   const auto cancel_timeout = [&status]() {
     status.cancel_timeout(COMMAND_WARNING_TIMEOUT);
@@ -43,10 +53,10 @@ static void test_already_set_command_warning_expires() {
 
   // Tesla may report Set Charging Limit as already_set even though BLE is healthy.
   apply_command_warning(status, CommandOutcome::FAILED, cancel_timeout);
-  assert(status.warning_active);
-  assert(status.timeout_armed);
+  CHECK(status.warning_active);
+  CHECK(status.timeout_armed);
   status.run_timeout();
-  assert(!status.warning_active);
+  CHECK(!status.warning_active);
 }
 
 static void test_healthy_command_results_clear_a_previous_warning() {
@@ -57,13 +67,13 @@ static void test_healthy_command_results_clear_a_previous_warning() {
 
   apply_command_warning(status, CommandOutcome::FAILED, cancel_timeout);
   apply_command_warning(status, CommandOutcome::SUCCESS, cancel_timeout);
-  assert(!status.warning_active);
-  assert(!status.timeout_armed);
+  CHECK(!status.warning_active);
+  CHECK(!status.timeout_armed);
 
   apply_command_warning(status, CommandOutcome::FAILED, cancel_timeout);
   apply_command_warning(status, CommandOutcome::SKIPPED, cancel_timeout);
-  assert(!status.warning_active);
-  assert(!status.timeout_armed);
+  CHECK(!status.warning_active);
+  CHECK(!status.timeout_armed);
 }
 
 static void test_connection_loss_preserves_persistent_warning() {
@@ -76,12 +86,14 @@ static void test_connection_loss_preserves_persistent_warning() {
   cancel_command_warning(cancel_timeout);
   status.status_set_warning("BLE connection lost");
   status.run_timeout();
-  assert(status.warning_active);
-  assert(status.persistent_warning);
+  CHECK(status.warning_active);
+  CHECK(status.persistent_warning);
 }
 
 int main() {
-  test_already_set_command_warning_expires();
+  test_failed_command_arms_expiring_warning();
   test_healthy_command_results_clear_a_previous_warning();
   test_connection_loss_preserves_persistent_warning();
+
+  return test_summary();
 }

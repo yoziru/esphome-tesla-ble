@@ -50,10 +50,8 @@ public:
     sensor::Sensor* get_sensor(const std::string& id);
     text_sensor::TextSensor* get_text_sensor(const std::string& id);
     
-    // Const versions for state queries
+    // Const version for state queries
     const binary_sensor::BinarySensor* get_binary_sensor(const std::string& id) const;
-    const sensor::Sensor* get_sensor(const std::string& id) const;
-    const text_sensor::TextSensor* get_text_sensor(const std::string& id) const;
     
     // ==========================================================================
     // Control setters (switches and numbers need special handling)
@@ -79,15 +77,6 @@ public:
     void set_windows_cover(cover::Cover* cvr) { windows_cover_ = cvr; }
     void set_charge_port_door_cover(cover::Cover* cvr) { charge_port_door_cover_ = cvr; }
     void set_climate(climate::Climate* clm) { climate_ = clm; }
-    
-    // Lock, Cover, Climate getters (for state manager access)
-    lock::Lock* get_doors_lock() { return doors_lock_; }
-    lock::Lock* get_charge_port_latch_lock() { return charge_port_latch_lock_; }
-    cover::Cover* get_trunk_cover() { return trunk_cover_; }
-    cover::Cover* get_frunk_cover() { return frunk_cover_; }
-    cover::Cover* get_windows_cover() { return windows_cover_; }
-    cover::Cover* get_charge_port_door_cover() { return charge_port_door_cover_; }
-    climate::Climate* get_climate() { return climate_; }
     
     // ==========================================================================
     // State updates from VCSEC
@@ -120,22 +109,13 @@ public:
     void update_sentry_mode(bool enabled);
     void republish_charging_amps();
     void republish_charging_limit();
-    void update_charger_connected(bool connected);
-    
-    // ==========================================================================
-    // Connection state management
-    // ==========================================================================
-    void set_sensors_available(bool available);
-    void reset_all_states();
     
     // ==========================================================================
     // State queries
     // ==========================================================================
     bool is_asleep() const;
     bool is_sentry_mode() const;
-    bool is_charge_flap_open() const;
     bool is_charging() const { return is_charging_; }
-    float get_charging_amps() const;
     
     // ==========================================================================
     // Dynamic limits

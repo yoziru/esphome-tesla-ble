@@ -96,16 +96,6 @@ const binary_sensor::BinarySensor* VehicleStateManager::get_binary_sensor(const 
     return (it != binary_sensors_.end()) ? it->second : nullptr;
 }
 
-const sensor::Sensor* VehicleStateManager::get_sensor(const std::string& id) const {
-    auto it = sensors_.find(id);
-    return (it != sensors_.end()) ? it->second : nullptr;
-}
-
-const text_sensor::TextSensor* VehicleStateManager::get_text_sensor(const std::string& id) const {
-    auto it = text_sensors_.find(id);
-    return (it != text_sensors_.end()) ? it->second : nullptr;
-}
-
 // =============================================================================
 // Helper methods for publishing by ID
 // =============================================================================
@@ -637,10 +627,6 @@ void VehicleStateManager::republish_charging_limit() {
     }
 }
 
-void VehicleStateManager::update_charger_connected(bool connected) {
-    publish_binary_sensor("charger", connected);
-}
-
 void VehicleStateManager::update_estimated_power() {
     // Pure helper: compute estimated power (kW) = V * A * phases / 1000.
     // Using std::optional for explicit missing-data handling (modern C++17) and early returns.
@@ -667,46 +653,18 @@ void VehicleStateManager::update_estimated_power() {
 }
 
 // =============================================================================
-// Connection state management
-// =============================================================================
-
-void VehicleStateManager::set_sensors_available(bool available) {
-    ESP_LOGD(STATE_MANAGER_TAG, "Setting sensors available: %s", available ? "true" : "false");
-    
-    // Set availability for key binary sensors
-    set_sensor_available(get_binary_sensor("asleep"), available);
-    set_sensor_available(get_binary_sensor("user_present"), available);
-}
-
-void VehicleStateManager::reset_all_states() {
-    ESP_LOGD(STATE_MANAGER_TAG, "Resetting all vehicle states");
-    is_charging_ = false;
-    set_sensors_available(false);
-}
-
-// =============================================================================
 // State queries
 // =============================================================================
 
 bool VehicleStateManager::is_asleep() const {
+    // Unknown (no state yet) counts as asleep: before the first VCSEC reply a
+    // wake request must send the wake action, not a poll that cannot wake.
     auto* sensor = get_binary_sensor("asleep");
-    return sensor ? sensor->state : true;
+    return sensor == nullptr || !sensor->has_state() || sensor->state;
 }
 
 bool VehicleStateManager::is_sentry_mode() const {
     return sentry_mode_switch_ != nullptr && sentry_mode_switch_->state;
-}
-
-bool VehicleStateManager::is_charge_flap_open() const {
-    // Use charge port door cover entity if available
-    if (charge_port_door_cover_) {
-        return charge_port_door_cover_->position == cover::COVER_OPEN;
-    }
-    return false;
-}
-
-float VehicleStateManager::get_charging_amps() const {
-    return charging_amps_number_ ? charging_amps_number_->state : 0.0f;
 }
 
 // =============================================================================

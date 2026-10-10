@@ -16,6 +16,15 @@ jobs:
       - name: Run tests
         run: make test
 
+  dashboard:
+    name: Validate Device Builder config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - name: Validate dashboard package config
+        run: make validate-dashboard-config
+
   ci:
     name: Building ${{ matrix.file }}
     runs-on: ubuntu-latest
