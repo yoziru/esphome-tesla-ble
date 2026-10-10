@@ -52,7 +52,7 @@ jobs:
           restore-keys: |
             platformio-${{ matrix.file }}-
       - name: Build ESPHome firmware to verify configuration
-        uses: esphome/build-action@4ef4722a2935eac47b7e227fe0e1f8e0f8afcc42 # v7.3.0
+        uses: esphome/build-action@ae5408cdbc4f70692bf8e345c4982bca05a93667 # v8.1.0
         with:
           yaml-file: ${{ matrix.file }}
           version: ${{ steps.get_esphome_version.outputs.esphome_version }}
