@@ -80,12 +80,6 @@ CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE = "infotainment_poll_interval_awake"
 CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE = "infotainment_poll_interval_active"
 CONF_INFOTAINMENT_SLEEP_TIMEOUT = "infotainment_sleep_timeout"
 
-# Tesla key roles
-TESLA_ROLES = {
-    "DRIVER": "Keys_Role_ROLE_DRIVER",
-    "CHARGING_MANAGER": "Keys_Role_ROLE_CHARGING_MANAGER",
-}
-
 # =============================================================================
 # ENTITY DEFINITIONS - Add new sensors/controls here!
 # =============================================================================
@@ -245,7 +239,8 @@ CONFIG_SCHEMA = (
             cv.GenerateID(CONF_ID): cv.declare_id(TeslaBLEVehicle),
             cv.Required(CONF_VIN): cv.string,
             cv.Optional(CONF_CHARGING_AMPS_MAX, default=DEFAULT_CHARGING_AMPS_MAX): cv.int_range(min=1, max=48),
-            cv.Optional(CONF_ROLE, default="DRIVER"): cv.enum(TESLA_ROLES, upper=True),
+            # C++ start_pairing() maps these roles to Keys_Role_* enums.
+            cv.Optional(CONF_ROLE, default="DRIVER"): cv.one_of("DRIVER", "CHARGING_MANAGER", upper=True),
             # Polling intervals (in seconds)
             cv.Optional(CONF_VCSEC_POLL_INTERVAL, default=10): cv.int_range(min=5, max=300),
             cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE, default=30): cv.int_range(min=10, max=600), 
@@ -408,9 +403,7 @@ async def to_code(config):
     vcsec_interval_seconds = config[CONF_VCSEC_POLL_INTERVAL]
     
     cg.add(var.set_update_interval(vcsec_interval_seconds * 1000))
-    # str() strips cv.enum()'s EnumValue subclass so the short role word
-    # ("DRIVER"/"CHARGING_MANAGER") reaches C++ instead of the long protobuf name.
-    cg.add(var.set_role(str(role)))
+    cg.add(var.set_role(role))
     cg.add(var.set_charging_amps_max(charging_amps_max))
     
     # Set polling intervals (convert from seconds to milliseconds)

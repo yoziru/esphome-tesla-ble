@@ -162,9 +162,9 @@ void TeslaBLEVehicle::configure_pending_sensors() {
   if (pending_climate_)
     state_manager_->set_climate(pending_climate_);
 
-  ESP_LOGD(TAG, "Configured %d binary, %d numeric, %d text sensors",
-           pending_binary_sensors_.size(), pending_sensors_.size(),
-           pending_text_sensors_.size());
+  ESP_LOGD(TAG, "Configured %u binary, %u numeric, %u text sensors",
+           (unsigned) pending_binary_sensors_.size(), (unsigned) pending_sensors_.size(),
+           (unsigned) pending_text_sensors_.size());
 }
 
 void TeslaBLEVehicle::loop() {
@@ -241,9 +241,9 @@ void TeslaBLEVehicle::dump_config() {
                      "ms, Active=%" PRIu32 "ms",
                  vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
                  poll_policy_.active_interval_ms());
-  ESP_LOGCONFIG(TAG, "  Sensors: %d binary, %d numeric, %d text",
-                pending_binary_sensors_.size(), pending_sensors_.size(),
-                pending_text_sensors_.size());
+  ESP_LOGCONFIG(TAG, "  Sensors: %u binary, %u numeric, %u text",
+                (unsigned) pending_binary_sensors_.size(), (unsigned) pending_sensors_.size(),
+                (unsigned) pending_text_sensors_.size());
 }
 
 // =============================================================================
@@ -1061,7 +1061,6 @@ void TeslaBLEVehicle::handle_connection_lost() {
     this->cancel_timeout(COMMAND_WARNING_TIMEOUT);
   });
 
-  poll_policy_.on_poll(0);
   last_vcsec_poll_ = 0;
   poll_policy_.reset();
   this->status_set_warning("BLE connection lost");

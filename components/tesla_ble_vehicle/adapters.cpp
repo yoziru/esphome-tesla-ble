@@ -65,7 +65,7 @@ void BleAdapterImpl::process_write_queue() {
     auto* client = parent_->parent();
     int gattc_if = client->get_gattc_if();
     uint16_t conn_id = client->get_conn_id();
-    uint16_t handle = parent_->get_write_handle(); // Need public getter on Vehicle
+    uint16_t handle = parent_->get_write_handle();
 
     if (handle == 0) {
         // Not ready

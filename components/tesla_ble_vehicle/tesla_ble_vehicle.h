@@ -161,12 +161,8 @@ public:
     // Command tracking sensors
     void set_last_command_text_sensor(text_sensor::TextSensor *sensor) { last_command_sensor_ = sensor; }
 
-    // Manager accessors
-    VehicleStateManager* get_state_manager() const { return state_manager_.get(); }
-    
     // BLE connection state
     bool is_connected() const { return node_state == espbt::ClientState::ESTABLISHED; }
-    uint16_t get_read_handle() const { return read_handle_; }
     uint16_t get_write_handle() const { return write_handle_; }
 
 private:
