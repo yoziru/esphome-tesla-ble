@@ -511,9 +511,8 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
     
     // Sentry mode - sync switch state from vehicle
     if (closures_state.has_sentry_mode_state && sentry_mode_switch_ != nullptr) {
-        const bool sentry_active = (closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Armed_tag ||
-                              closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Aware_tag ||
-                              closures_state.sentry_mode_state.which_type == CarServer_ClosuresState_SentryModeState_Panic_tag);
+        const bool sentry_active =
+            TeslaBLE::state_text::sentry_mode_active(closures_state.sentry_mode_state.which_type);
         if (!sentry_mode_switch_->has_state() || sentry_mode_switch_->state != sentry_active) {
             ESP_LOGD(STATE_MANAGER_TAG, "Syncing sentry mode switch to vehicle state: %s", sentry_active ? "ON" : "OFF");
             publish_sensor_state(sentry_mode_switch_, sentry_active);
