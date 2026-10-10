@@ -1239,6 +1239,9 @@ void TeslaClimate::control(const climate::ClimateCall &call) {
 
   if (call.get_mode().has_value()) {
     auto mode = call.get_mode().value();
+    // ESPHome does not apply the call to the entity before control(): update
+    // the published state too or HA reverts it until the next poll.
+    this->mode = mode;
     if (mode == climate::CLIMATE_MODE_OFF) {
       parent_->set_climate_on(false);
     } else if (mode == climate::CLIMATE_MODE_HEAT_COOL) {
@@ -1249,6 +1252,8 @@ void TeslaClimate::control(const climate::ClimateCall &call) {
   // Handle custom presets
   const auto custom = call.get_custom_preset();
   if (!custom.empty()) {
+    // No telemetry reports the active preset, so keep the selection locally.
+    this->set_custom_preset_(custom);
     if (custom == "Normal") {
       parent_->set_preconditioning_max(false);
       parent_->set_climate_keeper(0);
@@ -1269,6 +1274,7 @@ void TeslaClimate::control(const climate::ClimateCall &call) {
   // Handle custom fan modes
   const auto fan = call.get_custom_fan_mode();
   if (!fan.empty()) {
+    this->set_custom_fan_mode_(fan);
     if (fan == "Normal") {
       parent_->set_bioweapon_mode(false);
     } else if (fan == "Bioweapon Mode") {
