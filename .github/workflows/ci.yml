@@ -12,7 +12,7 @@ jobs:
     name: Unit tests (C++ + Python)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Run tests
         run: make test
 
@@ -20,7 +20,7 @@ jobs:
     name: Validate Device Builder config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - name: Validate dashboard package config
         run: make validate-dashboard-config
@@ -36,7 +36,7 @@ jobs:
           - tesla-ble-m5stack-atoms3.yml
           - tesla-ble-m5stack-nanoc6.yml
     steps:
-      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Mock secrets.yaml from example
         run: cp secrets.yaml.example secrets.yaml
       - name: Get ESPHome version
@@ -45,14 +45,14 @@ jobs:
           esphome_version=$(grep esphome requirements.txt | cut -d'=' -f3)
           echo "esphome_version=$esphome_version" >> "$GITHUB_OUTPUT"
       - name: Cache PlatformIO packages
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.platformio
           key: platformio-${{ matrix.file }}-${{ steps.get_esphome_version.outputs.esphome_version }}
           restore-keys: |
             platformio-${{ matrix.file }}-
       - name: Build ESPHome firmware to verify configuration
-        uses: esphome/build-action@4ef4722a2935eac47b7e227fe0e1f8e0f8afcc42 # v7.3.0
+        uses: esphome/build-action@ae5408cdbc4f70692bf8e345c4982bca05a93667 # v8.1.0
         with:
           yaml-file: ${{ matrix.file }}
           version: ${{ steps.get_esphome_version.outputs.esphome_version }}
