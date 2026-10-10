@@ -43,7 +43,7 @@ The generic package targets the classic ESP32 (`esp32dev`). Do not use it for ES
 If you run the [ESPHome add-on](https://esphome.io/guides/getting_started_hassio.html) in Home Assistant:
 
 1. For a new, unflashed board, select **Create configuration** → **Create new project** and complete the name and Wi-Fi setup. For a board already running this project's firmware, use **Adopt** instead.
-2. Open the device's YAML editor. Keep the generated `esphome`, `api`, and `wifi` sections, but remove the generated `esp32:` section. The board package below supplies the correct target and framework settings.
+2. Open the device's YAML editor. Keep the generated `esphome`, `api`, and `wifi` sections, but delete the generated `esp32:`, `logger:`, `ota:`, and `captive_portal:` sections. The board package below supplies all of them (chip target, logging, encrypted OTA, captive portal); a leftover generated `ota:` carrying a `password:` fails validation because the encryption key already authenticates the uploader.
 3. Add these entries to the `secrets.yaml` used by your ESPHome configuration. Find the vehicle MAC with an [Android BLE scanner](#via-android-ble-scanner-recommended-for-device-builder); iOS apps cannot reveal it.
 
 ```yaml
@@ -61,7 +61,7 @@ substitutions:
   tesla_vin: !secret tesla_vin
 ```
 
-5. Add the board package under the top-level `packages` section. It provides the matching `esp32:` target, custom components, and encrypted ESPHome OTA updates using the API encryption key (ESPHome 2026.9.0 or newer). Do not add separate `esp32:`, `external_components:`, or `ota:` sections. For an M5Stack NanoC6:
+5. Add the board package under the top-level `packages` section. It provides the matching `esp32:` target, logging, the captive portal, encrypted ESPHome OTA updates using the API encryption key (ESPHome 2026.9.0 or newer), and the custom components. Do not add separate `esp32:`, `logger:`, `ota:`, `captive_portal:`, or `external_components:` sections. For an M5Stack NanoC6:
 
 ```yaml
 packages:
