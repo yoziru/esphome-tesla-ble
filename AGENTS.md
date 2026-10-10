@@ -1,6 +1,6 @@
 # Build Commands
 make compile [BOARD=<board>]              # Compile firmware
-make compile_docker [BOARD=<board>]       # Compile using Docker
+make docker-compile [BOARD=<board>]       # Compile using Docker
 make validate-config [BOARD=<board>]      # Validate YAML without building
 make upload [BOARD=<board>] [HOST_SUFFIX] # Flash firmware to device
 make logs [HOST_SUFFIX]                   # View device logs
@@ -45,10 +45,10 @@ Error handling: Check pointers before use. Return bool for success/failure helpe
   components/tesla_ble_vehicle/state_text.h (dependency-free, values static_asserted against the tesla-ble protobuf headers in vehicle_state_manager.cpp)
 - Sensors defined in __init__.py SENSORS/BINARY_SENSORS/TEXT_SENSORS lists
 - Sensor values published in vehicle_state_manager.cpp update methods
-- Commands use TeslaBLEVehicle::send_command() with Command tracking
+- Commands use TeslaBLEVehicle::send_command_with_tracking() (tesla-ble OperationResult tracking)
 
 # Testing
 - make test runs C++ + Python unit tests (fast, no ESPHome/device needed). CI runs it on every PR.
-- C++: tests/test_polling_policy.cpp and tests/test_state_text.cpp (plain compiler, no framework).
+- C++: tests/test_*.cpp (plain compiler, no framework; shared CHECK harness in tests/test_helper.h).
   Add behavior-level test cases there.
 - Python: tests/test_codegen.py (stdlib-only ast checks on entity lists in __init__.py).
