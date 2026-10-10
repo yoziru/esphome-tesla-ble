@@ -689,8 +689,10 @@ void VehicleStateManager::reset_all_states() {
 // =============================================================================
 
 bool VehicleStateManager::is_asleep() const {
+    // Unknown (no state yet) counts as asleep: before the first VCSEC reply a
+    // wake request must send the wake action, not a poll that cannot wake.
     auto* sensor = get_binary_sensor("asleep");
-    return sensor ? sensor->state : true;
+    return sensor == nullptr || !sensor->has_state() || sensor->state;
 }
 
 bool VehicleStateManager::is_sentry_mode() const {
