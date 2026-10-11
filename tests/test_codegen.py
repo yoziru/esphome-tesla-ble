@@ -33,6 +33,7 @@ ENTITY_LISTS = {
     "SWITCHES": {"required": ("id", "name", "class", "setter")},
     "LOCKS": {"required": ("id", "name", "class", "setter")},
     "COVERS": {"required": ("id", "name", "class", "setter")},
+    "SELECTS": {"required": ("id", "name", "class", "options")},
     "NUMBERS": {"required": ("id", "name", "class", "setter")},
     "CLIMATE": {"required": ("id", "name", "class", "setter")},
 }
@@ -116,6 +117,29 @@ def check_sensor_wiring(sensors: dict, checks: int, failures: int):
     return checks, failures
 
 
+def check_seat_option_order(tree: ast.Module, checks: int, failures: int):
+    """Execute the Python option builder against the C++ indexing contract."""
+    canonical = ["Off", "Low heat", "Medium heat", "High heat", "Low cool", "Medium cool", "High cool", "Auto"]
+    definitions = [node for node in tree.body if
+        (isinstance(node, ast.FunctionDef) and node.name == "seat_options") or
+        (isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and
+            target.id in ("HEAT_OPTIONS", "COOL_OPTIONS") for target in node.targets))]
+    namespace = {"__builtins__": {}}
+    try:
+        exec(compile(ast.Module(body=definitions, type_ignores=[]), str(COMPONENT), "exec"), namespace)
+        for cooling, auto in ((False, False), (False, True), (True, False), (True, True)):
+            checks += 1
+            expected = canonical[:4] + (canonical[4:7] if cooling else []) + (canonical[7:] if auto else [])
+            actual = namespace["seat_options"](cooling, auto)
+            if actual != expected:
+                print(f"  FAIL seat_options({cooling}, {auto}): expected {expected}, got {actual}")
+                failures += 1
+    except Exception as error:
+        print(f"  FAIL seat option builder: {error}")
+        failures += 1
+    return checks, failures
+
+
 def main() -> int:
     tree = ast.parse(COMPONENT.read_text(encoding="utf-8"), filename=str(COMPONENT))
 
@@ -155,6 +179,7 @@ def main() -> int:
                     seen_ids[entity_id] = list_name
 
     checks, failures = check_sensor_wiring(collect_sensor_ids(tree), checks, failures)
+    checks, failures = check_seat_option_order(tree, checks, failures)
 
     if failures:
         print(f"FAILED: {failures}/{checks} checks")

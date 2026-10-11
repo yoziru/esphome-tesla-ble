@@ -9,6 +9,7 @@
 #include <esphome/components/lock/lock.h>
 #include <esphome/components/cover/cover.h>
 #include <esphome/components/climate/climate.h>
+#include <esphome/components/select/select.h>
 #include <optional>
 #include <map>
 #include <string>
@@ -76,7 +77,17 @@ public:
     void set_frunk_cover(cover::Cover* cvr) { frunk_cover_ = cvr; }
     void set_windows_cover(cover::Cover* cvr) { windows_cover_ = cvr; }
     void set_charge_port_door_cover(cover::Cover* cvr) { charge_port_door_cover_ = cvr; }
+    void set_sunroof_cover(cover::Cover* cvr) { sunroof_cover_ = cvr; }
     void set_climate(climate::Climate* clm) { climate_ = clm; }
+    void set_seat_select(int seat, select::Select* sel);
+    void set_cabin_protection_select(select::Select* sel) { cabin_protection_select_ = sel; }
+    void set_cabin_temperature_select(select::Select* sel) { cabin_temperature_select_ = sel; }
+
+    // ==========================================================================
+    // Observed seat capabilities
+    // ==========================================================================
+    int seat_cool_level(int seat) const;
+    bool seat_auto_supported(int seat) const;
     
     // ==========================================================================
     // State updates from VCSEC
@@ -94,6 +105,8 @@ public:
     void update_drive_state(const CarServer_DriveState& drive_state);
     void update_tire_pressure_state(const CarServer_TirePressureState& tire_pressure_state);
     void update_closures_state(const CarServer_ClosuresState& closures_state);
+    void update_software_update_state(const CarServer_SoftwareUpdateState& update_state,
+                                      const std::string& version);
     
     // ==========================================================================
     // Direct state updates (for specific use cases)
@@ -133,6 +146,11 @@ public:
     
 private:
     TeslaBLEVehicle* parent_;
+
+    // Climate sub-updates (called from update_climate_state)
+    void update_seat_climate_state(const CarServer_ClimateState& climate_state);
+    void update_cabin_protection_state(const CarServer_ClimateState& climate_state);
+    void update_steering_wheel_heat_mode(const CarServer_ClimateState& climate_state);
     
     // ==========================================================================
     // Sensor storage maps - sensors are stored by string ID
@@ -159,7 +177,12 @@ private:
     cover::Cover* frunk_cover_{nullptr};
     cover::Cover* windows_cover_{nullptr};
     cover::Cover* charge_port_door_cover_{nullptr};
+    cover::Cover* sunroof_cover_{nullptr};
     climate::Climate* climate_{nullptr};
+    // Seat climate selects indexed by TeslaBLE::SeatPosition value.
+    select::Select* seat_selects_[16]{};
+    select::Select* cabin_protection_select_{nullptr};
+    select::Select* cabin_temperature_select_{nullptr};
     
     // ==========================================================================
     // Internal state tracking
@@ -171,6 +194,11 @@ private:
     float current_inside_temp_{NAN};
     float target_temp_{21.0f};
     bool climate_on_{false};
+    // Seat climate indexed by TeslaBLE::SeatPosition value (-1 = not reported).
+    int seat_heat_levels_[16]{};
+    int seat_cool_levels_[16]{};
+    bool seat_auto_modes_[16]{};
+    bool seat_auto_observed_[16]{};
 
     // Cached values for estimated power calculation (V * A * phases / 1000)
     // Using NAN/optional sentinel pattern consistent with existing climate temps (NAN) and modern optional for phases.

@@ -13,7 +13,11 @@ namespace esphome {
 namespace tesla_ble_vehicle {
 
 VehicleStateManager::VehicleStateManager(TeslaBLEVehicle* parent)
-    : parent_(parent) {}
+    : parent_(parent) {
+    // -1 means "not reported yet" for seat levels.
+    std::fill(std::begin(seat_heat_levels_), std::end(seat_heat_levels_), -1);
+    std::fill(std::begin(seat_cool_levels_), std::end(seat_cool_levels_), -1);
+}
 
 // =============================================================================
 // Generic sensor setters/getters
@@ -346,7 +350,6 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
 
 void VehicleStateManager::update_climate_state(const CarServer_ClimateState& climate_state) {
     ESP_LOGD(STATE_MANAGER_TAG, "Updating climate state");
-    
     // Inside temperature (used internally for climate entity)
     if (climate_state.which_optional_inside_temp_celsius) {
         const float temp = climate_state.optional_inside_temp_celsius.inside_temp_celsius;
@@ -388,6 +391,137 @@ void VehicleStateManager::update_climate_state(const CarServer_ClimateState& cli
     // Update climate entity with current state
     if (auto* tesla_climate = static_cast<TeslaClimate*>(climate_)) {
         tesla_climate->update_state(climate_on_, current_inside_temp_, target_temp_);
+    }
+
+    update_seat_climate_state(climate_state);
+    update_cabin_protection_state(climate_state);
+    update_steering_wheel_heat_mode(climate_state);
+}
+
+void VehicleStateManager::set_seat_select(int seat, select::Select* sel) {
+    if (seat < 0 || seat >= 16) {
+        ESP_LOGW(STATE_MANAGER_TAG, "Ignoring seat select for invalid seat %d", seat);
+        return;
+    }
+    seat_selects_[seat] = sel;
+}
+
+int VehicleStateManager::seat_cool_level(int seat) const {
+    return seat >= 0 && seat < 16 ? seat_cool_levels_[seat] : -1;
+}
+
+bool VehicleStateManager::seat_auto_supported(int seat) const {
+    return seat >= 0 && seat < 16 && seat_auto_observed_[seat];
+}
+
+// Seats report each field only when fitted, so the reported value is also the
+// capability signal; the level arrays start at -1 (not reported).
+void VehicleStateManager::update_seat_climate_state(const CarServer_ClimateState& climate_state) {
+    struct SeatField {
+        pb_size_t which_heater;
+        const int32_t* heater;
+        pb_size_t which_cooler;
+        const int32_t* cooler;
+        pb_size_t which_auto;
+        const bool* auto_mode;
+        int seat;
+    };
+    const SeatField fields[] = {
+        {climate_state.which_optional_seat_heater_left, &climate_state.optional_seat_heater_left.seat_heater_left,
+         climate_state.which_optional_seat_fan_front_left, &climate_state.optional_seat_fan_front_left.seat_fan_front_left,
+         climate_state.which_optional_auto_seat_climate_left, &climate_state.optional_auto_seat_climate_left.auto_seat_climate_left,
+         static_cast<int>(TeslaBLE::SeatPosition::FRONT_LEFT)},
+        {climate_state.which_optional_seat_heater_right, &climate_state.optional_seat_heater_right.seat_heater_right,
+         climate_state.which_optional_seat_fan_front_right, &climate_state.optional_seat_fan_front_right.seat_fan_front_right,
+         climate_state.which_optional_auto_seat_climate_right, &climate_state.optional_auto_seat_climate_right.auto_seat_climate_right,
+         static_cast<int>(TeslaBLE::SeatPosition::FRONT_RIGHT)},
+        {climate_state.which_optional_seat_heater_rear_left, &climate_state.optional_seat_heater_rear_left.seat_heater_rear_left,
+         0, nullptr, 0, nullptr, static_cast<int>(TeslaBLE::SeatPosition::REAR_LEFT)},
+        {climate_state.which_optional_seat_heater_rear_right, &climate_state.optional_seat_heater_rear_right.seat_heater_rear_right,
+         0, nullptr, 0, nullptr, static_cast<int>(TeslaBLE::SeatPosition::REAR_RIGHT)},
+        {climate_state.which_optional_seat_heater_rear_center, &climate_state.optional_seat_heater_rear_center.seat_heater_rear_center,
+         0, nullptr, 0, nullptr, static_cast<int>(TeslaBLE::SeatPosition::REAR_CENTER)},
+        {climate_state.which_optional_seat_heater_rear_left_back, &climate_state.optional_seat_heater_rear_left_back.seat_heater_rear_left_back,
+         0, nullptr, 0, nullptr, static_cast<int>(TeslaBLE::SeatPosition::REAR_LEFT_BACK)},
+        {climate_state.which_optional_seat_heater_rear_right_back, &climate_state.optional_seat_heater_rear_right_back.seat_heater_rear_right_back,
+         0, nullptr, 0, nullptr, static_cast<int>(TeslaBLE::SeatPosition::REAR_RIGHT_BACK)},
+        {climate_state.which_optional_seat_heater_third_row_left, &climate_state.optional_seat_heater_third_row_left.seat_heater_third_row_left,
+         0, nullptr, 0, nullptr, static_cast<int>(TeslaBLE::SeatPosition::THIRD_ROW_LEFT)},
+        {climate_state.which_optional_seat_heater_third_row_right, &climate_state.optional_seat_heater_third_row_right.seat_heater_third_row_right,
+         0, nullptr, 0, nullptr, static_cast<int>(TeslaBLE::SeatPosition::THIRD_ROW_RIGHT)},
+    };
+
+    for (const auto& field : fields) {
+        auto* seat_select = seat_selects_[field.seat];
+        if (seat_select == nullptr) {
+            continue;
+        }
+        auto* tesla_select = static_cast<TeslaSeatClimateSelect*>(seat_select);
+        const bool cooling_supported = tesla_select->cooling_supported();
+        const bool auto_supported = tesla_select->auto_supported();
+        if (field.which_heater) {
+            seat_heat_levels_[field.seat] = *field.heater;
+        }
+        if (field.which_cooler) {
+            seat_cool_levels_[field.seat] = *field.cooler;
+        }
+        if (field.which_auto) {
+            seat_auto_observed_[field.seat] = true;
+            seat_auto_modes_[field.seat] = *field.auto_mode;
+        }
+        const int index = seat_climate_option_index(seat_heat_levels_[field.seat], seat_cool_levels_[field.seat],
+                                                    seat_auto_modes_[field.seat], cooling_supported, auto_supported);
+        if (index >= 0 && seat_select->active_index() != static_cast<size_t>(index) &&
+            seat_select->has_index(static_cast<size_t>(index))) {
+            seat_select->publish_state(static_cast<size_t>(index));
+        }
+    }
+}
+
+void VehicleStateManager::update_cabin_protection_state(const CarServer_ClimateState& climate_state) {
+    if (climate_state.which_optional_cabin_overheat_protection) {
+        const int mode = climate_state.optional_cabin_overheat_protection.cabin_overheat_protection;
+        if (cabin_protection_select_ != nullptr && mode >= 0 && mode <= 2 &&
+            cabin_protection_select_->active_index() != static_cast<size_t>(mode) &&
+            cabin_protection_select_->has_index(static_cast<size_t>(mode))) {
+            cabin_protection_select_->publish_state(static_cast<size_t>(mode));
+        }
+    }
+    if (climate_state.which_optional_cop_activation_temperature) {
+        const int index = climate_state.optional_cop_activation_temperature.cop_activation_temperature - 1;
+        if (cabin_temperature_select_ != nullptr && index >= 0 && index <= 2 &&
+            cabin_temperature_select_->active_index() != static_cast<size_t>(index) &&
+            cabin_temperature_select_->has_index(static_cast<size_t>(index))) {
+            cabin_temperature_select_->publish_state(static_cast<size_t>(index));
+        }
+    }
+}
+
+// The vehicle reports Auto/Low/High separately from the on/off heater flag.
+void VehicleStateManager::update_steering_wheel_heat_mode(const CarServer_ClimateState& climate_state) {
+    if (climate_state.which_optional_auto_steering_wheel_heat &&
+        climate_state.optional_auto_steering_wheel_heat.auto_steering_wheel_heat) {
+        publish_text_sensor("steering_wheel_heat_mode", "Auto");
+        return;
+    }
+    if (climate_state.which_optional_steering_wheel_heat_level) {
+        switch (climate_state.optional_steering_wheel_heat_level.steering_wheel_heat_level) {
+            case CarServer_StwHeatLevel_StwHeatLevel_Off:
+                publish_text_sensor("steering_wheel_heat_mode", "Off");
+                return;
+            case CarServer_StwHeatLevel_StwHeatLevel_Low:
+                publish_text_sensor("steering_wheel_heat_mode", "Low");
+                return;
+            case CarServer_StwHeatLevel_StwHeatLevel_High:
+                publish_text_sensor("steering_wheel_heat_mode", "High");
+                return;
+            default:
+                break;
+        }
+    }
+    if (climate_state.which_optional_steering_wheel_heater) {
+        publish_text_sensor("steering_wheel_heat_mode",
+                            climate_state.optional_steering_wheel_heater.steering_wheel_heater ? "On" : "Off");
     }
 }
 
@@ -503,10 +637,14 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
         windows_cover_->publish_state();
     }
     
-    // Sunroof (any percent open > 0 means open)
-    if (closures_state.which_optional_sun_roof_percent_open) {
-        const bool sunroof_open = closures_state.optional_sun_roof_percent_open.sun_roof_percent_open > 0;
-        publish_binary_sensor("sunroof", sunroof_open);
+    // Sunroof (percent open; the cover publishes absolute position)
+    if (closures_state.which_optional_sun_roof_percent_open && sunroof_cover_ != nullptr) {
+        const int percent = closures_state.optional_sun_roof_percent_open.sun_roof_percent_open;
+        const float position = static_cast<float>(percent < 0 ? 0 : percent > 100 ? 100 : percent) / 100.0f;
+        if (sunroof_cover_->position != position) {
+            sunroof_cover_->position = position;
+            sunroof_cover_->publish_state();
+        }
     }
     
     // Sentry mode - sync switch state from vehicle
@@ -529,8 +667,17 @@ void VehicleStateManager::update_closures_state(const CarServer_ClosuresState& c
 // Direct state update methods
 // =============================================================================
 
-void VehicleStateManager::update_asleep(bool asleep) {
-    if (publish_binary_sensor("asleep", asleep)) {
+void VehicleStateManager::update_software_update_state(const CarServer_SoftwareUpdateState& update_state,
+                                                       const std::string& version) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Updating software update state");
+    if (update_state.has_status) {
+        publish_text_sensor("software_update",
+                            TeslaBLE::state_text::software_update_status(update_state.status.which_type));
+    }
+    publish_text_sensor("software_update_version", version);
+}
+
+void VehicleStateManager::update_asleep(bool asleep) {    if (publish_binary_sensor("asleep", asleep)) {
         ESP_LOGI(STATE_MANAGER_TAG, "Vehicle sleep state: %s", asleep ? "ASLEEP" : "AWAKE");
     }
 }

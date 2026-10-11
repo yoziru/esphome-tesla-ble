@@ -1,5 +1,4 @@
 #include "tesla_ble_vehicle.h"
-#include "command_warning_policy.h"
 #include <client.h>
 #include <cinttypes>
 #include <cstring>
@@ -52,7 +51,6 @@ void TeslaBLEVehicle::setup() {
   write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
   initialize_managers();
   restore_charging_amps_max_();
-  configure_pending_sensors();
 
   if (vin_.empty()) {
     ESP_LOGE(TAG, "VIN not configured - component will not function properly");
@@ -76,7 +74,6 @@ void TeslaBLEVehicle::initialize_managers() {
   TeslaBLE::set_log_callback(tesla_ble_log_callback);
   vehicle_ =
       std::make_shared<TeslaBLE::Vehicle>(ble_adapter_, storage_adapter_);
-  state_manager_ = std::make_unique<VehicleStateManager>(this);
 
   ESP_LOGD(TAG, "Wiring up callbacks...");
 
@@ -89,82 +86,37 @@ void TeslaBLEVehicle::initialize_managers() {
   });
 
   vehicle_->set_vehicle_status_callback([this](const VCSEC_VehicleStatus &s) {
-    if (state_manager_)
-      state_manager_->update_vehicle_status(s);
+    state_manager_.update_vehicle_status(s);
   });
 
   vehicle_->set_charge_state_callback([this](const CarServer_ChargeState &s) {
-    if (state_manager_)
-      state_manager_->update_charge_state(s);
+    state_manager_.update_charge_state(s);
   });
 
   vehicle_->set_climate_state_callback([this](const CarServer_ClimateState &s) {
-    if (state_manager_)
-      state_manager_->update_climate_state(s);
+    state_manager_.update_climate_state(s);
   });
 
   vehicle_->set_drive_state_callback([this](const CarServer_DriveState &s) {
-    if (state_manager_)
-      state_manager_->update_drive_state(s);
+    state_manager_.update_drive_state(s);
   });
 
   vehicle_->set_tire_pressure_state_callback(
       [this](const CarServer_TirePressureState &s) {
-        if (state_manager_)
-          state_manager_->update_tire_pressure_state(s);
+        state_manager_.update_tire_pressure_state(s);
       });
 
   vehicle_->set_closures_state_callback(
       [this](const CarServer_ClosuresState &s) {
-        if (state_manager_)
-          state_manager_->update_closures_state(s);
+        state_manager_.update_closures_state(s);
+      });
+
+  vehicle_->set_software_update_state_callback(
+      [this](const CarServer_SoftwareUpdateState &s, const std::string &version) {
+        state_manager_.update_software_update_state(s, version);
       });
 
   ESP_LOGD(TAG, "All components initialized");
-}
-
-void TeslaBLEVehicle::configure_pending_sensors() {
-  if (!state_manager_) {
-    ESP_LOGE(TAG, "State manager not available");
-    return;
-  }
-
-  for (const auto &pair : pending_binary_sensors_)
-    state_manager_->set_binary_sensor(pair.first, pair.second);
-  for (const auto &pair : pending_sensors_)
-    state_manager_->set_sensor(pair.first, pair.second);
-  for (const auto &pair : pending_text_sensors_)
-    state_manager_->set_text_sensor(pair.first, pair.second);
-
-  if (pending_charging_switch_)
-    state_manager_->set_charging_switch(pending_charging_switch_);
-  if (pending_sentry_mode_switch_)
-    state_manager_->set_sentry_mode_switch(pending_sentry_mode_switch_);
-  if (pending_steering_wheel_heat_switch_)
-    state_manager_->set_steering_wheel_heat_switch(
-        pending_steering_wheel_heat_switch_);
-  if (pending_charging_amps_number_)
-    state_manager_->set_charging_amps_number(pending_charging_amps_number_);
-  if (pending_charging_limit_number_)
-    state_manager_->set_charging_limit_number(pending_charging_limit_number_);
-  if (pending_doors_lock_)
-    state_manager_->set_doors_lock(pending_doors_lock_);
-  if (pending_charge_port_latch_lock_)
-    state_manager_->set_charge_port_latch_lock(pending_charge_port_latch_lock_);
-  if (pending_trunk_cover_)
-    state_manager_->set_trunk_cover(pending_trunk_cover_);
-  if (pending_frunk_cover_)
-    state_manager_->set_frunk_cover(pending_frunk_cover_);
-  if (pending_windows_cover_)
-    state_manager_->set_windows_cover(pending_windows_cover_);
-  if (pending_charge_port_door_cover_)
-    state_manager_->set_charge_port_door_cover(pending_charge_port_door_cover_);
-  if (pending_climate_)
-    state_manager_->set_climate(pending_climate_);
-
-  ESP_LOGD(TAG, "Configured %u binary, %u numeric, %u text sensors",
-           (unsigned) pending_binary_sensors_.size(), (unsigned) pending_sensors_.size(),
-           (unsigned) pending_text_sensors_.size());
 }
 
 void TeslaBLEVehicle::loop() {
@@ -206,15 +158,15 @@ void TeslaBLEVehicle::update() {
   }
 
   // Infotainment Polling - use faster interval when vehicle is active
-  const bool is_asleep = state_manager_->is_asleep();
+  const bool is_asleep = state_manager_.is_asleep();
   // Only sentry mode and active charging warrant keeping the car awake. A car
   // that is merely left unlocked, or reports user presence because a phone is
   // in range, can still fall asleep on its own and must be allowed to do so
   // (issues #201/#202). To add faster polling for unlocked/user-present later,
   // extend the decision inputs here (and gate it behind an opt-in config).
   TeslaBLE::InfotainmentPollDecision decision =
-      poll_policy_.update(now, is_asleep, state_manager_->is_charging(),
-                          state_manager_->is_sentry_mode());
+      poll_policy_.update(now, is_asleep, state_manager_.is_charging(),
+                          state_manager_.is_sentry_mode());
 
   if (poll_policy_.should_poll(now, decision.interval_ms)) {
     ESP_LOGI(TAG, "Polling Infotainment (%s)",
@@ -231,15 +183,11 @@ void TeslaBLEVehicle::dump_config() {
   ESP_LOGCONFIG(TAG, "  VIN: %s", vin_.empty() ? "Not set" : vin_.c_str());
   ESP_LOGCONFIG(TAG, "  Role: %s", role_.c_str());
   ESP_LOGCONFIG(TAG, "  Max Charging Amps: %d",
-                state_manager_ ? state_manager_->get_charging_amps_max()
-                               : DEFAULT_CHARGING_AMPS_MAX);
+                state_manager_.get_charging_amps_max());
   ESP_LOGCONFIG(TAG, "  Polling: VCSEC=%" PRIu32 "ms, Awake=%" PRIu32
                      "ms, Active=%" PRIu32 "ms",
                  vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
                  poll_policy_.active_interval_ms());
-  ESP_LOGCONFIG(TAG, "  Sensors: %u binary, %u numeric, %u text",
-                (unsigned) pending_binary_sensors_.size(), (unsigned) pending_sensors_.size(),
-                (unsigned) pending_text_sensors_.size());
 }
 
 // =============================================================================
@@ -275,21 +223,18 @@ void TeslaBLEVehicle::set_charging_amps_max(int amps_max) {
 
   configured_charging_amps_max_ = amps_max;
 
-  if (state_manager_) {
-    state_manager_->set_charging_amps_max(amps_max);
-  }
+  state_manager_.set_charging_amps_max(amps_max);
 }
 
 void TeslaBLEVehicle::restore_charging_amps_max_() {
-  if (!state_manager_) return;
   auto pref = global_preferences->make_preference<int32_t>(charging_amps_max_pref_hash_());
   int32_t stored = 0;
   if (pref.load(&stored) && stored > 0 && stored <= 80) {
     ESP_LOGI(TAG, "Restored charging amps max from NVS: %" PRId32 " A", stored);
-    state_manager_->set_charging_amps_max(stored);
+    state_manager_.set_charging_amps_max(stored);
     return;
   }
-  state_manager_->set_charging_amps_max(configured_charging_amps_max_);
+  state_manager_.set_charging_amps_max(configured_charging_amps_max_);
 }
 
 uint32_t TeslaBLEVehicle::charging_amps_max_pref_hash_() const {
@@ -336,23 +281,17 @@ void TeslaBLEVehicle::set_infotainment_sleep_timeout(uint32_t interval_ms) {
 
 void TeslaBLEVehicle::set_binary_sensor(const std::string &id,
                                         binary_sensor::BinarySensor *sensor) {
-  pending_binary_sensors_[id] = sensor;
-  if (state_manager_)
-    state_manager_->set_binary_sensor(id, sensor);
+  state_manager_.set_binary_sensor(id, sensor);
 }
 
 void TeslaBLEVehicle::set_sensor(const std::string &id,
                                  sensor::Sensor *sensor) {
-  pending_sensors_[id] = sensor;
-  if (state_manager_)
-    state_manager_->set_sensor(id, sensor);
+  state_manager_.set_sensor(id, sensor);
 }
 
 void TeslaBLEVehicle::set_text_sensor(const std::string &id,
                                       text_sensor::TextSensor *sensor) {
-  pending_text_sensors_[id] = sensor;
-  if (state_manager_)
-    state_manager_->set_text_sensor(id, sensor);
+  state_manager_.set_text_sensor(id, sensor);
 }
 
 // =============================================================================
@@ -360,33 +299,23 @@ void TeslaBLEVehicle::set_text_sensor(const std::string &id,
 // =============================================================================
 
 void TeslaBLEVehicle::set_charging_switch(switch_::Switch *sw) {
-  pending_charging_switch_ = sw;
-  if (state_manager_)
-    state_manager_->set_charging_switch(sw);
+  state_manager_.set_charging_switch(sw);
 }
 
 void TeslaBLEVehicle::set_steering_wheel_heat_switch(switch_::Switch *sw) {
-  pending_steering_wheel_heat_switch_ = sw;
-  if (state_manager_)
-    state_manager_->set_steering_wheel_heat_switch(sw);
+  state_manager_.set_steering_wheel_heat_switch(sw);
 }
 
 void TeslaBLEVehicle::set_sentry_mode_switch(switch_::Switch *sw) {
-  pending_sentry_mode_switch_ = sw;
-  if (state_manager_)
-    state_manager_->set_sentry_mode_switch(sw);
+  state_manager_.set_sentry_mode_switch(sw);
 }
 
 void TeslaBLEVehicle::set_charging_amps_number(number::Number *number) {
-  pending_charging_amps_number_ = number;
-  if (state_manager_)
-    state_manager_->set_charging_amps_number(number);
+  state_manager_.set_charging_amps_number(number);
 }
 
 void TeslaBLEVehicle::set_charging_limit_number(number::Number *number) {
-  pending_charging_limit_number_ = number;
-  if (state_manager_)
-    state_manager_->set_charging_limit_number(number);
+  state_manager_.set_charging_limit_number(number);
 }
 
 // =============================================================================
@@ -394,45 +323,51 @@ void TeslaBLEVehicle::set_charging_limit_number(number::Number *number) {
 // =============================================================================
 
 void TeslaBLEVehicle::set_doors_lock(lock::Lock *lck) {
-  pending_doors_lock_ = lck;
-  if (state_manager_)
-    state_manager_->set_doors_lock(lck);
+  state_manager_.set_doors_lock(lck);
 }
 
 void TeslaBLEVehicle::set_charge_port_latch_lock(lock::Lock *lck) {
-  pending_charge_port_latch_lock_ = lck;
-  if (state_manager_)
-    state_manager_->set_charge_port_latch_lock(lck);
+  state_manager_.set_charge_port_latch_lock(lck);
 }
 
 void TeslaBLEVehicle::set_trunk_cover(cover::Cover *cvr) {
-  pending_trunk_cover_ = cvr;
-  if (state_manager_)
-    state_manager_->set_trunk_cover(cvr);
+  state_manager_.set_trunk_cover(cvr);
 }
 
 void TeslaBLEVehicle::set_frunk_cover(cover::Cover *cvr) {
-  pending_frunk_cover_ = cvr;
-  if (state_manager_)
-    state_manager_->set_frunk_cover(cvr);
+  state_manager_.set_frunk_cover(cvr);
 }
 
 void TeslaBLEVehicle::set_windows_cover(cover::Cover *cvr) {
-  pending_windows_cover_ = cvr;
-  if (state_manager_)
-    state_manager_->set_windows_cover(cvr);
+  state_manager_.set_windows_cover(cvr);
 }
 
 void TeslaBLEVehicle::set_charge_port_door_cover(cover::Cover *cvr) {
-  pending_charge_port_door_cover_ = cvr;
-  if (state_manager_)
-    state_manager_->set_charge_port_door_cover(cvr);
+  state_manager_.set_charge_port_door_cover(cvr);
+}
+
+void TeslaBLEVehicle::set_sunroof_cover(cover::Cover *cvr) {
+  state_manager_.set_sunroof_cover(cvr);
+}
+
+void TeslaBLEVehicle::set_seat_select(int seat, select::Select *sel) {
+  if (seat < 0 || seat >= 16) {
+    ESP_LOGW(TAG, "Ignoring seat select for invalid seat %d", seat);
+    return;
+  }
+  state_manager_.set_seat_select(seat, sel);
+}
+
+void TeslaBLEVehicle::set_cabin_protection_select(select::Select *sel) {
+  state_manager_.set_cabin_protection_select(sel);
+}
+
+void TeslaBLEVehicle::set_cabin_temperature_select(select::Select *sel) {
+  state_manager_.set_cabin_temperature_select(sel);
 }
 
 void TeslaBLEVehicle::set_climate(climate::Climate *clm) {
-  pending_climate_ = clm;
-  if (state_manager_)
-    state_manager_->set_climate(clm);
+  state_manager_.set_climate(clm);
 }
 
 // =============================================================================
@@ -473,24 +408,24 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
                                             TeslaBLE::OperationResult result) {
   std::string value = name;
 
-  const auto outcome = result.is_success()
-                           ? CommandOutcome::SUCCESS
-                           : result.is_skipped() ? CommandOutcome::SKIPPED : CommandOutcome::FAILED;
-  if (outcome == CommandOutcome::SUCCESS) {
+  if (result.is_success()) {
     value += " → Success";
-  } else if (outcome == CommandOutcome::SKIPPED) {
+  } else if (result.is_skipped()) {
     value += " → Skipped";
   } else {
-    value += " → Failed";
+    value += result.error() && result.error()->may_have_succeeded() ? " → Outcome unknown" : " → Failed";
     if (result.error()) {
       value += ": ";
       value += result.error()->message();
     }
     ESP_LOGW(TAG, "Command failed: %s", value.c_str());
   }
-  apply_command_warning(*this, outcome, [this]() {
-    this->cancel_timeout(COMMAND_WARNING_TIMEOUT);
-  });
+  if (result.is_failure()) {
+    this->status_momentary_warning("command-failed-warning");
+  } else {
+    this->cancel_timeout("command-failed-warning");
+    this->status_clear_warning();
+  }
 
   if (last_command_sensor_)
     last_command_sensor_->publish_state(value);
@@ -521,9 +456,9 @@ int TeslaBLEVehicle::wake_vehicle() {
   if (!vehicle_)
     return -1;
 
-  if (state_manager_ && !state_manager_->is_asleep()) {
+  if (!state_manager_.is_asleep()) {
     ESP_LOGI(TAG, "Vehicle already awake - sending VCSEC poll instead");
-    vehicle_->vcsec_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+    track("VCSEC Poll", [this](auto cb) { vehicle_->vcsec_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP, std::move(cb)); });
     return 0;
   }
 
@@ -577,6 +512,7 @@ void TeslaBLEVehicle::force_update() {
   if (vehicle_) {
     vehicle_->vcsec_poll();
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+    vehicle_->software_update_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
   }
 }
 
@@ -592,8 +528,7 @@ int TeslaBLEVehicle::set_charging_state(bool charging) {
       charging ? "Start Charging" : "Stop Charging",
       [this, charging](auto cb) { vehicle_->set_charging_state(charging, std::move(cb)); },
       [this, charging](bool succeeded) {
-        const auto decision = control_state_decision(ControlStateCommand::CHARGING_STATE, succeeded);
-        if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_control_state(charging);
+        if (succeeded) state_manager_.update_charging_control_state(charging);
       });
   return 0;
 }
@@ -606,7 +541,7 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
     return 0;
   }
 
-  int max_amps = state_manager_->get_charging_amps_max();
+  int max_amps = state_manager_.get_charging_amps_max();
   if (amps > max_amps) {
     ESP_LOGW(TAG, "Requested amps (%d) exceeds maximum (%d), clamping", amps,
              max_amps);
@@ -617,9 +552,8 @@ int TeslaBLEVehicle::set_charging_amps(int amps) {
   track("Set Charging Amps",
         [this, clamped](auto cb) { vehicle_->set_charging_amps(clamped, std::move(cb)); },
         [this, clamped](bool succeeded) {
-          const auto decision = control_state_decision(ControlStateCommand::SET_AMPS, succeeded);
-          if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_amps(static_cast<float>(clamped));
-          if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_amps();
+          if (succeeded) state_manager_.update_charging_amps(static_cast<float>(clamped));
+          else state_manager_.republish_charging_amps();
         });
   return clamped;
 }
@@ -635,9 +569,8 @@ int TeslaBLEVehicle::set_charging_limit(int limit) {
   track("Set Charging Limit",
         [this, limit](auto cb) { vehicle_->set_charging_limit(limit, std::move(cb)); },
         [this, limit](bool succeeded) {
-          const auto decision = control_state_decision(ControlStateCommand::SET_LIMIT, succeeded);
-          if (decision.publish_requested_state && state_manager_) state_manager_->update_charging_limit(static_cast<float>(limit));
-          if (decision.republish_confirmed_number_state && state_manager_) state_manager_->republish_charging_limit();
+          if (succeeded) state_manager_.update_charging_limit(static_cast<float>(limit));
+          else state_manager_.republish_charging_limit();
         });
   return 0;
 }
@@ -733,9 +666,60 @@ void TeslaBLEVehicle::set_steering_wheel_heat(bool enable) {
   track(enable ? "Steering Heat On" : "Steering Heat Off",
         [this, enable](auto cb) { vehicle_->set_steering_wheel_heat(enable, std::move(cb)); },
         [this, enable](bool succeeded) {
-          const auto decision = control_state_decision(ControlStateCommand::SET_STEERING_WHEEL_HEAT, succeeded);
-          if (decision.publish_requested_state && state_manager_) state_manager_->update_steering_wheel_heat(enable);
+          if (succeeded) state_manager_.update_steering_wheel_heat(enable);
         });
+}
+
+void TeslaBLEVehicle::set_seat_climate(int seat, int level, bool cooling) {
+  if (!vehicle_)
+    return;
+
+  const auto position = static_cast<TeslaBLE::SeatPosition>(seat);
+  const bool cooling_supported = state_manager_.seat_cool_level(seat) >= 0;
+  track("Set Seat Climate", [this, position, level, cooling, cooling_supported](auto cb) {
+    vehicle_->set_seat_climate(position, level, cooling, cooling_supported, std::move(cb));
+  });
+}
+
+void TeslaBLEVehicle::set_seat_auto(int seat, bool enable) {
+  if (!vehicle_)
+    return;
+  if (!state_manager_.seat_auto_supported(seat)) {
+    ESP_LOGW(TAG, "Seat Auto support has not been observed for seat %d", seat);
+    return;
+  }
+
+  const auto position = static_cast<TeslaBLE::SeatPosition>(seat);
+  ESP_LOGI(TAG, "Seat %d auto climate %s requested", seat, enable ? "ON" : "OFF");
+  track(enable ? "Seat Auto On" : "Seat Auto Off",
+        [this, position, enable](auto cb) { vehicle_->set_auto_seat_climate(position, enable, std::move(cb)); });
+}
+
+void TeslaBLEVehicle::set_cabin_overheat_protection(int mode) {
+  if (!vehicle_)
+    return;
+
+  ESP_LOGI(TAG, "Cabin overheat protection mode %d requested", mode);
+  track("Cabin Overheat Protection",
+        [this, mode](auto cb) { vehicle_->set_cabin_overheat_protection(mode, std::move(cb)); });
+}
+
+void TeslaBLEVehicle::set_cabin_overheat_temperature(int level) {
+  if (!vehicle_)
+    return;
+
+  ESP_LOGI(TAG, "Cabin overheat protection temperature level %d requested", level);
+  track("Cabin Overheat Temp",
+        [this, level](auto cb) { vehicle_->set_cabin_overheat_protection_temp(level, std::move(cb)); });
+}
+
+void TeslaBLEVehicle::set_sunroof_position(int percent) {
+  if (!vehicle_)
+    return;
+
+  ESP_LOGI(TAG, "Sunroof position %d%% requested", percent);
+  track("Set Sunroof Position",
+        [this, percent](auto cb) { vehicle_->set_sunroof_position(percent, std::move(cb)); });
 }
 
 // =============================================================================
@@ -752,13 +736,22 @@ void TeslaBLEVehicle::honk_horn() {
   track("Honk Horn", [this](auto cb) { vehicle_->honk_horn(std::move(cb)); });
 }
 
+void TeslaBLEVehicle::install_software_update() {
+  ESP_LOGI(TAG, "Install software update requested");
+  track("Schedule Software Update", [this](auto cb) { vehicle_->schedule_software_update(0, std::move(cb)); });
+}
+
+void TeslaBLEVehicle::cancel_software_update() {
+  ESP_LOGI(TAG, "Cancel software update requested");
+  track("Cancel Software Update", [this](auto cb) { vehicle_->cancel_software_update(std::move(cb)); });
+}
+
 void TeslaBLEVehicle::set_sentry_mode(bool enable) {
   ESP_LOGI(TAG, "Sentry mode %s requested", enable ? "ON" : "OFF");
   track(enable ? "Sentry On" : "Sentry Off",
         [this, enable](auto cb) { vehicle_->set_sentry_mode(enable, std::move(cb)); },
         [this, enable](bool succeeded) {
-          const auto decision = control_state_decision(ControlStateCommand::SET_SENTRY_MODE, succeeded);
-          if (decision.publish_requested_state && state_manager_) state_manager_->update_sentry_mode(enable);
+          if (succeeded) state_manager_.update_sentry_mode(enable);
         });
 }
 
@@ -827,6 +820,8 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event,
   }
 
   case ESP_GATTC_REG_FOR_NOTIFY_EVT:
+    if (param->reg_for_notify.handle != this->read_handle_)
+      break;
     if (param->reg_for_notify.status != ESP_GATT_OK) {
       ESP_LOGE(TAG, "Failed to register for notifications");
       break;
@@ -838,7 +833,8 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event,
     break;
 
   case ESP_GATTC_NOTIFY_EVT: {
-    if (param->notify.conn_id != this->parent()->get_conn_id())
+    if (param->notify.conn_id != this->parent()->get_conn_id() ||
+        param->notify.handle != this->read_handle_)
       break;
 
     std::vector<unsigned char> data(
@@ -880,9 +876,7 @@ void TeslaBLEVehicle::handle_connection_lost() {
   if (ble_adapter_)
     ble_adapter_->clear_queues();
 
-  cancel_command_warning([this]() {
-    this->cancel_timeout(COMMAND_WARNING_TIMEOUT);
-  });
+  this->cancel_timeout("command-failed-warning");
 
   last_vcsec_poll_ = 0;
   poll_policy_.reset();
@@ -1031,6 +1025,62 @@ void TeslaChargePortDoorCover::control(const cover::CoverCall &call) {
       parent_->close_charge_port();
     }
   }
+}
+
+cover::CoverTraits TeslaSunroofCover::get_traits() {
+  auto traits = cover::CoverTraits();
+  traits.set_supports_position(true);
+  traits.set_supports_tilt(false);
+  traits.set_supports_stop(false);
+  traits.set_is_assumed_state(false);
+  return traits;
+}
+
+void TeslaSunroofCover::control(const cover::CoverCall &call) {
+  if (!parent_)
+    return;
+
+  if (call.get_position().has_value()) {
+    const float pos = call.get_position().value();
+    int percent = static_cast<int>(pos * 100.0f + 0.5f);
+    if (percent < 0)
+      percent = 0;
+    if (percent > 100)
+      percent = 100;
+    parent_->set_sunroof_position(percent);
+  }
+}
+
+// =============================================================================
+// Select implementations
+// =============================================================================
+
+void TeslaSeatClimateSelect::control(size_t index) {
+  if (!parent_)
+    return;
+
+  const auto selection = seat_climate_selection(index, cooling_supported_, auto_supported_);
+  if (!selection.valid) {
+    ESP_LOGW(TAG, "Ignoring unsupported seat climate option %u", (unsigned) index);
+    return;
+  }
+  if (selection.auto_mode) {
+    parent_->set_seat_auto(seat_, true);
+  } else {
+    parent_->set_seat_climate(seat_, selection.level, selection.cooling);
+  }
+}
+
+void TeslaCabinProtectionSelect::control(size_t index) {
+  if (!parent_ || index > 2)
+    return;
+  parent_->set_cabin_overheat_protection(static_cast<int>(index));
+}
+
+void TeslaCabinTemperatureSelect::control(size_t index) {
+  if (!parent_ || index > 2)
+    return;
+  parent_->set_cabin_overheat_temperature(static_cast<int>(index) + 1);
 }
 
 // =============================================================================

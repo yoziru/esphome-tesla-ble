@@ -26,6 +26,17 @@ void BleAdapterImpl::disconnect() {
 
 bool BleAdapterImpl::write(const std::vector<uint8_t>& data) {
     if (!parent_->is_connected()) return false;
+
+    // Whole-frame admission: reject the frame rather than start one that does
+    // not fit, so the queue never holds a partial frame and memory stays
+    // bounded on a sick link. A rejected write surfaces to the library as a
+    // failed attempt (ambiguous if an earlier copy was accepted).
+    const size_t chunks = (data.size() + BLOCK_LENGTH - 1) / BLOCK_LENGTH;
+    if (write_queue_.size() + chunks > MAX_TX_BACKLOG_CHUNKS) {
+        ESP_LOGW(ADAPTER_TAG, "TX backlog full (%u queued + %u new chunks) - rejecting frame",
+                 (unsigned) write_queue_.size(), (unsigned) chunks);
+        return false;
+    }
     
     ESP_LOGV(ADAPTER_TAG, "BLE TX: %s", TeslaBLE::format_hex(data.data(), data.size()).c_str());
     

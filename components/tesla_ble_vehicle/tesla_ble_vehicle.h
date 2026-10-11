@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <map>
 #include <string>
 #include <functional>
 #include <esphome/components/ble_client/ble_client.h>
@@ -15,13 +14,14 @@
 #include <esphome/components/lock/lock.h>
 #include <esphome/components/cover/cover.h>
 #include <esphome/components/climate/climate.h>
+#include <esphome/components/select/select.h>
 #include <esphome/core/component.h>
 #include <esphome/core/automation.h>
 #include <esphome/core/preferences.h>
 
 #include "ble_adapter_impl.h"
-#include "control_state_policy.h"
 #include "connection_reset_policy.h"
+#include "seat_climate_policy.h"
 #include "storage_adapter_impl.h"
 #include <polling_policy.h>
 #include <vehicle.h>
@@ -109,7 +109,11 @@ public:
     void set_frunk_cover(cover::Cover *cvr);
     void set_windows_cover(cover::Cover *cvr);
     void set_charge_port_door_cover(cover::Cover *cvr);
+    void set_sunroof_cover(cover::Cover *cvr);
     void set_climate(climate::Climate *clm);
+    void set_seat_select(int seat, select::Select *sel);
+    void set_cabin_protection_select(select::Select *sel);
+    void set_cabin_temperature_select(select::Select *sel);
 
     // ==========================================================================
     // Button setters
@@ -150,10 +154,17 @@ public:
     void set_bioweapon_mode(bool enable);
     void set_preconditioning_max(bool enable);  // Defrost
     void set_steering_wheel_heat(bool enable);
+    void set_seat_climate(int seat, int level, bool cooling);
+    void set_seat_auto(int seat, bool enable);
+    void set_cabin_overheat_protection(int mode);  // 0=Off, 1=On, 2=Fan only
+    void set_cabin_overheat_temperature(int level);  // 1=Low, 2=Medium, 3=High
+    void set_sunroof_position(int percent);
     
     // Vehicle controls (Infotainment)
     void flash_lights();
     void honk_horn();
+    void install_software_update();
+    void cancel_software_update();
     void set_sentry_mode(bool enable);
     void vent_windows();
     void close_windows();
@@ -168,7 +179,6 @@ public:
 private:
     // Initialization helpers
     void initialize_managers();
-    void configure_pending_sensors();
 
     // Connection handlers
     void handle_connection_established();
@@ -178,7 +188,7 @@ private:
     std::shared_ptr<BleAdapterImpl> ble_adapter_;
     std::shared_ptr<StorageAdapterImpl> storage_adapter_;
     std::shared_ptr<::TeslaBLE::Vehicle> vehicle_;
-    std::unique_ptr<VehicleStateManager> state_manager_;
+    VehicleStateManager state_manager_{this};
 
     // Configuration
     std::string vin_;
@@ -199,35 +209,6 @@ private:
     uint16_t read_handle_{0};
     uint16_t write_handle_{0};
 
-    // ==========================================================================
-    // Pending sensors (stored before state manager is initialized)
-    // ==========================================================================
-    std::map<std::string, binary_sensor::BinarySensor*> pending_binary_sensors_;
-    std::map<std::string, sensor::Sensor*> pending_sensors_;
-    std::map<std::string, text_sensor::TextSensor*> pending_text_sensors_;
-    
-    // Pending switches
-    switch_::Switch *pending_charging_switch_{nullptr};
-    switch_::Switch *pending_steering_wheel_heat_switch_{nullptr};
-    switch_::Switch *pending_sentry_mode_switch_{nullptr};
-    
-    // Pending numbers
-    number::Number *pending_charging_amps_number_{nullptr};
-    number::Number *pending_charging_limit_number_{nullptr};
-    
-    // Pending locks
-    lock::Lock *pending_doors_lock_{nullptr};
-    lock::Lock *pending_charge_port_latch_lock_{nullptr};
-    
-    // Pending covers
-    cover::Cover *pending_trunk_cover_{nullptr};
-    cover::Cover *pending_frunk_cover_{nullptr};
-    cover::Cover *pending_windows_cover_{nullptr};
-    cover::Cover *pending_charge_port_door_cover_{nullptr};
-    
-    // Pending climate
-    climate::Climate *pending_climate_{nullptr};
-    
     std::string last_rx_hex_;
 
     // Fallback until the vehicle reports its maximum.
@@ -278,6 +259,8 @@ DEFINE_TESLA_BUTTON(TeslaRegenerateKeyButton, regenerate_key)
 DEFINE_TESLA_BUTTON(TeslaForceUpdateButton, force_update)
 DEFINE_TESLA_BUTTON(TeslaFlashLightsButton, flash_lights)
 DEFINE_TESLA_BUTTON(TeslaHonkHornButton, honk_horn)
+DEFINE_TESLA_BUTTON(TeslaSoftwareUpdateInstallButton, install_software_update)
+DEFINE_TESLA_BUTTON(TeslaSoftwareUpdateCancelButton, cancel_software_update)
 DEFINE_TESLA_BUTTON(TeslaUnlatchDriverDoorButton, unlatch_driver_door)
 
 // =============================================================================
@@ -353,6 +336,45 @@ protected:
 class TeslaChargePortDoorCover : public TeslaCoverBase {
 protected:
     void control(const cover::CoverCall &call) override;
+};
+
+// Sunroof supports absolute position (0-100% open), unlike the binary covers.
+class TeslaSunroofCover : public TeslaCoverBase {
+protected:
+    cover::CoverTraits get_traits() override;
+    void control(const cover::CoverCall &call) override;
+};
+
+// =============================================================================
+// Select classes - seat climate and cabin overheat protection
+// =============================================================================
+
+// One seat control: Off, heat levels, cool levels (ventilated seats) and Auto
+// (front seats). Options are declared by the SELECTS definitions in
+// __init__.py in the canonical order from seat_climate_policy.h.
+class TeslaSeatClimateSelect : public WithParent<select::Select> {
+ public:
+  void set_seat(int seat) { seat_ = seat; }
+  void set_cooling_supported(bool supported) { cooling_supported_ = supported; }
+  void set_auto_supported(bool supported) { auto_supported_ = supported; }
+  bool cooling_supported() const { return cooling_supported_; }
+  bool auto_supported() const { return auto_supported_; }
+
+ protected:
+  void control(size_t index) override;
+  int seat_{0};
+  bool cooling_supported_{false};
+  bool auto_supported_{false};
+};
+
+class TeslaCabinProtectionSelect : public WithParent<select::Select> {
+ protected:
+  void control(size_t index) override;
+};
+
+class TeslaCabinTemperatureSelect : public WithParent<select::Select> {
+ protected:
+  void control(size_t index) override;
 };
 
 // =============================================================================

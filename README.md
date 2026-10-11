@@ -35,6 +35,12 @@ The generic package targets the classic ESP32 (`esp32dev`). Do not use it for ES
 - [x] Wake vehicle, set charging amps/limit, start/stop charging
 - [x] Sensors: asleep/awake, locked/unlocked, user presence, charge port, BLE signal, IEC 61851
 - [x] Charging sensors: battery level, charge rate, energy added, time to full, charger phases
+- [x] Software update: status and version sensors, install and cancel buttons (polled every 5th infotainment cycle)
+- [x] Climate controls: per-seat climate, cabin overheat protection and temperature, steering heat mode, sunroof position cover
+
+Seat entities/options are currently configured at build time. Cooling and Auto
+commands require support to have been observed in vehicle telemetry; unsupported
+options are not dynamically hidden as they are in the direct-BLE HA integration.
 
 ## Installation
 
@@ -191,6 +197,8 @@ tesla_ble_vehicle:
 ```
 
 The system only polls infotainment data during an 11-minute wake window, then lets the car sleep. Active charging and sentry mode keep it awake for continuous updates. A car that is merely left unlocked, or that reports user presence because a phone is in range, is treated as idle — the integration backs off and lets it sleep regardless. VCSEC status polling is low-power and does not affect vehicle sleep.
+
+Successful controls refresh the affected state after 1.5 seconds. Repeated controls coalesce that refresh; it does not wake a sleeping car and is cancelled on disconnect.
 
 ## Usage
 
