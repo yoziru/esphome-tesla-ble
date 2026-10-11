@@ -41,6 +41,12 @@ private:
     std::queue<BLETXChunk> write_queue_;
     WriteRetryPolicy write_retry_policy_;
     
+    // Bound on queued TX chunks (18 bytes each). A sick link previously
+    // accumulated every accepted frame and protocol resend copy without limit;
+    // whole frames are rejected once the backlog would exceed this, so memory
+    // stays bounded and commands fail fast instead of queueing forever.
+    // One maximum-size frame is 42 chunks; 256 holds large poll bursts.
+    static const size_t MAX_TX_BACKLOG_CHUNKS = 256;
     static const size_t BLOCK_LENGTH = 18; // Safe BLE MTU chunk size
 };
 

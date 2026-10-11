@@ -40,15 +40,19 @@ Error handling: Check pointers before use. Return bool for success/failure helpe
 - VCSEC is always safe to poll (low-power controller, doesn't wake vehicle)
 - Sleep state is detected via VCSEC; infotainment uses NO_WAKE_SKIP when asleep
 - Polling decision logic (idle/awake/charging/sentry cadence + wake policy) lives in
-  components/tesla_ble_vehicle/polling_policy.h (dependency-free, unit-testable); tesla_ble_vehicle.cpp wires it to ESPHome
+  the shared library's include/polling_policy.h; tesla_ble_vehicle.cpp wires it to ESPHome
 - Raw state -> text/flag conversions (sleep/lock/presence/charging/shift/charge-limit) live in
-  components/tesla_ble_vehicle/state_text.h (dependency-free, values static_asserted against the tesla-ble protobuf headers in vehicle_state_manager.cpp)
+  the shared library's include/state_text.h and src/state_text.cpp, using generated protobuf enums/tags
 - Sensors defined in __init__.py SENSORS/BINARY_SENSORS/TEXT_SENSORS lists
 - Sensor values published in vehicle_state_manager.cpp update methods
-- Commands use TeslaBLEVehicle::send_command_with_tracking() (tesla-ble OperationResult tracking)
+- Commands use TeslaBLEVehicle::track() (tesla-ble OperationResult tracking)
+- The shared Vehicle delays state refreshes 1.5 seconds and coalesces them by state group;
+  disconnect clears deferred refreshes, and pending_command_count includes them.
 
 # Testing
 - make test runs C++ + Python unit tests (fast, no ESPHome/device needed). CI runs it on every PR.
 - C++: tests/test_*.cpp (plain compiler, no framework; shared CHECK harness in tests/test_helper.h).
   Add behavior-level test cases there.
-- Python: tests/test_codegen.py (stdlib-only ast checks on entity lists in __init__.py).
+- Python: tests/test_codegen.py (stdlib-only ast checks on entity lists in __init__.py);
+  tests/test_command_results.py compiles production TeslaBLEVehicle command-result
+  methods against stubs (outcomes, number rollback, warning expiry).

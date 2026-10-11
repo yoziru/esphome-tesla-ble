@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, binary_sensor, button, switch, number, sensor, text_sensor, lock, cover, climate
+from esphome.components import ble_client, binary_sensor, button, switch, number, sensor, text_sensor, lock, cover, climate, select
 from esphome.const import (
     CONF_ACCURACY_DECIMALS,
     CONF_DEVICE_CLASS,
@@ -20,7 +20,7 @@ from esphome import automation
 
 CODEOWNERS = ["@yoziru"]
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["binary_sensor", "button", "switch", "number", "sensor", "text_sensor", "lock", "cover", "climate"]
+AUTO_LOAD = ["binary_sensor", "button", "switch", "number", "sensor", "text_sensor", "lock", "cover", "climate", "select"]
 
 tesla_ble_vehicle_ns = cg.esphome_ns.namespace("tesla_ble_vehicle")
 TeslaBLEVehicle = tesla_ble_vehicle_ns.class_(
@@ -35,6 +35,8 @@ TeslaRegenerateKeyButton = tesla_ble_vehicle_ns.class_("TeslaRegenerateKeyButton
 TeslaForceUpdateButton = tesla_ble_vehicle_ns.class_("TeslaForceUpdateButton", button.Button)
 TeslaFlashLightsButton = tesla_ble_vehicle_ns.class_("TeslaFlashLightsButton", button.Button)
 TeslaHonkHornButton = tesla_ble_vehicle_ns.class_("TeslaHonkHornButton", button.Button)
+TeslaSoftwareUpdateInstallButton = tesla_ble_vehicle_ns.class_("TeslaSoftwareUpdateInstallButton", button.Button)
+TeslaSoftwareUpdateCancelButton = tesla_ble_vehicle_ns.class_("TeslaSoftwareUpdateCancelButton", button.Button)
 TeslaUnlatchDriverDoorButton = tesla_ble_vehicle_ns.class_("TeslaUnlatchDriverDoorButton", button.Button)
 
 # Custom switch classes - generated via macro in C++, just reference here
@@ -51,6 +53,12 @@ TeslaTrunkCover = tesla_ble_vehicle_ns.class_("TeslaTrunkCover", cover.Cover)
 TeslaFrunkCover = tesla_ble_vehicle_ns.class_("TeslaFrunkCover", cover.Cover)
 TeslaWindowsCover = tesla_ble_vehicle_ns.class_("TeslaWindowsCover", cover.Cover)
 TeslaChargePortDoorCover = tesla_ble_vehicle_ns.class_("TeslaChargePortDoorCover", cover.Cover)
+TeslaSunroofCover = tesla_ble_vehicle_ns.class_("TeslaSunroofCover", cover.Cover)
+
+# Custom select classes
+TeslaSeatClimateSelect = tesla_ble_vehicle_ns.class_("TeslaSeatClimateSelect", select.Select)
+TeslaCabinProtectionSelect = tesla_ble_vehicle_ns.class_("TeslaCabinProtectionSelect", select.Select)
+TeslaCabinTemperatureSelect = tesla_ble_vehicle_ns.class_("TeslaCabinTemperatureSelect", select.Select)
 
 # Custom climate class
 TeslaClimate = tesla_ble_vehicle_ns.class_("TeslaClimate", climate.Climate)
@@ -123,7 +131,6 @@ BINARY_SENSORS = [
     {"id": "window_driver_rear", "name": "Window Driver Rear", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
     {"id": "window_passenger_front", "name": "Window Passenger Front", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
     {"id": "window_passenger_rear", "name": "Window Passenger Rear", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
-    {"id": "sunroof", "name": "Sunroof", "icon": "mdi:car-select", "device_class": "window", "disabled_by_default": True},
 
 ]
 
@@ -161,6 +168,9 @@ TEXT_SENSORS = [
     {"id": "iec61851_state", "name": "IEC 61851", "icon": "mdi:ev-plug-type2", "disabled_by_default": True},
     {"id": "shift_state", "name": "Shift State", "icon": "mdi:car-shift-pattern", "disabled_by_default": True},
     {"id": "charge_limit_reason", "name": "Charge Limit Reason", "icon": "mdi:ev-plug-tesla"},
+    {"id": "software_update", "name": "Software Update", "icon": "mdi:cellphone-arrow-down"},
+    {"id": "software_update_version", "name": "Software Update Version", "icon": "mdi:information-outline", "entity_category": "diagnostic"},
+    {"id": "steering_wheel_heat_mode", "name": "Steering Heat Mode", "icon": "mdi:steering", "entity_category": "diagnostic"},
     {"id": "last_command", "name": "Last Command", "icon": "mdi:history", "entity_category": "diagnostic", "disabled_by_default": True, "setter": "set_last_command_text_sensor"},
 ]
 
@@ -174,6 +184,8 @@ BUTTONS = [
     # Vehicle controls
     {"id": "flash_lights", "name": "Flash Lights", "class": TeslaFlashLightsButton, "setter": None, "icon": "mdi:car-light-high"},
     {"id": "honk_horn", "name": "Sound Horn", "class": TeslaHonkHornButton, "setter": None, "icon": "mdi:bullhorn"},
+    {"id": "software_update_install", "name": "Install Software Update", "class": TeslaSoftwareUpdateInstallButton, "setter": None, "icon": "mdi:cellphone-arrow-down"},
+    {"id": "software_update_cancel", "name": "Cancel Software Update", "class": TeslaSoftwareUpdateCancelButton, "setter": None, "icon": "mdi:close-circle-outline"},
 ]
 
 SWITCHES = [
@@ -194,6 +206,66 @@ COVERS = [
     {"id": "frunk", "name": "Frunk", "class": TeslaFrunkCover, "setter": "set_frunk_cover", "icon": "mdi:car", "device_class": "door"},
     {"id": "windows", "name": "Windows", "class": TeslaWindowsCover, "setter": "set_windows_cover", "icon": "mdi:car-door", "device_class": "awning"},
     {"id": "charge_port_door", "name": "Charge Port Door", "class": TeslaChargePortDoorCover, "setter": "set_charge_port_door_cover", "icon": "mdi:ev-plug-tesla", "device_class": "door"},
+    {"id": "sunroof", "name": "Sunroof", "class": TeslaSunroofCover, "setter": "set_sunroof_cover", "icon": "mdi:car-select", "device_class": "window", "disabled_by_default": True},
+]
+
+# =============================================================================
+# SELECTS - one seat climate control per seat, cabin overheat protection
+# =============================================================================
+# The option order is canonical and must match seat_climate_policy.h:
+#   0 Off | 1-3 Low/Medium/High heat | 4-6 Low/Medium/High cool | 7 Auto
+# A seat has one control: the same levels are heating or cooling, never both,
+# so cooling and Auto options appear only on the seats that support them.
+# "seat" values must match TeslaBLE::SeatPosition in the shared library.
+
+SEAT_POSITIONS = {
+    "front_left": 7,
+    "front_right": 8,
+    "rear_left": 9,
+    "rear_left_back": 10,
+    "rear_center": 11,
+    "rear_right": 12,
+    "rear_right_back": 13,
+    "third_row_left": 14,
+    "third_row_right": 15,
+}
+
+HEAT_OPTIONS = ["Low heat", "Medium heat", "High heat"]
+COOL_OPTIONS = ["Low cool", "Medium cool", "High cool"]
+
+
+def seat_options(cooling, auto):
+    options = ["Off"] + HEAT_OPTIONS
+    if cooling:
+        options += COOL_OPTIONS
+    if auto:
+        options.append("Auto")
+    return options
+
+
+SELECTS = [
+    {"id": "seat_climate_left", "name": "Front Left Seat Climate", "class": TeslaSeatClimateSelect,
+     "seat": "front_left", "cooling": True, "auto": True, "icon": "mdi:car-seat", "options": seat_options(True, True)},
+    {"id": "seat_climate_right", "name": "Front Right Seat Climate", "class": TeslaSeatClimateSelect,
+     "seat": "front_right", "cooling": True, "auto": True, "icon": "mdi:car-seat", "options": seat_options(True, True)},
+    {"id": "seat_climate_rear_left", "name": "Rear Left Seat Heat", "class": TeslaSeatClimateSelect,
+     "seat": "rear_left", "icon": "mdi:car-seat", "options": seat_options(False, False)},
+    {"id": "seat_climate_rear_right", "name": "Rear Right Seat Heat", "class": TeslaSeatClimateSelect,
+     "seat": "rear_right", "icon": "mdi:car-seat", "options": seat_options(False, False)},
+    {"id": "seat_climate_rear_center", "name": "Rear Center Seat Heat", "class": TeslaSeatClimateSelect,
+     "seat": "rear_center", "icon": "mdi:car-seat", "options": seat_options(False, False), "disabled_by_default": True},
+    {"id": "seat_climate_rear_left_back", "name": "Rear Left Backrest Heat", "class": TeslaSeatClimateSelect,
+     "seat": "rear_left_back", "icon": "mdi:car-seat", "options": seat_options(False, False), "disabled_by_default": True},
+    {"id": "seat_climate_rear_right_back", "name": "Rear Right Backrest Heat", "class": TeslaSeatClimateSelect,
+     "seat": "rear_right_back", "icon": "mdi:car-seat", "options": seat_options(False, False), "disabled_by_default": True},
+    {"id": "seat_climate_third_row_left", "name": "Third Row Left Seat Heat", "class": TeslaSeatClimateSelect,
+     "seat": "third_row_left", "icon": "mdi:car-seat", "options": seat_options(False, False), "disabled_by_default": True},
+    {"id": "seat_climate_third_row_right", "name": "Third Row Right Seat Heat", "class": TeslaSeatClimateSelect,
+     "seat": "third_row_right", "icon": "mdi:car-seat", "options": seat_options(False, False), "disabled_by_default": True},
+    {"id": "cabin_overheat_protection", "name": "Cabin Overheat Protection", "class": TeslaCabinProtectionSelect,
+     "setter": "set_cabin_protection_select", "icon": "mdi:car-defrost-front", "options": ["Off", "On", "Fan only"]},
+    {"id": "cop_activation_temperature", "name": "Cabin Overheat Temperature", "class": TeslaCabinTemperatureSelect,
+     "setter": "set_cabin_temperature_select", "icon": "mdi:thermometer", "options": ["Low", "Medium", "High"]},
 ]
 
 # Climate entity
@@ -387,6 +459,21 @@ async def create_climate_entity(var, definition):
     return _attach(var, clm, definition)
 
 
+async def create_select(var, definition):
+    """Create a select and register with TeslaBLEVehicle."""
+    config = _base_config(definition, definition["class"], "select")
+    sel = await select.new_select(config, options=definition["options"])
+    cg.add(sel.set_parent(var))
+    if "seat" in definition:
+        seat = SEAT_POSITIONS[definition["seat"]]
+        cg.add(sel.set_seat(seat))
+        cg.add(sel.set_cooling_supported(definition.get("cooling", False)))
+        cg.add(sel.set_auto_supported(definition.get("auto", False)))
+        cg.add(var.set_seat_select(seat, sel))
+    elif definition.get("setter"):
+        cg.add(getattr(var, definition["setter"])(sel))
+    return sel
+
 # =============================================================================
 # CODE GENERATION
 # =============================================================================
@@ -420,6 +507,7 @@ async def to_code(config):
         (SWITCHES, create_switch),
         (LOCKS, create_lock),
         (COVERS, create_cover),
+        (SELECTS, create_select),
     ):
         for definition in creators[0]:
             await creators[1](var, definition)
