@@ -1,5 +1,12 @@
 # ESPHome Tesla BLE
 
+> [!TIP]
+> **Using Home Assistant?** [Tesla BLE for Home Assistant](https://github.com/yoziru/ha-tesla-ble)
+> provides vehicle sensors and controls through HA's local Bluetooth adapter or a
+> stock ESPHome Bluetooth proxy with active connections enabled—no custom Tesla
+> firmware required. Install it through HACS as a custom repository. Use this
+> project if you want the Tesla BLE client to run on the ESP32 itself.
+
 Manage your Tesla vehicle over BLE using an ESP32 — control charging, check battery status, lock/unlock, and more.
 
 | Controls | Sensors | Diagnostic |
