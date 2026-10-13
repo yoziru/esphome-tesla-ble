@@ -35,7 +35,10 @@ HARNESS = r'''
 #define ESP_LOGW(...) ((void)0)
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGE(...) ((void)0)
+unsigned millis() { return 100; }
+enum Keys_Role { Keys_Role_ROLE_OWNER, Keys_Role_ROLE_DRIVER, Keys_Role_ROLE_CHARGING_MANAGER };
 namespace TeslaBLE {
+enum class WakePolicy { WAKE_IF_NEEDED };
 struct Error {
   bool may_have_succeeded() const { return false; }
   std::string message() const { return "rejected"; }
@@ -71,7 +74,11 @@ struct StateRecorder {
 };
 struct VehicleAdapter {
   int outcome = 0;
+  int polls = 0;
   void set_connected(bool) {}
+  void vcsec_poll() { ++polls; }
+  void infotainment_poll(TeslaBLE::WakePolicy) { ++polls; }
+  void pair(Keys_Role, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
   template<typename V> void set_charging_state(V, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
   template<typename V> void set_charging_amps(V, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
   template<typename V> void set_charging_limit(V, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
@@ -79,18 +86,25 @@ struct VehicleAdapter {
   template<typename V> void set_sentry_mode(V, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
 };
 struct BleAdapter { void clear_queues() {} };
-struct PollPolicy { void reset() {} };
-struct TextSensor { void publish_state(const std::string &) {} };
+struct PollPolicy { void reset() {} void on_poll(unsigned) {} };
+struct TextSensor { std::string state; void publish_state(const std::string &v) { state = v; } };
+struct BinarySensor { bool state = false; void publish_state(bool v) { state = v; } };
 constexpr int MIN_CHARGING_LIMIT = 50, MAX_CHARGING_LIMIT = 100;
 struct TeslaBLEVehicle : Platform {
   StateRecorder state_manager_;
   std::shared_ptr<VehicleAdapter> vehicle_ = std::make_shared<VehicleAdapter>();
   std::shared_ptr<BleAdapter> ble_adapter_;
   TextSensor *last_command_sensor_ = nullptr;
+  BinarySensor *pairing_required_sensor_ = nullptr;
+  bool key_rejected_ = false;
+  std::string role_ = "DRIVER";
   int last_vcsec_poll_ = 0;
   PollPolicy poll_policy_;
   void handle_command_result(const std::string &, TeslaBLE::OperationResult);
+  void handle_key_not_paired();
+  void handle_connection_established();
   void handle_connection_lost();
+  int start_pairing();
   void track(const std::string &, std::function<void(TeslaBLE::Command::OperationResultCallback)>,
              std::function<void(bool)> = nullptr);
   int set_charging_state(bool);
@@ -130,6 +144,32 @@ int main() {
     assert(component.state_manager_.publishes == (outcome == 0 ? 5 : 0));
     assert(component.state_manager_.republishes == (outcome == 0 ? 0 : 2));
   }
+  BinarySensor pairing;
+  TextSensor last_command;
+  component.pairing_required_sensor_ = &pairing;
+  component.last_command_sensor_ = &last_command;
+  component.handle_key_not_paired();
+  assert(pairing.state && component.warning && !component.timeout);
+  assert(last_command.state.find("tap a key card") != std::string::npos);
+  component.expire();
+  component.handle_command_result("poll", {0});
+  component.handle_connection_lost();
+  component.handle_connection_established();
+  assert(pairing.state && component.warning && component.vehicle_->polls == 0);
+  component.vehicle_->outcome = 0;
+  component.state_manager_ = {};
+  component.set_charging_limit(80);
+  assert(component.state_manager_.publishes == 0 && component.state_manager_.republishes == 1);
+  for (int outcome : {2, 1}) {
+    component.vehicle_->outcome = outcome;
+    component.start_pairing();
+    assert(pairing.state && component.warning);
+  }
+  component.vehicle_->outcome = 0;
+  component.start_pairing();
+  assert(!pairing.state && !component.warning && !component.key_rejected_);
+  assert(component.vehicle_->polls == 2);
+  assert(last_command.state == "Pair → Success");
 }
 '''
 
@@ -137,7 +177,7 @@ int main() {
 def main():
     source = (COMPONENT / "tesla_ble_vehicle.cpp").read_text()
     names = (
-        "handle_command_result", "handle_connection_lost", "track",
+        "handle_command_result", "handle_key_not_paired", "handle_connection_established", "handle_connection_lost", "track", "start_pairing",
         "set_charging_state", "set_charging_amps", "set_charging_limit",
         "set_steering_wheel_heat", "set_sentry_mode",
     )

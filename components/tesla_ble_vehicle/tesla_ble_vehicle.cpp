@@ -76,6 +76,7 @@ void TeslaBLEVehicle::initialize_managers() {
       std::make_shared<TeslaBLE::Vehicle>(ble_adapter_, storage_adapter_);
 
   ESP_LOGD(TAG, "Wiring up callbacks...");
+  vehicle_->set_key_not_paired_callback([this]() { handle_key_not_paired(); });
 
   vehicle_->set_raw_message_callback([this](const std::vector<uint8_t> &data) {
     std::string hex = TeslaBLE::format_hex(data.data(), data.size());
@@ -145,7 +146,7 @@ void TeslaBLEVehicle::loop() {
 }
 
 void TeslaBLEVehicle::update() {
-  if (!is_connected() || !vehicle_)
+  if (!is_connected() || !vehicle_ || key_rejected_)
     return;
 
   uint32_t now = millis();
@@ -404,6 +405,16 @@ void TeslaBLEVehicle::set_force_update_button(button::Button *button) {
 // Command tracking (v5.1.0 OperationResult + phase callbacks)
 // =============================================================================
 
+void TeslaBLEVehicle::handle_key_not_paired() {
+  key_rejected_ = true;
+  this->cancel_timeout("command-failed-warning");
+  this->status_set_warning("Pairing required: press Pair BLE Key, tap a key card, and approve in the car");
+  if (pairing_required_sensor_)
+    pairing_required_sensor_->publish_state(true);
+  if (last_command_sensor_)
+    last_command_sensor_->publish_state("Pairing required: press Pair BLE Key, tap a key card, and approve in the car");
+}
+
 void TeslaBLEVehicle::handle_command_result(const std::string &name,
                                             TeslaBLE::OperationResult result) {
   std::string value = name;
@@ -420,7 +431,10 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
     }
     ESP_LOGW(TAG, "Command failed: %s", value.c_str());
   }
-  if (result.is_failure()) {
+  if (key_rejected_) {
+    this->cancel_timeout("command-failed-warning");
+    this->status_set_warning("Pairing required: press Pair BLE Key, tap a key card, and approve in the car");
+  } else if (result.is_failure()) {
     this->status_momentary_warning("command-failed-warning");
   } else {
     this->cancel_timeout("command-failed-warning");
@@ -434,6 +448,11 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
 void TeslaBLEVehicle::track(const std::string &name,
                             std::function<void(TeslaBLE::Command::OperationResultCallback)> send,
                             std::function<void(bool)> on_result) {
+  if (key_rejected_ && name != "Pair") {
+    handle_key_not_paired();
+    if (on_result) on_result(false);
+    return;
+  }
   if (!vehicle_) {
     ESP_LOGE(TAG, "Cannot send command '%s': vehicle not initialized", name.c_str());
     return;
@@ -482,7 +501,14 @@ int TeslaBLEVehicle::start_pairing() {
     role_enum = Keys_Role_ROLE_CHARGING_MANAGER;
   }
 
-  vehicle_->pair(role_enum);
+  track("Pair", [this, role_enum](auto cb) { vehicle_->pair(role_enum, std::move(cb)); },
+        [this](bool succeeded) {
+          if (!succeeded) return;
+          key_rejected_ = false;
+          if (pairing_required_sensor_) pairing_required_sensor_->publish_state(false);
+          this->status_clear_warning();
+          handle_connection_established();
+        });
   return 0;
 }
 
@@ -499,6 +525,10 @@ int TeslaBLEVehicle::regenerate_key() {
 }
 
 void TeslaBLEVehicle::force_update() {
+  if (key_rejected_) {
+    handle_key_not_paired();
+    return;
+  }
   uint32_t now = millis();
   if (!poll_policy_.should_poll(now, poll_policy_.active_interval_ms())) {
     ESP_LOGD(TAG, "Force update requested too soon (within active polling "
@@ -860,14 +890,20 @@ void TeslaBLEVehicle::handle_connection_established() {
   if (vehicle_) {
     vehicle_->set_connected(true);
     ESP_LOGI(TAG, "Connection established - triggering initial polls");
-    vehicle_->vcsec_poll();
-    vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+    if (!key_rejected_) {
+      vehicle_->vcsec_poll();
+      vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+    }
     last_vcsec_poll_ = millis();
     poll_policy_.on_poll(millis());
     poll_policy_.reset();
   }
 
-  this->status_clear_warning();
+  if (key_rejected_) {
+    handle_key_not_paired();
+  } else {
+    this->status_clear_warning();
+  }
 }
 
 void TeslaBLEVehicle::handle_connection_lost() {
@@ -880,7 +916,11 @@ void TeslaBLEVehicle::handle_connection_lost() {
 
   last_vcsec_poll_ = 0;
   poll_policy_.reset();
-  this->status_set_warning("BLE connection lost");
+  if (key_rejected_) {
+    handle_key_not_paired();
+  } else {
+    this->status_set_warning("BLE connection lost");
+  }
 }
 
 // =============================================================================

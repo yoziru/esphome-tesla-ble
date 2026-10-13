@@ -171,6 +171,10 @@ public:
     
     // Command tracking sensors
     void set_last_command_text_sensor(text_sensor::TextSensor *sensor) { last_command_sensor_ = sensor; }
+    void set_pairing_required_binary_sensor(binary_sensor::BinarySensor *sensor) {
+      pairing_required_sensor_ = sensor;
+      sensor->publish_state(key_rejected_);
+    }
 
     // BLE connection state
     bool is_connected() const { return node_state == espbt::ClientState::ESTABLISHED; }
@@ -200,6 +204,8 @@ private:
     // Polling state
     uint32_t last_vcsec_poll_{0};
     TeslaBLE::InfotainmentPollPolicy poll_policy_;
+    bool key_rejected_{false};
+    binary_sensor::BinarySensor *pairing_required_sensor_{nullptr};
     ConnectionResetPolicy connection_reset_policy_;
 
     // BLE state
@@ -220,6 +226,7 @@ private:
 
     // Command tracking
     void handle_command_result(const std::string &name, TeslaBLE::OperationResult result);
+    void handle_key_not_paired();
     // Runs a library action and reports its outcome to the last-command
     // sensor. `send` receives the result callback to hand to the action.
     void track(const std::string &name,
