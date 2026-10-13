@@ -12,4 +12,4 @@ esp32:
       #   path: /path/to/tesla-ble
       - name: tesla-ble
         source: https://github.com/yoziru/tesla-ble.git
-        ref: v6.0.2
+        ref: v6.1.0

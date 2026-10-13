@@ -114,6 +114,7 @@ CONF_INFOTAINMENT_SLEEP_TIMEOUT = "infotainment_sleep_timeout"
 #   - step: step size
 
 BINARY_SENSORS = [
+    {"id": "pairing_required", "name": "Pairing Required", "device_class": "problem", "entity_category": "diagnostic", "setter": "set_pairing_required_binary_sensor"},
     # VCSEC sensors
     {"id": "asleep", "name": "Asleep", "icon": "mdi:sleep"},
     {"id": "user_present", "name": "User Present", "icon": "mdi:account-check", "device_class": "occupancy"},

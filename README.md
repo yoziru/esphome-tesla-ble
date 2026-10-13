@@ -249,6 +249,11 @@ Use an Android BLE scanner app such as nRF Connect, scan nearby devices, and loo
 
 > No popup? Press "Pair BLE key" and tap your card again. Make sure BLE MAC and VIN are correct.
 
+If the car rejects a removed key, **Pairing Required** turns on and automatic
+polling pauses. Enable **Pair BLE Key** on the device's entity page if hidden,
+then repeat pairing above. The existing key is reused; **Last Command** reports
+the confirmed result. A BLE connection alone does not confirm key authorization.
+
 ### Adding to Home Assistant
 
 **Settings → Devices & Services → Add Integration → ESPHome**. Enter the device's IP (find it in your router or from ESPHome Device Builder) and your API encryption key.
