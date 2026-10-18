@@ -43,6 +43,10 @@ The generic package targets the classic ESP32 (`esp32dev`). Do not use it for ES
 - [x] Software update: status and version sensors, install and cancel buttons (polled every 5th infotainment cycle)
 - [x] Climate controls: per-seat climate, cabin overheat protection and temperature, steering heat mode, sunroof position cover
 
+**Charger Power Estimated** uses shared phase detection when available, otherwise
+reported power. **Charger Phases** stays raw; **Charger Effective Phases** is
+inferred and stays unknown until detection succeeds.
+
 Seat entities/options are currently configured at build time. Cooling and Auto
 commands require support to have been observed in vehicle telemetry; unsupported
 options are not dynamically hidden as they are in the direct-BLE HA integration.

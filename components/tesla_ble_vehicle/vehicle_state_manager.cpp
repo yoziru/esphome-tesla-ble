@@ -136,8 +136,6 @@ void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
 
 void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charge_state) {
     ESP_LOGD(STATE_MANAGER_TAG, "Updating charge state");
-    // Track whether charger is disconnected in this message to avoid stale estimate recomputation.
-    bool charger_was_disconnected = false;
     
     // Update charging status and charging state text
     if (charge_state.has_charging_state) {
@@ -168,14 +166,6 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         // Update charger connected binary sensor
         const bool charger_connected = TeslaBLE::state_text::charger_connected(charge_state.charging_state.which_type);
         publish_binary_sensor("charger", charger_connected);
-        if (!charger_connected) {
-            // No cable: clear cached estimate inputs so a later reconnect without voltage doesn't reuse stale AC voltage.
-            charger_was_disconnected = true;
-            cached_charger_voltage_ = NAN;
-            cached_charger_current_ = 0.0f;
-            cached_charger_phases_ = std::nullopt;
-            publish_sensor("charger_power_estimated", 0.0f);
-        }
     }
     
     // Update battery level
@@ -195,6 +185,17 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
             publish_sensor("charger_power", power_kw);
         }
     }
+#if !__has_include(<charging_power.h>)
+    // Without phase detection, use reported power rather than raw phase counts.
+    const bool disconnected = charge_state.has_charging_state &&
+        charge_state.charging_state.which_type == CarServer_ChargeState_ChargingState_Disconnected_tag;
+    const bool dc = charge_state.which_optional_fast_charger_present &&
+        charge_state.optional_fast_charger_present.fast_charger_present;
+    const auto reported = charge_state.optional_charger_power.charger_power;
+    publish_sensor("charger_power_estimated", disconnected ? 0.0f :
+        (!dc && charge_state.which_optional_charger_power && reported >= 0 && reported <= 500 ?
+         static_cast<float>(reported) : NAN));
+#endif
     
     // Update range (battery_range is in miles)
     if (charge_state.which_optional_battery_range) {
@@ -220,21 +221,19 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update charger voltage (cache for estimated power)
+    // Update charger voltage
     if (charge_state.which_optional_charger_voltage) {
         const float voltage = static_cast<float>(charge_state.optional_charger_voltage.charger_voltage);
         if (voltage >= 0.0f && voltage <= 600.0f && std::isfinite(voltage)) {
             publish_sensor("charger_voltage", voltage);
-            cached_charger_voltage_ = voltage;
         }
     }
     
-    // Update charger current (cached for estimated power)
+    // Update charger current
     if (charge_state.which_optional_charger_actual_current) {
         const float current = static_cast<float>(charge_state.optional_charger_actual_current.charger_actual_current);
         if (current >= 0.0f && current <= 100.0f && std::isfinite(current)) {
             publish_sensor("charger_current", current);
-            cached_charger_current_ = current;
         }
     }
 
@@ -318,13 +317,10 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
     
-    // Update charger phases (integer 1..3, cached for estimated power)
+    // Keep raw phases for diagnostics.
     if (charge_state.which_optional_charger_phases) {
         const float phases = static_cast<float>(charge_state.optional_charger_phases.charger_phases);
-        if (phases >= 1.0f && phases <= 3.0f && std::isfinite(phases)) {
-            publish_sensor("charger_phases", phases);
-            cached_charger_phases_ = static_cast<int32_t>(phases);
-        }
+        publish_sensor("charger_phases", phases);
     }
 
     // Update charge port latch lock (cable latch engaged/disengaged)
@@ -341,11 +337,6 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         }
     }
 
-    // Deferred estimated power calculation: single publish per poll from cached voltage/current/phases.
-    // Skipped when we already published 0 for disconnected to avoid overwriting with stale cached values.
-    if (!charger_was_disconnected) {
-        update_estimated_power();
-    }
 }
 
 void VehicleStateManager::update_climate_state(const CarServer_ClimateState& climate_state) {
@@ -741,30 +732,14 @@ void VehicleStateManager::republish_charging_limit() {
     }
 }
 
-void VehicleStateManager::update_estimated_power() {
-    // Pure helper: compute estimated power (kW) = V * A * phases / 1000.
-    // Using std::optional for explicit missing-data handling (modern C++17) and early returns.
-    if (!cached_charger_phases_.has_value()) {
-        return;
-    }
-    const int32_t phases = cached_charger_phases_.value();
-    if (phases < 1 || phases > 3) {
-        return;
-    }
-    if (!std::isfinite(cached_charger_voltage_) || !std::isfinite(cached_charger_current_)) {
-        return;
-    }
-    if (cached_charger_voltage_ < 0.0f || cached_charger_voltage_ > 600.0f ||
-        cached_charger_current_ < 0.0f || cached_charger_current_ > 100.0f) {
-        return;
-    }
-    const float power_kw = cached_charger_voltage_ * cached_charger_current_ *
-                           static_cast<float>(phases) / 1000.0f;
-    if (!std::isfinite(power_kw) || power_kw < 0.0f || power_kw > 100.0f) {
-        return;
-    }
-    publish_sensor("charger_power_estimated", power_kw);
+#if __has_include(<charging_power.h>)
+void VehicleStateManager::update_charging_power(const TeslaBLE::ChargingPower& power) {
+    publish_sensor("charger_power_estimated", power.is_ac == false ? NAN :
+        static_cast<float>(power.power_w.value_or(NAN) / 1000.0));
+    publish_sensor("charger_effective_phases", power.effective_phases ?
+        static_cast<float>(*power.effective_phases) : NAN);
 }
+#endif
 
 // =============================================================================
 // State queries
