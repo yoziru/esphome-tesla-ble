@@ -10,13 +10,15 @@
 #include <esphome/components/cover/cover.h>
 #include <esphome/components/climate/climate.h>
 #include <esphome/components/select/select.h>
-#include <optional>
 #include <map>
 #include <string>
 #include <cmath>
 #include <type_traits>
 #include <car_server.pb.h>
 #include <vcsec.pb.h>
+#if __has_include(<charging_power.h>)
+#include <charging_power.h>
+#endif
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -101,6 +103,9 @@ public:
     // State updates from CarServer (Infotainment)
     // ==========================================================================
     void update_charge_state(const CarServer_ChargeState& charge_state);
+#if __has_include(<charging_power.h>)
+    void update_charging_power(const TeslaBLE::ChargingPower& power);
+#endif
     void update_climate_state(const CarServer_ClimateState& climate_state);
     void update_drive_state(const CarServer_DriveState& drive_state);
     void update_tire_pressure_state(const CarServer_TirePressureState& tire_pressure_state);
@@ -200,13 +205,6 @@ private:
     bool seat_auto_modes_[16]{};
     bool seat_auto_observed_[16]{};
 
-    // Cached values for estimated power calculation (V * A * phases / 1000)
-    // Using NAN/optional sentinel pattern consistent with existing climate temps (NAN) and modern optional for phases.
-    float cached_charger_voltage_{NAN};
-    float cached_charger_current_{NAN};
-    std::optional<int32_t> cached_charger_phases_{std::nullopt};
-    void update_estimated_power();
-
     
     // ==========================================================================
     // Helper methods for publishing sensor state
@@ -218,7 +216,8 @@ private:
     template<typename T, typename V> static bool publish_sensor_state(T *entity, V state) {
       if (entity == nullptr) return false;
       if constexpr (std::is_floating_point<V>::value) {
-        if (!entity->has_state() || std::abs(entity->state - state) > 0.001f) {
+        if (!entity->has_state() || std::isnan(entity->state) != std::isnan(state) ||
+            std::abs(entity->state - state) > 0.001f) {
           entity->publish_state(state);
           return true;
         }

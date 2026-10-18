@@ -92,6 +92,9 @@ void TeslaBLEVehicle::initialize_managers() {
 
   vehicle_->set_charge_state_callback([this](const CarServer_ChargeState &s) {
     state_manager_.update_charge_state(s);
+#if __has_include(<charging_power.h>)
+    state_manager_.update_charging_power(vehicle_->charging_power());
+#endif
   });
 
   vehicle_->set_climate_state_callback([this](const CarServer_ClimateState &s) {
