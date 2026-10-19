@@ -197,6 +197,12 @@ The Tesla backend enforces these restrictions. Change requires re-pairing.
 
 ### Polling
 
+Automatic telemetry never sends wake commands, including initial/reconnect probes.
+Reconnects preserve idle timing and coalesce infotainment probes on the sleep-timeout
+cadence; explicit **Force data update** and controls can still wake the vehicle.
+Unlike the native HA integration, ESPHome retains sensor values rather than expiring
+infotainment entities after two minutes. Retained values are not proof of freshness.
+
 ```yaml
 tesla_ble_vehicle:
   vcsec_poll_interval: 10               # Status updates (always safe, low power)
