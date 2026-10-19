@@ -204,6 +204,7 @@ private:
     // Polling state
     uint32_t last_vcsec_poll_{0};
     TeslaBLE::InfotainmentPollPolicy poll_policy_;
+    bool initial_poll_sent_{false};
     bool key_rejected_{false};
     binary_sensor::BinarySensor *pairing_required_sensor_{nullptr};
     ConnectionResetPolicy connection_reset_policy_;

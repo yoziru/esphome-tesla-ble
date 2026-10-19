@@ -38,7 +38,7 @@ HARNESS = r'''
 unsigned millis() { return 100; }
 enum Keys_Role { Keys_Role_ROLE_OWNER, Keys_Role_ROLE_DRIVER, Keys_Role_ROLE_CHARGING_MANAGER };
 namespace TeslaBLE {
-enum class WakePolicy { WAKE_IF_NEEDED };
+enum class WakePolicy { WAKE_IF_NEEDED, NO_WAKE_SKIP };
 struct Error {
   bool may_have_succeeded() const { return false; }
   std::string message() const { return "rejected"; }
@@ -75,9 +75,13 @@ struct StateRecorder {
 struct VehicleAdapter {
   int outcome = 0;
   int polls = 0;
+  int wake_capable_polls = 0;
   void set_connected(bool) {}
-  void vcsec_poll() { ++polls; }
-  void infotainment_poll(TeslaBLE::WakePolicy) { ++polls; }
+  void vcsec_poll(TeslaBLE::WakePolicy policy = TeslaBLE::WakePolicy::WAKE_IF_NEEDED) {
+    ++polls;
+    if (policy == TeslaBLE::WakePolicy::WAKE_IF_NEEDED) ++wake_capable_polls;
+  }
+  void infotainment_poll(TeslaBLE::WakePolicy policy) { vcsec_poll(policy); }
   void pair(Keys_Role, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
   template<typename V> void set_charging_state(V, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
   template<typename V> void set_charging_amps(V, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
@@ -86,7 +90,13 @@ struct VehicleAdapter {
   template<typename V> void set_sentry_mode(V, TeslaBLE::Command::OperationResultCallback cb) { cb({outcome}); }
 };
 struct BleAdapter { void clear_queues() {} };
-struct PollPolicy { void reset() {} void on_poll(unsigned) {} };
+struct PollPolicy {
+  bool due = false;
+  void reset() {}
+  void on_poll(unsigned) { due = false; }
+  unsigned sleep_timeout_ms() const { return 660000; }
+  bool should_poll(unsigned, unsigned) const { return due; }
+};
 struct TextSensor { std::string state; void publish_state(const std::string &v) { state = v; } };
 struct BinarySensor { bool state = false; void publish_state(bool v) { state = v; } };
 constexpr int MIN_CHARGING_LIMIT = 50, MAX_CHARGING_LIMIT = 100;
@@ -100,6 +110,7 @@ struct TeslaBLEVehicle : Platform {
   std::string role_ = "DRIVER";
   int last_vcsec_poll_ = 0;
   PollPolicy poll_policy_;
+  bool initial_poll_sent_ = false;
   void handle_command_result(const std::string &, TeslaBLE::OperationResult);
   void handle_key_not_paired();
   void handle_connection_established();
@@ -170,6 +181,16 @@ int main() {
   assert(!pairing.state && !component.warning && !component.key_rejected_);
   assert(component.vehicle_->polls == 2);
   assert(last_command.state == "Pair → Success");
+  for (int flap = 0; flap < 5; ++flap) {
+    component.handle_connection_lost();
+    component.handle_connection_established();
+  }
+  assert(component.vehicle_->polls == 7);
+  component.poll_policy_.due = true;
+  component.handle_connection_lost();
+  component.handle_connection_established();
+  assert(component.vehicle_->polls == 9);
+  assert(component.vehicle_->wake_capable_polls == 0);
 }
 '''
 

@@ -149,7 +149,7 @@ void TeslaBLEVehicle::loop() {
 }
 
 void TeslaBLEVehicle::update() {
-  if (!is_connected() || !vehicle_ || key_rejected_)
+  if (!is_connected() || !vehicle_ || key_rejected_ || vehicle_->pending_command_count())
     return;
 
   uint32_t now = millis();
@@ -157,7 +157,7 @@ void TeslaBLEVehicle::update() {
   // VCSEC Polling
   if (now - last_vcsec_poll_ >= vcsec_poll_interval_) {
     ESP_LOGI(TAG, "Polling VCSEC");
-    vehicle_->vcsec_poll();
+    vehicle_->vcsec_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     last_vcsec_poll_ = now;
   }
 
@@ -173,11 +173,8 @@ void TeslaBLEVehicle::update() {
                           state_manager_.is_sentry_mode());
 
   if (poll_policy_.should_poll(now, decision.interval_ms)) {
-    ESP_LOGI(TAG, "Polling Infotainment (%s)",
-             decision.wake_policy == TeslaBLE::WakePolicy::NO_WAKE_SKIP
-                 ? "sleeping - NO_WAKE_SKIP"
-                 : "active - WAKE_IF_NEEDED");
-    vehicle_->infotainment_poll(decision.wake_policy);
+    ESP_LOGI(TAG, "Polling Infotainment (NO_WAKE_SKIP, interval=%" PRIu32 "ms)", decision.interval_ms);
+    vehicle_->infotainment_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     poll_policy_.on_poll(now);
   }
 }
@@ -894,12 +891,15 @@ void TeslaBLEVehicle::handle_connection_established() {
     vehicle_->set_connected(true);
     ESP_LOGI(TAG, "Connection established - triggering initial polls");
     if (!key_rejected_) {
-      vehicle_->vcsec_poll();
-      vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+      vehicle_->vcsec_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+      const uint32_t now = millis();
+      if (!initial_poll_sent_ || poll_policy_.should_poll(now, poll_policy_.sleep_timeout_ms())) {
+        vehicle_->infotainment_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+        poll_policy_.on_poll(now);
+        initial_poll_sent_ = true;
+      }
     }
     last_vcsec_poll_ = millis();
-    poll_policy_.on_poll(millis());
-    poll_policy_.reset();
   }
 
   if (key_rejected_) {
@@ -918,7 +918,6 @@ void TeslaBLEVehicle::handle_connection_lost() {
   this->cancel_timeout("command-failed-warning");
 
   last_vcsec_poll_ = 0;
-  poll_policy_.reset();
   if (key_rejected_) {
     handle_key_not_paired();
   } else {
