@@ -7,6 +7,8 @@ the stdlib `ast` module (no esphome import needed) and checks that:
 
 - every entity entry is well-formed: required keys present, entity ids unique
   across all lists (sensor, control, and climate definitions)
+- to_code calls esp32.require_mbedtls_tls() (on ESPHome versions that have it),
+  so ESPHome keeps the mbedTLS PEM writer tesla-ble uses to store its private key
 - the sensor ids used from C++ (publish_* calls in vehicle_state_manager.cpp,
   or a dedicated setter method) match the ids defined in the Python lists, in
   both directions - a typo on either side would silently produce a dead sensor
@@ -140,6 +142,26 @@ def check_seat_option_order(tree: ast.Module, checks: int, failures: int):
     return checks, failures
 
 
+def check_mbedtls_tls_required(tree: ast.Module, checks: int, failures: int) -> tuple[int, int]:
+    """to_code must keep mbedTLS PEM writing, which tesla-ble needs to store its key.
+
+    esp32.require_mbedtls_tls() only exists from ESPHome 2026.10.0, so the call
+    has to sit under an ``if`` on ESPHOME_VERSION.
+    """
+    checks += 1
+    to_code = next(node for node in tree.body
+                   if isinstance(node, ast.AsyncFunctionDef) and node.name == "to_code")
+    version_checks = [node for node in ast.walk(to_code) if isinstance(node, ast.If) and any(
+        isinstance(name, ast.Name) and name.id == "ESPHOME_VERSION" for name in ast.walk(node.test))]
+    if not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+               and isinstance(node.func.value, ast.Name)
+               and (node.func.value.id, node.func.attr) == ("esp32", "require_mbedtls_tls")
+               for check in version_checks for stmt in check.body for node in ast.walk(stmt)):
+        print("  FAIL to_code does not call esp32.require_mbedtls_tls() under an ESPHOME_VERSION check")
+        failures += 1
+    return checks, failures
+
+
 def main() -> int:
     tree = ast.parse(COMPONENT.read_text(encoding="utf-8"), filename=str(COMPONENT))
 
@@ -180,6 +202,7 @@ def main() -> int:
 
     checks, failures = check_sensor_wiring(collect_sensor_ids(tree), checks, failures)
     checks, failures = check_seat_option_order(tree, checks, failures)
+    checks, failures = check_mbedtls_tls_required(tree, checks, failures)
 
     if failures:
         print(f"FAILED: {failures}/{checks} checks")
