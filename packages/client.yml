@@ -21,6 +21,7 @@ sensor:
   - platform: ble_client
     type: rssi
     ble_client_id: ble_tesla_id
+    id: ble_signal_id
     name: "BLE Signal"
     icon: mdi:bluetooth
     entity_category: diagnostic
@@ -28,5 +29,6 @@ sensor:
 switch:
   - platform: ble_client
     ble_client_id: ble_tesla_id
+    id: ble_connection_id
     name: "BLE Connection"
     entity_category: diagnostic
