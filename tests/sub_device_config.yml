@@ -1,0 +1,44 @@
+# C++ generation fixture for test_sub_device.py. It applies the README's
+# sub-device recipe on top of packages/client.yml; the test generates it with
+# and without `-s vehicle_device_id tesla` and checks where entities land.
+substitutions:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 8MB
+  ble_mac_address: !secret test_vehicle_ble_mac
+  tesla_vin: !secret test_vehicle_vin
+  vcsec_poll_interval: "10"
+  infotainment_poll_interval_awake: "30"
+  infotainment_poll_interval_active: "10"
+  infotainment_sleep_timeout: "660"
+  # Empty keeps every entity on the main device
+  vehicle_device_id: ""
+
+packages:
+  board: !include ../packages/board.yml
+  client: !include ../packages/client.yml
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [tesla_ble_vehicle]
+
+esphome:
+  name: tesla-ble-sub-device-test
+  devices:
+    - id: tesla
+      name: Tesla
+
+logger:
+
+tesla_ble_vehicle:
+  device_id: ${vehicle_device_id}
+
+sensor:
+  - id: !extend ble_signal_id
+    device_id: ${vehicle_device_id}
+
+switch:
+  - id: !extend ble_connection_id
+    device_id: ${vehicle_device_id}

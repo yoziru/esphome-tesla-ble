@@ -4,6 +4,7 @@ from esphome.components import ble_client, binary_sensor, button, switch, number
 from esphome.const import (
     CONF_ACCURACY_DECIMALS,
     CONF_DEVICE_CLASS,
+    CONF_DEVICE_ID,
     CONF_DISABLED_BY_DEFAULT,
     CONF_ENTITY_CATEGORY,
     CONF_FORCE_UPDATE,
@@ -320,6 +321,8 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE, default=30): cv.int_range(min=10, max=600), 
             cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE, default=10): cv.int_range(min=5, max=120),
             cv.Optional(CONF_INFOTAINMENT_SLEEP_TIMEOUT, default=660): cv.int_range(min=60, max=3600),
+            # Sub-device (esphome: devices:) that every vehicle entity is placed on
+            cv.Optional(CONF_DEVICE_ID): cv.sub_device_id,
         },
     )
     .extend(cv.polling_component_schema("10s"))
@@ -348,6 +351,8 @@ def _base_config(definition, id_type, suffix):
         config[CONF_ICON] = definition["icon"]
     if definition.get("entity_category") == "diagnostic":
         config[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
+    if definition.get(CONF_DEVICE_ID) is not None:
+        config[CONF_DEVICE_ID] = definition[CONF_DEVICE_ID]
     return config
 
 
@@ -500,7 +505,10 @@ async def to_code(config):
     cg.add(var.set_infotainment_poll_interval_awake(config[CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE] * 1000))
     cg.add(var.set_infotainment_poll_interval_active(config[CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE] * 1000))
     cg.add(var.set_infotainment_sleep_timeout(config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000))
-    
+
+    # Every entity goes on the configured sub-device (None = the main device)
+    device_id = config.get(CONF_DEVICE_ID)
+
     for creators in (
         (BINARY_SENSORS, create_binary_sensor),
         (SENSORS, create_sensor),
@@ -512,12 +520,12 @@ async def to_code(config):
         (SELECTS, create_select),
     ):
         for definition in creators[0]:
-            await creators[1](var, definition)
+            await creators[1](var, {**definition, CONF_DEVICE_ID: device_id})
 
     for definition in NUMBERS:
-        await create_number(var, definition, config)
+        await create_number(var, {**definition, CONF_DEVICE_ID: device_id}, config)
 
-    await create_climate_entity(var, CLIMATE)
+    await create_climate_entity(var, {**CLIMATE, CONF_DEVICE_ID: device_id})
 
 
 # =============================================================================
