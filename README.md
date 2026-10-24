@@ -186,7 +186,7 @@ switch:
 
 The ESP's own entities (Wi-Fi signal, uptime, restart, ...) stay on the main device.
 
-On ESPHome 2026.11.0 and newer, also add `relation: via` to the `tesla` device so Home Assistant shows the car as connected via the ESP ([device relation](https://esphome.io/components/esphome/#device-relation)).
+On ESPHome 2026.11.0 and newer, also add `relation: via` to the `tesla` device so Home Assistant shows the car as connected via the ESP ([device relation](https://next.esphome.io/components/esphome/#device-relation)).
 
 ### CLI
 
