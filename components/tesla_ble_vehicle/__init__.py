@@ -1,6 +1,20 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, binary_sensor, button, switch, number, sensor, text_sensor, lock, cover, climate, select
+from esphome import automation
+from esphome.components import (
+    binary_sensor,
+    ble_client,
+    button,
+    climate,
+    cover,
+    esp32,
+    lock,
+    number,
+    select,
+    sensor,
+    switch,
+    text_sensor,
+)
 from esphome.const import (
     CONF_ACCURACY_DECIMALS,
     CONF_DEVICE_CLASS,
@@ -15,8 +29,9 @@ from esphome.const import (
     CONF_UNIT_OF_MEASUREMENT,
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
-from esphome import automation
-
+from esphome.const import (
+    __version__ as ESPHOME_VERSION,
+)
 
 CODEOWNERS = ["@yoziru"]
 DEPENDENCIES = ["ble_client"]
@@ -484,6 +499,12 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await ble_client.register_ble_node(var, config)
+
+    # tesla-ble stores its private key with mbedtls_pk_write_key_pem; without a
+    # TLS user ESPHome 2026.10+ compiles PEM writing (and the rest of TLS) out.
+    # require_mbedtls_tls() arrived in the same release; older versions keep PEM on.
+    if cv.Version.parse(ESPHOME_VERSION) >= cv.Version(2026, 10, 0):
+        esp32.require_mbedtls_tls()
 
     cg.add(var.set_vin(config[CONF_VIN]))
     
