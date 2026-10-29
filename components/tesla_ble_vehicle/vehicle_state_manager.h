@@ -210,7 +210,7 @@ private:
     // Helper methods for publishing sensor state
     // ==========================================================================
     bool publish_binary_sensor(const std::string& id, bool state);
-    bool publish_sensor(const std::string& id, float state);
+    bool publish_sensor(const std::string& id, float state, bool force_report = false);
     bool publish_text_sensor(const std::string& id, const std::string& state);
 
     template<typename T, typename V> static bool publish_sensor_state(T *entity, V state) {

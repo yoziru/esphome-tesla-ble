@@ -77,8 +77,12 @@ bool VehicleStateManager::publish_binary_sensor(const std::string& id, bool stat
     return sensor != nullptr && publish_sensor_state(sensor, state);
 }
 
-bool VehicleStateManager::publish_sensor(const std::string& id, float state) {
+bool VehicleStateManager::publish_sensor(const std::string& id, float state, bool force_report) {
     auto* sensor = get_sensor(id);
+    if (sensor != nullptr && force_report) {
+        sensor->publish_state(state);
+        return true;
+    }
     return sensor != nullptr && publish_sensor_state(sensor, state);
 }
 
@@ -182,7 +186,8 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     if (charge_state.which_optional_charger_power) {
         const float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
         if (power_kw >= 0.0f && power_kw <= 500.0f && std::isfinite(power_kw)) {
-            publish_sensor("charger_power", power_kw);
+            // Raw receipt callbacks must see confirmed unchanged power too.
+            publish_sensor("charger_power", power_kw, true);
         }
     }
 #if !__has_include(<charging_power.h>)

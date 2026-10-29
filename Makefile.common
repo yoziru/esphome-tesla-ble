@@ -108,6 +108,7 @@ test-python: ## Run the Python codegen and component-method checks
 	python3 $(TEST_DIR)/test_codegen.py
 	python3 $(TEST_DIR)/test_command_results.py
 	python3 $(TEST_DIR)/test_charging_power.py
+	python3 $(TEST_DIR)/test_native_power_receipts.py
 
 validate-dashboard-config: check-uv ## Validate the generated-style ESPHome Dashboard configuration
 	uvx --with pip esphome==$(ESPHOME_VERSION) config $(TEST_DIR)/dashboard_config.yml
