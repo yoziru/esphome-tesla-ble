@@ -1,0 +1,22 @@
+# Optional native-power receipt for freshness-sensitive consumers such as PowerSync.
+# Include after client.yml. This is driven by raw vehicle samples, never a timer.
+tesla_ble_vehicle:
+  charger_power:
+    name: "Charger Power"
+    on_raw_value:
+      - text_sensor.template.publish:
+          id: charger_power_received
+          state: !lambda |-
+            auto received = id(homeassistant_time).utcnow();
+            if (!received.is_valid() || !std::isfinite(x) || x < 0 || x > 500) {
+              return std::string("unavailable");
+            }
+            return received.strftime("%Y-%m-%dT%H:%M:%SZ");
+
+text_sensor:
+  - platform: template
+    id: charger_power_received
+    name: "Charger Power Received"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
