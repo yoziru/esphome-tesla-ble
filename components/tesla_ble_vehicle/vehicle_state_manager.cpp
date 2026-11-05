@@ -148,6 +148,7 @@ void VehicleStateManager::update_charge_schedule_state(const CarServer_ChargeSch
         ESP_LOGD(STATE_MANAGER_TAG, "Charge schedule: no window");
         publish_text_sensor("charge_schedule_start", "none");
         publish_text_sensor("charge_schedule_end", "none");
+        publish_text_sensor("charge_schedule_days", "none");
         return;
     }
     const auto& window = schedule_state.optional_charge_schedule_window.charge_schedule_window;
@@ -159,6 +160,15 @@ void VehicleStateManager::update_charge_schedule_state(const CarServer_ChargeSch
                         window.enabled && window.start_enabled ? clock_time(window.start_time) : "none");
     publish_text_sensor("charge_schedule_end",
                         window.enabled && window.end_enabled ? clock_time(window.end_time) : "none");
+    // Tesla's day bits: Sunday = 1, Monday = 2 ... Saturday = 64.
+    static const char *const DAY_NAMES[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    std::string days;
+    for (int day = 0; day < 7; day++) {
+        if (window.days_of_week & (1 << day)) {
+            days += (days.empty() ? "" : ",") + std::string(DAY_NAMES[day]);
+        }
+    }
+    publish_text_sensor("charge_schedule_days", window.enabled && !days.empty() ? days : "none");
 }
 
 void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charge_state) {

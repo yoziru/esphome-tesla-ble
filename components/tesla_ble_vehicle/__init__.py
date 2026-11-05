@@ -172,6 +172,7 @@ TEXT_SENSORS = [
     {"id": "charge_limit_reason", "name": "Charge Limit Reason", "icon": "mdi:ev-plug-tesla"},
     {"id": "charge_schedule_start", "name": "Charge Schedule Start", "icon": "mdi:clock-start", "disabled_by_default": True},
     {"id": "charge_schedule_end", "name": "Charge Schedule End", "icon": "mdi:clock-end", "disabled_by_default": True},
+    {"id": "charge_schedule_days", "name": "Charge Schedule Days", "icon": "mdi:calendar-week", "disabled_by_default": True},
     {"id": "software_update", "name": "Software Update", "icon": "mdi:cellphone-arrow-down"},
     {"id": "software_update_version", "name": "Software Update Version", "icon": "mdi:information-outline", "entity_category": "diagnostic"},
     {"id": "steering_wheel_heat_mode", "name": "Steering Heat Mode", "icon": "mdi:steering", "entity_category": "diagnostic"},
