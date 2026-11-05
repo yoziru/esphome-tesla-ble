@@ -106,6 +106,7 @@ public:
 #if __has_include(<charging_power.h>)
     void update_charging_power(const TeslaBLE::ChargingPower& power);
 #endif
+    void update_charge_schedule_state(const CarServer_ChargeScheduleState& schedule_state);
     void update_climate_state(const CarServer_ClimateState& climate_state);
     void update_drive_state(const CarServer_DriveState& drive_state);
     void update_tire_pressure_state(const CarServer_TirePressureState& tire_pressure_state);

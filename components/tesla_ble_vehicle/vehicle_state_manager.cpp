@@ -8,6 +8,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cinttypes>
+#include <cstdio>
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -133,6 +134,32 @@ void VehicleStateManager::update_user_presence(VCSEC_UserPresence_E presence) {
 // =============================================================================
 // CarServer State Updates
 // =============================================================================
+
+// The car's charge schedule (Tesla app > Schedule): the window that applies now or next, as "HH:MM",
+// or "none" when the car has no enabled schedule. Lets a charge controller tell a stop the schedule
+// asked for from one it may undo.
+void VehicleStateManager::update_charge_schedule_state(const CarServer_ChargeScheduleState& schedule_state) {
+    auto clock_time = [](int32_t minutes) {
+        char text[6];
+        std::snprintf(text, sizeof(text), "%02d:%02d", static_cast<int>((minutes / 60) % 24), static_cast<int>(minutes % 60));
+        return std::string(text);
+    };
+    if (!schedule_state.which_optional_charge_schedule_window) {
+        ESP_LOGD(STATE_MANAGER_TAG, "Charge schedule: no window");
+        publish_text_sensor("charge_schedule_start", "none");
+        publish_text_sensor("charge_schedule_end", "none");
+        return;
+    }
+    const auto& window = schedule_state.optional_charge_schedule_window.charge_schedule_window;
+    ESP_LOGD(STATE_MANAGER_TAG,
+             "Charge schedule window: enabled=%d days=0x%02x start_enabled=%d start=%d end_enabled=%d end=%d one_time=%d",
+             window.enabled, static_cast<unsigned>(window.days_of_week), window.start_enabled,
+             static_cast<int>(window.start_time), window.end_enabled, static_cast<int>(window.end_time), window.one_time);
+    publish_text_sensor("charge_schedule_start",
+                        window.enabled && window.start_enabled ? clock_time(window.start_time) : "none");
+    publish_text_sensor("charge_schedule_end",
+                        window.enabled && window.end_enabled ? clock_time(window.end_time) : "none");
+}
 
 void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charge_state) {
     ESP_LOGD(STATE_MANAGER_TAG, "Updating charge state");
