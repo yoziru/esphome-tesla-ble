@@ -46,6 +46,7 @@ public:
     // ==========================================================================
     void set_binary_sensor(const std::string& id, binary_sensor::BinarySensor* sensor);
     void set_sensor(const std::string& id, sensor::Sensor* sensor);
+    void set_charger_power_force_report(bool enabled) { charger_power_force_report_ = enabled; }
     void set_text_sensor(const std::string& id, text_sensor::TextSensor* sensor);
     
     // Generic sensor getters - use these in update methods
@@ -151,6 +152,7 @@ public:
     
 private:
     TeslaBLEVehicle* parent_;
+    bool charger_power_force_report_{false};
 
     // Climate sub-updates (called from update_climate_state)
     void update_seat_climate_state(const CarServer_ClimateState& climate_state);

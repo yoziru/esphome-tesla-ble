@@ -1,5 +1,6 @@
 # Optional native-power receipt for freshness-sensitive consumers such as PowerSync.
-# Include after client.yml. This is driven by raw vehicle samples, never a timer.
+# Requires common.yml (homeassistant_time); include after client.yml.
+# This is driven by raw vehicle samples, never a timer.
 tesla_ble_vehicle:
   charger_power:
     name: "Charger Power"

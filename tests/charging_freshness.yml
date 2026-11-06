@@ -1,0 +1,6 @@
+packages:
+  native_power: !include charging_power_base.yml
+  freshness: !include ../packages/charging-freshness.yml
+
+substitutions:
+  device_name: tesla-ble-freshness-test

@@ -186,8 +186,8 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
     if (charge_state.which_optional_charger_power) {
         const float power_kw = static_cast<float>(charge_state.optional_charger_power.charger_power);
         if (power_kw >= 0.0f && power_kw <= 500.0f && std::isfinite(power_kw)) {
-            // Raw receipt callbacks must see confirmed unchanged power too.
-            publish_sensor("charger_power", power_kw, true);
+            // Only opted-in raw receipt callbacks need confirmed unchanged power.
+            publish_sensor("charger_power", power_kw, charger_power_force_report_);
         }
     }
 #if !__has_include(<charging_power.h>)

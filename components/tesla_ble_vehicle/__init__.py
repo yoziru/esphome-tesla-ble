@@ -382,7 +382,8 @@ async def create_sensor(var, definition, overrides=None):
     config = _base_config(definition, sensor.Sensor, "sensor")
     config[CONF_FORCE_UPDATE] = False
     if overrides:
-        config.update(overrides)
+        # sensor_schema() supplies a generated ID; keep the component's stable ID.
+        config.update({key: value for key, value in overrides.items() if key != CONF_ID})
     if "unit" in definition:
         config[CONF_UNIT_OF_MEASUREMENT] = definition["unit"]
     if "accuracy_decimals" in definition:
@@ -497,6 +498,7 @@ async def to_code(config):
     cg.add(var.set_update_interval(vcsec_interval_seconds * 1000))
     cg.add(var.set_role(role))
     cg.add(var.set_charging_amps_max(charging_amps_max))
+    cg.add(var.set_charger_power_force_report("charger_power" in config))
     
     # Set polling intervals (convert from seconds to milliseconds)
     cg.add(var.set_vcsec_poll_interval(vcsec_interval_seconds * 1000))
