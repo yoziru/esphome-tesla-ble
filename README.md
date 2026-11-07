@@ -198,8 +198,8 @@ The Tesla backend enforces these restrictions. Change requires re-pairing.
 ### Polling
 
 Automatic telemetry never sends wake commands, including initial/reconnect probes.
-Reconnects preserve idle timing and coalesce infotainment probes on the sleep-timeout
-cadence; explicit **Force data update** and controls can still wake the vehicle.
+Reconnects preserve idle timing and request fresh VCSEC status before infotainment;
+explicit **Force data update** and controls can still wake the vehicle.
 Unlike the native HA integration, ESPHome retains sensor values rather than expiring
 infotainment entities after two minutes. Retained values are not proof of freshness.
 
@@ -211,7 +211,17 @@ tesla_ble_vehicle:
   infotainment_sleep_timeout: 660       # Idle seconds before letting the car sleep (default 11 min)
 ```
 
-The system only polls infotainment data during an 11-minute wake window, then lets the car sleep. Active charging and sentry mode keep it awake for continuous updates. A car that is merely left unlocked, or that reports user presence because a phone is in range, is treated as idle — the integration backs off and lets it sleep regardless. VCSEC status polling is low-power and does not affect vehicle sleep.
+Genuine activity allows awake-cadence infotainment polling for 11 minutes before backing off. Fresh charging or sentry observations enable faster updates, but automatic polling never wakes the car. A car that is merely left unlocked, or that reports user presence because a phone is in range, is treated as idle. VCSEC status polling is low-power and does not affect vehicle sleep.
+
+Fresh VCSEC awake status after connection or an asleep-to-awake transition allows
+a refresh on the next update tick and a bounded three-minute awake-cadence window.
+Both triggers share an eleven-minute cooldown within the running firmware;
+reconnects and repeated awake reports cannot renew it. Sleep, stale status or
+disconnect cancels the window. Automatic polls always use `NO_WAKE_SKIP`, and a
+probe never resets idle timing. Opening the charge port while awake remains
+genuine activity. Retained charging/sentry values alone do not sustain fast polling.
+Without activity, polling returns to the sleep-timeout cadence. Startup begins
+backed off; fresh charging observations can take over the active cadence.
 
 Successful controls refresh the affected state after 1.5 seconds. Repeated controls coalesce that refresh; it does not wake a sleeping car and is cancelled on disconnect.
 

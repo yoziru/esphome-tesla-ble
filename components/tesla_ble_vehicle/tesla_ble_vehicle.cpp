@@ -1,10 +1,12 @@
 #include "tesla_ble_vehicle.h"
+#include <algorithm>
 #include <client.h>
 #include <cinttypes>
 #include <cstring>
 #include <defs.h>
 #include <esp_log.h>
 #include <esphome/core/helpers.h>
+#include <state_text.h>
 #include <tb_utils.h>
 
 namespace esphome {
@@ -50,6 +52,8 @@ void TeslaBLEVehicle::setup() {
   read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
   write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
   initialize_managers();
+  poll_policy_.update(millis() - poll_policy_.sleep_timeout_ms() - 1, true,
+                      false, false);
   restore_charging_amps_max_();
 
   if (vin_.empty()) {
@@ -87,10 +91,11 @@ void TeslaBLEVehicle::initialize_managers() {
   });
 
   vehicle_->set_vehicle_status_callback([this](const VCSEC_VehicleStatus &s) {
-    state_manager_.update_vehicle_status(s);
+    handle_vehicle_status(s);
   });
 
   vehicle_->set_charge_state_callback([this](const CarServer_ChargeState &s) {
+    last_charge_state_ = millis();
     state_manager_.update_charge_state(s);
 #if __has_include(<charging_power.h>)
     state_manager_.update_charging_power(vehicle_->charging_power());
@@ -112,6 +117,7 @@ void TeslaBLEVehicle::initialize_managers() {
 
   vehicle_->set_closures_state_callback(
       [this](const CarServer_ClosuresState &s) {
+        last_closures_state_ = millis();
         state_manager_.update_closures_state(s);
       });
 
@@ -121,6 +127,43 @@ void TeslaBLEVehicle::initialize_managers() {
       });
 
   ESP_LOGD(TAG, "All components initialized");
+}
+
+void TeslaBLEVehicle::handle_vehicle_status(const VCSEC_VehicleStatus &s) {
+  const uint32_t now = millis();
+  const auto asleep = TeslaBLE::state_text::sleep_status(
+      static_cast<int>(s.vehicleSleepStatus));
+  const bool fresh = vehicle_status_known_ &&
+      now - last_vehicle_status_ <=
+          std::max<uint32_t>(120000, vcsec_poll_interval_ * 2);
+  if (!asleep.has_value() || asleep.value()) {
+    poll_policy_.begin_probe_window(now, 0);
+    probe_poll_pending_ = false;
+  } else if ((!fresh || was_asleep_) &&
+             (!probe_started_ || now - last_probe_ >= 660000U)) {
+    poll_policy_.begin_probe_window(now, 180000);
+    probe_poll_pending_ = true;
+    probe_started_ = true;
+    last_probe_ = now;
+  }
+  was_asleep_ = !asleep.has_value() || asleep.value();
+  vehicle_status_known_ = asleep.has_value();
+  last_vehicle_status_ = now;
+  state_manager_.update_vehicle_status(s);
+
+  if (!s.has_closureStatuses)
+    return;
+  const bool charge_port_open =
+      s.closureStatuses.chargePort == VCSEC_ClosureState_E_CLOSURESTATE_OPEN;
+  // The first status after boot or reconnect only establishes the baseline.
+  if (fresh && charge_port_known_ && charge_port_open && !charge_port_open_ &&
+      !was_asleep_) {
+    // Opening the charge port is genuine activity. Restart the idle window so
+    // a plug-in is read within the awake interval instead of the sleep cadence.
+    poll_policy_.reset();
+  }
+  charge_port_known_ = true;
+  charge_port_open_ = charge_port_open;
 }
 
 void TeslaBLEVehicle::loop() {
@@ -162,20 +205,34 @@ void TeslaBLEVehicle::update() {
   }
 
   // Infotainment Polling - use faster interval when vehicle is active
-  const bool is_asleep = state_manager_.is_asleep();
+  const bool is_asleep = !vehicle_status_known_ || was_asleep_ ||
+      now - last_vehicle_status_ > std::max<uint32_t>(120000, vcsec_poll_interval_ * 2);
+  if (is_asleep) {
+    poll_policy_.begin_probe_window(now, 0);
+    probe_poll_pending_ = false;
+  }
   // Only sentry mode and active charging warrant keeping the car awake. A car
   // that is merely left unlocked, or reports user presence because a phone is
   // in range, can still fall asleep on its own and must be allowed to do so
   // (issues #201/#202). To add faster polling for unlocked/user-present later,
   // extend the decision inputs here (and gate it behind an opt-in config).
+  const uint32_t active_freshness_ms =
+      std::max<uint32_t>(120000, poll_policy_.awake_interval_ms() * 2);
   TeslaBLE::InfotainmentPollDecision decision =
-      poll_policy_.update(now, is_asleep, state_manager_.is_charging(),
-                          state_manager_.is_sentry_mode());
+      poll_policy_.update(now, is_asleep,
+          !is_asleep && last_charge_state_.has_value() &&
+              now - *last_charge_state_ <= active_freshness_ms &&
+              state_manager_.is_charging(),
+          !is_asleep && last_closures_state_.has_value() &&
+              now - *last_closures_state_ <= active_freshness_ms &&
+              state_manager_.is_sentry_mode());
 
-  if (poll_policy_.should_poll(now, decision.interval_ms)) {
-    ESP_LOGI(TAG, "Polling Infotainment (NO_WAKE_SKIP, interval=%" PRIu32 "ms)", decision.interval_ms);
+  if (!is_asleep && (probe_poll_pending_ || poll_policy_.should_poll(now, decision.interval_ms))) {
+    ESP_LOGI(TAG, "Polling Infotainment (NO_WAKE_SKIP, interval=%" PRIu32 "ms%s)", decision.interval_ms,
+             probe_poll_pending_ ? ", awake probe" : "");
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     poll_policy_.on_poll(now);
+    probe_poll_pending_ = false;
   }
 }
 
@@ -887,17 +944,17 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event,
 }
 
 void TeslaBLEVehicle::handle_connection_established() {
+  vehicle_status_known_ = false;
+  charge_port_known_ = false;
+  probe_poll_pending_ = false;
+  poll_policy_.begin_probe_window(millis(), 0);
+  last_charge_state_.reset();
+  last_closures_state_.reset();
   if (vehicle_) {
     vehicle_->set_connected(true);
     ESP_LOGI(TAG, "Connection established - triggering initial polls");
     if (!key_rejected_) {
       vehicle_->vcsec_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
-      const uint32_t now = millis();
-      if (!initial_poll_sent_ || poll_policy_.should_poll(now, poll_policy_.sleep_timeout_ms())) {
-        vehicle_->infotainment_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
-        poll_policy_.on_poll(now);
-        initial_poll_sent_ = true;
-      }
     }
     last_vcsec_poll_ = millis();
   }
@@ -910,6 +967,12 @@ void TeslaBLEVehicle::handle_connection_established() {
 }
 
 void TeslaBLEVehicle::handle_connection_lost() {
+  vehicle_status_known_ = false;
+  charge_port_known_ = false;
+  probe_poll_pending_ = false;
+  poll_policy_.begin_probe_window(millis(), 0);
+  last_charge_state_.reset();
+  last_closures_state_.reset();
   if (vehicle_)
     vehicle_->set_connected(false);
   if (ble_adapter_)
