@@ -84,17 +84,19 @@ TEST_DIR ?= tests
 TEST_BUILD_DIR ?= $(TEST_DIR)/build
 TEST_INCLUDE_DIRS ?= -Icomponents/tesla_ble_vehicle
 TEST_CXXFLAGS ?= -std=c++17 -Wall -Wextra
+TESLA_BLE_DIR ?= ../tesla-ble
+NATIVE_TEST_BUILD_DIR := $(TEST_BUILD_DIR)/native
 
-# Each tests/test_*.cpp compiles to its own binary.
-TEST_SRCS := $(wildcard $(TEST_DIR)/test_*.cpp)
+# Standalone policy tests compile to their own binaries; the component uses CMake.
+TEST_SRCS := $(filter-out $(TEST_DIR)/test_command_results.cpp,$(wildcard $(TEST_DIR)/test_*.cpp))
 TEST_BINS := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_BUILD_DIR)/%,$(TEST_SRCS))
 # Rebuild all test binaries when any component header or the shared harness changes.
 TEST_HEADERS := $(wildcard components/tesla_ble_vehicle/*.h) $(TEST_DIR)/test_helper.h
 
-.PHONY: test test-cpp test-python validate-dashboard-config
+.PHONY: test test-cpp test-native test-python validate-dashboard-config
 test: test-cpp test-python ## Run the unit tests (C++ and Python)
 
-test-cpp: $(TEST_BINS) ## Build and run the C++ unit tests
+test-cpp: $(TEST_BINS) test-native ## Build and run the C++ unit tests
 	@for bin in $(TEST_BINS); do \
 	  echo "== $$bin =="; \
 	  $$bin || exit 1; \
@@ -104,9 +106,13 @@ $(TEST_BUILD_DIR)/test_%: $(TEST_DIR)/test_%.cpp $(TEST_HEADERS)
 	mkdir -p $(TEST_BUILD_DIR)
 	$(CXX) $(TEST_CXXFLAGS) $(TEST_INCLUDE_DIRS) $< -o $@
 
-test-python: ## Run the Python codegen and component-method checks
+test-native: ## Compile and run the production component against host platform stubs
+	cmake -S $(TEST_DIR) -B $(NATIVE_TEST_BUILD_DIR) -DTESLA_BLE_DIR=$(abspath $(TESLA_BLE_DIR)) -DCMAKE_CXX_COMPILER="$(CXX)"
+	cmake --build $(NATIVE_TEST_BUILD_DIR) --target test_command_results -j 2
+	$(NATIVE_TEST_BUILD_DIR)/test_command_results
+
+test-python: ## Run the Python codegen and charging-power checks
 	python3 $(TEST_DIR)/test_codegen.py
-	python3 $(TEST_DIR)/test_command_results.py
 	python3 $(TEST_DIR)/test_charging_power.py
 
 validate-dashboard-config: check-uv ## Validate the generated-style ESPHome Dashboard configuration
