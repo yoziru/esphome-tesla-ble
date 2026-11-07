@@ -15,7 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yoziru/tesla-ble
+          ref: v6.4.0
+          path: tesla-ble-library
       - name: Run tests
+        env:
+          TESLA_BLE_DIR: tesla-ble-library
         run: make test
 
   dashboard:
@@ -58,4 +65,3 @@ jobs:
         with:
           yaml-file: ${{ matrix.file }}
           version: ${{ steps.get_esphome_version.outputs.esphome_version }}
-
