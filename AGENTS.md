@@ -56,3 +56,6 @@ Error handling: Check pointers before use. Return bool for success/failure helpe
 - Python: tests/test_codegen.py (stdlib-only ast checks on entity lists in __init__.py);
   tests/test_command_results.py compiles production TeslaBLEVehicle command-result
   methods against stubs (outcomes, number rollback, warning expiry).
+- make test-sub-device (needs uv; own CI job) runs ESPHome `compile --only-generate` on
+  tests/sub_device_config.yml (the README sub-device recipe) and checks `device_id` puts
+  every entity on the sub-device.

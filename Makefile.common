@@ -91,7 +91,7 @@ TEST_BINS := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_BUILD_DIR)/%,$(TEST_SRCS))
 # Rebuild all test binaries when any component header or the shared harness changes.
 TEST_HEADERS := $(wildcard components/tesla_ble_vehicle/*.h) $(TEST_DIR)/test_helper.h
 
-.PHONY: test test-cpp test-python validate-dashboard-config
+.PHONY: test test-cpp test-python test-sub-device validate-dashboard-config
 test: test-cpp test-python ## Run the unit tests (C++ and Python)
 
 test-cpp: $(TEST_BINS) ## Build and run the C++ unit tests
@@ -111,6 +111,9 @@ test-python: ## Run the Python codegen and component-method checks
 
 validate-dashboard-config: check-uv ## Validate the generated-style ESPHome Dashboard configuration
 	uvx --with pip esphome==$(ESPHOME_VERSION) config $(TEST_DIR)/dashboard_config.yml
+
+test-sub-device: check-uv ## Generate C++ to check device_id puts every vehicle entity on the sub-device
+	ESPHOME="uvx --with pip esphome==$(ESPHOME_VERSION)" python3 $(TEST_DIR)/test_sub_device.py
 
 .PHONY: help
 help: ## Show help messages for make targets

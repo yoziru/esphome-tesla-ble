@@ -162,6 +162,32 @@ For multiple vehicles, create one ESPHome device per vehicle and map each device
 
 Or copy [`tesla-ble.example.yml`](./tesla-ble.example.yml) as a starting point for custom configs.
 
+#### Vehicle entities on a sub-device
+
+By default the vehicle entities sit on the ESP device itself. To group them under their own device in Home Assistant, declare an ESPHome [sub-device](https://esphome.io/components/esphome/#sub-devices) and set `device_id` on `tesla_ble_vehicle`. The `!extend` entries move the **BLE Signal** and **BLE Connection** entities from `packages/client.yml` too:
+
+```yaml
+esphome:
+  devices:
+    - id: tesla
+      name: Tesla
+
+tesla_ble_vehicle:
+  device_id: tesla
+
+sensor:
+  - id: !extend ble_signal_id
+    device_id: tesla
+
+switch:
+  - id: !extend ble_connection_id
+    device_id: tesla
+```
+
+The ESP's own entities (Wi-Fi signal, uptime, restart, ...) stay on the main device.
+
+On ESPHome 2026.11.0 and newer, also add `relation: via` to the `tesla` device so Home Assistant shows the car as connected via the ESP ([device relation](https://next.esphome.io/components/esphome/#device-relation)).
+
 ### CLI
 
 Requires Python 3.10+, [uv](https://docs.astral.sh/uv/), and GNU Make.
