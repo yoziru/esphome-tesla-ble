@@ -329,6 +329,7 @@ CONFIG_SCHEMA = (
             cv.Required(CONF_VIN): cv.string,
             cv.Optional(CONF_CHARGING_AMPS_MAX, default=DEFAULT_CHARGING_AMPS_MAX): cv.int_range(min=1, max=48),
             # C++ start_pairing() maps these roles to Keys_Role_* enums.
+            cv.Optional("charger_power"): sensor.sensor_schema(),
             cv.Optional(CONF_ROLE, default="DRIVER"): cv.one_of("DRIVER", "CHARGING_MANAGER", upper=True),
             # Polling intervals (in seconds)
             cv.Optional(CONF_VCSEC_POLL_INTERVAL, default=10): cv.int_range(min=5, max=300),
@@ -391,10 +392,13 @@ async def create_binary_sensor(var, definition):
     return sens
 
 
-async def create_sensor(var, definition):
+async def create_sensor(var, definition, overrides=None):
     """Create a sensor and register with TeslaBLEVehicle using generic setter."""
     config = _base_config(definition, sensor.Sensor, "sensor")
     config[CONF_FORCE_UPDATE] = False
+    if overrides:
+        # sensor_schema() supplies a generated ID; keep the component's stable ID.
+        config.update({key: value for key, value in overrides.items() if key != CONF_ID})
     if "unit" in definition:
         config[CONF_UNIT_OF_MEASUREMENT] = definition["unit"]
     if "accuracy_decimals" in definition:
@@ -515,6 +519,7 @@ async def to_code(config):
     cg.add(var.set_update_interval(vcsec_interval_seconds * 1000))
     cg.add(var.set_role(role))
     cg.add(var.set_charging_amps_max(charging_amps_max))
+    cg.add(var.set_charger_power_force_report("charger_power" in config))
     
     # Set polling intervals (convert from seconds to milliseconds)
     cg.add(var.set_vcsec_poll_interval(vcsec_interval_seconds * 1000))
@@ -533,7 +538,10 @@ async def to_code(config):
         (SELECTS, create_select),
     ):
         for definition in creators[0]:
-            await creators[1](var, definition)
+            if creators[1] is create_sensor and definition["id"] == "charger_power":
+                await create_sensor(var, definition, config.get("charger_power"))
+            else:
+                await creators[1](var, definition)
 
     for definition in NUMBERS:
         await create_number(var, definition, config)

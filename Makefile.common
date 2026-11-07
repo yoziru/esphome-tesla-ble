@@ -91,7 +91,7 @@ TEST_BINS := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_BUILD_DIR)/%,$(TEST_SRCS))
 # Rebuild all test binaries when any component header or the shared harness changes.
 TEST_HEADERS := $(wildcard components/tesla_ble_vehicle/*.h) $(TEST_DIR)/test_helper.h
 
-.PHONY: test test-cpp test-python validate-dashboard-config
+.PHONY: test test-cpp test-python test-freshness-codegen validate-dashboard-config
 test: test-cpp test-python ## Run the unit tests (C++ and Python)
 
 test-cpp: $(TEST_BINS) ## Build and run the C++ unit tests
@@ -108,9 +108,13 @@ test-python: ## Run the Python codegen and component-method checks
 	python3 $(TEST_DIR)/test_codegen.py
 	python3 $(TEST_DIR)/test_command_results.py
 	python3 $(TEST_DIR)/test_charging_power.py
+	python3 $(TEST_DIR)/test_native_power_receipts.py
 
 validate-dashboard-config: check-uv ## Validate the generated-style ESPHome Dashboard configuration
 	uvx --with pip esphome==$(ESPHOME_VERSION) config $(TEST_DIR)/dashboard_config.yml
+
+test-freshness-codegen: check-uv ## Generate and verify default and opt-in native-power configurations
+	uv run --no-project --python 3.12 --with pip --with esphome==$(ESPHOME_VERSION) python $(TEST_DIR)/test_freshness_codegen.py
 
 .PHONY: help
 help: ## Show help messages for make targets
