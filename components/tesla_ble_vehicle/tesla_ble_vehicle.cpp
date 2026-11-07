@@ -102,6 +102,10 @@ void TeslaBLEVehicle::initialize_managers() {
 #endif
   });
 
+  vehicle_->set_charge_schedule_state_callback([this](const CarServer_ChargeScheduleState &s) {
+    state_manager_.update_charge_schedule_state(s);
+  });
+
   vehicle_->set_climate_state_callback([this](const CarServer_ClimateState &s) {
     state_manager_.update_climate_state(s);
   });
@@ -231,6 +235,7 @@ void TeslaBLEVehicle::update() {
     ESP_LOGI(TAG, "Polling Infotainment (NO_WAKE_SKIP, interval=%" PRIu32 "ms%s)", decision.interval_ms,
              probe_poll_pending_ ? ", awake probe" : "");
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
+    vehicle_->charge_schedule_state_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     poll_policy_.on_poll(now);
     probe_poll_pending_ = false;
   }
