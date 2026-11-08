@@ -25,7 +25,7 @@ void BleAdapterImpl::disconnect() {
 }
 
 bool BleAdapterImpl::write(const std::vector<uint8_t>& data) {
-    if (!parent_->is_connected()) return false;
+    if (!parent_->is_connected() || !parent_->recovery_can_process()) return false;
 
     // Whole-frame admission: reject the frame rather than start one that does
     // not fit, so the queue never holds a partial frame and memory stays
@@ -52,6 +52,7 @@ bool BleAdapterImpl::write(const std::vector<uint8_t>& data) {
 }
 
 void BleAdapterImpl::process_write_queue() {
+    if (!parent_->recovery_can_process()) return;
     if (write_queue_.empty()) return;
     if (!parent_->is_connected()) return;
 

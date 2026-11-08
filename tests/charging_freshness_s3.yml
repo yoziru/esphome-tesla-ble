@@ -1,0 +1,7 @@
+packages:
+  native_power: !include charging_freshness.yml
+
+substitutions:
+  device_name: ble-freshness-s3
+  board: esp32-s3-devkitc-1
+  variant: ESP32S3

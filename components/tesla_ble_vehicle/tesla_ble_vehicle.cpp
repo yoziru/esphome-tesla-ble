@@ -51,6 +51,9 @@ void TeslaBLEVehicle::setup() {
   service_uuid_ = espbt::ESPBTUUID::from_raw(SERVICE_UUID);
   read_uuid_ = espbt::ESPBTUUID::from_raw(READ_UUID);
   write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
+  // Load the persistent hold before restored entities or boot automations
+  // can enqueue controls. A new boot discards all old library/adapter queues.
+  setup_stop_recovery_();
   initialize_managers();
   poll_policy_.update(millis() - poll_policy_.sleep_timeout_ms() - 1, true,
                       false, false);
@@ -102,6 +105,18 @@ void TeslaBLEVehicle::initialize_managers() {
 #endif
   });
 
+#if defined(USE_POWERSYNC_BLE_RECOVERY) && !defined(TESLABLE_CORRELATED_CHARGE_STATE)
+#error "PowerSync recovery requires the matching TeslaBLE library with correlated charge reports"
+#endif
+#ifdef TESLABLE_CORRELATED_CHARGE_STATE
+  if (recovery_proof_ != nullptr) {
+    vehicle_->set_correlated_charge_state_callback(
+        [this](const CarServer_ChargeState &state, const std::string &uuid) {
+          read_stop_recovery_sample_(state, uuid);
+        });
+  }
+
+#endif
   vehicle_->set_climate_state_callback([this](const CarServer_ClimateState &s) {
     state_manager_.update_climate_state(s);
   });
@@ -167,6 +182,8 @@ void TeslaBLEVehicle::handle_vehicle_status(const VCSEC_VehicleStatus &s) {
 }
 
 void TeslaBLEVehicle::loop() {
+  if (!recovery_can_process()) return;
+  if (recovery_held()) poll_stop_recovery_();
   if (vehicle_)
     vehicle_->loop();
   if (ble_adapter_)
@@ -192,6 +209,7 @@ void TeslaBLEVehicle::loop() {
 }
 
 void TeslaBLEVehicle::update() {
+  if (recovery_held()) { poll_stop_recovery_(); return; }
   if (!is_connected() || !vehicle_ || key_rejected_ || vehicle_->pending_command_count())
     return;
 
@@ -505,6 +523,11 @@ void TeslaBLEVehicle::handle_command_result(const std::string &name,
 void TeslaBLEVehicle::track(const std::string &name,
                             std::function<void(TeslaBLE::Command::OperationResultCallback)> send,
                             std::function<void(bool)> on_result) {
+  if (recovery_held()) {
+    ESP_LOGW(TAG, "Recovery holds vehicle control: %s", name.c_str());
+    if (on_result) on_result(false);
+    return;
+  }
   if (key_rejected_ && name != "Pair") {
     handle_key_not_paired();
     if (on_result) on_result(false);
@@ -570,6 +593,7 @@ int TeslaBLEVehicle::start_pairing() {
 }
 
 int TeslaBLEVehicle::regenerate_key() {
+  if (recovery_held()) return -1;
   ESP_LOGI(TAG, "Key regeneration requested");
 
   if (!vehicle_) {
@@ -582,6 +606,7 @@ int TeslaBLEVehicle::regenerate_key() {
 }
 
 void TeslaBLEVehicle::force_update() {
+  if (recovery_held()) { poll_stop_recovery_(); return; }
   if (key_rejected_) {
     handle_key_not_paired();
     return;

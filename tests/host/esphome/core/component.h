@@ -22,7 +22,15 @@ class PollingComponent {
     timeouts_[name] = millis() + length;
   }
   bool cancel_timeout(const std::string &name) { return timeouts_.erase(name) != 0; }
+  void set_timeout(const std::string &name, uint32_t delay, std::function<void()> callback) {
+    callbacks_[name] = {millis()+delay, std::move(callback)};
+  }
   void run_timeouts() {
+    for (auto it = callbacks_.begin(); it != callbacks_.end();) {
+      if (static_cast<int32_t>(millis()-it->second.first) >= 0) {
+        auto callback = it->second.second; it = callbacks_.erase(it); callback();
+      } else ++it;
+    }
     for (auto it = timeouts_.begin(); it != timeouts_.end();) {
       if (static_cast<int32_t>(millis() - it->second) >= 0) {
         status_clear_warning();
@@ -31,6 +39,7 @@ class PollingComponent {
     }
   }
  private:
+  std::map<std::string, std::pair<uint32_t, std::function<void()>>> callbacks_;
   bool warning_ = false;
   std::map<std::string, uint32_t> timeouts_;
 };

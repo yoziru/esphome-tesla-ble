@@ -8,7 +8,8 @@ add_executable(test_command_results
   test_command_results.cpp
   host/platform.cpp
   ../components/tesla_ble_vehicle/tesla_ble_vehicle.cpp
-  ../components/tesla_ble_vehicle/vehicle_state_manager.cpp)
+  ../components/tesla_ble_vehicle/vehicle_state_manager.cpp
+  ../components/tesla_ble_vehicle/powersync_recovery.cpp)
 target_compile_features(test_command_results PRIVATE cxx_std_23)
 target_compile_options(test_command_results PRIVATE -Wall -Wextra)
 set_source_files_properties(test_command_results.cpp PROPERTIES COMPILE_OPTIONS -fno-access-control)

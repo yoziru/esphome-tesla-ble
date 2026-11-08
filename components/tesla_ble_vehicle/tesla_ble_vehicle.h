@@ -27,6 +27,7 @@
 #include <polling_policy.h>
 #include <vehicle.h>
 #include "vehicle_state_manager.h"
+#include "powersync_recovery_policy.h"
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -67,6 +68,11 @@ public:
     void update() override;
     void dump_config() override;
 
+    void set_recovery_proof(text_sensor::TextSensor *sensor) { recovery_proof_ = sensor; }
+    void request_stop_recovery(const std::string &request);
+    bool recovery_held() const { return recovery_proof_ != nullptr && stop_recovery_.locked(); }
+    bool recovery_can_process() const { return !recovery_held() || stop_recovery_.reading(); }
+
     // BLE event handling
     void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                            esp_ble_gattc_cb_param_t *param) override;
@@ -90,6 +96,9 @@ public:
     // ==========================================================================
     void set_binary_sensor(const std::string& id, binary_sensor::BinarySensor* sensor);
     void set_sensor(const std::string& id, sensor::Sensor* sensor);
+    void set_charger_power_force_report(bool enabled) {
+      state_manager_.set_charger_power_force_report(enabled);
+    }
     void set_text_sensor(const std::string& id, text_sensor::TextSensor* sensor);
 
     // ==========================================================================
@@ -182,6 +191,15 @@ public:
     uint16_t get_write_handle() const { return write_handle_; }
 
 private:
+    StopRecoveryProtocol stop_recovery_;
+    text_sensor::TextSensor *recovery_proof_{nullptr};
+    uint32_t recovery_last_poll_{0};
+    std::string recovery_last_uuid_;
+    void setup_stop_recovery_();
+    bool persist_stop_recovery_();
+    void publish_stop_recovery_();
+    void poll_stop_recovery_();
+    void read_stop_recovery_sample_(const CarServer_ChargeState &state, const std::string &uuid);
     // Initialization helpers
     void initialize_managers();
 

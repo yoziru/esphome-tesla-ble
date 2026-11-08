@@ -303,11 +303,101 @@ static void charge_port_edges() {
   CHECK(policy() == WakePolicy::NO_WAKE_SKIP);
 }
 
+
+static CarServer_ChargeState stopped_sample() {
+  CarServer_ChargeState state = CarServer_ChargeState_init_default;
+  state.has_charging_state = true;
+  state.charging_state.which_type = CarServer_ChargeState_ChargingState_Stopped_tag;
+  state.which_optional_charger_actual_current = CarServer_ChargeState_charger_actual_current_tag;
+  state.optional_charger_actual_current.charger_actual_current = 0;
+  state.which_optional_charger_power = CarServer_ChargeState_charger_power_tag;
+  state.optional_charger_power.charger_power = 0;
+  return state;
+}
+
+static void recovery_transaction() {
+  host_nvs_record.clear(); host_nvs_pending.clear(); host_nvs_fail = false;
+  text_sensor::TextSensor proof;
+  TeslaBLEVehicle original;
+  original.set_vin("5YJ30123456789ABC"); original.set_recovery_proof(&proof); original.setup();
+  original.vehicle_->set_connected(true); original.vehicle_->set_awake(true);
+  original.set_charging_state(true);
+  CHECK(original.vehicle_->pending_command_count() > 0);
+  const std::string nonce(32, 'a');
+  original.request_stop_recovery("prepare:"+nonce);
+  CHECK(original.recovery_held());
+  CHECK(!original.recovery_can_process());
+  CHECK(original.stop_recovery_.phase == 'p');
+  const auto pending = original.vehicle_->pending_command_count();
+  original.set_charging_state(true); original.set_charging_amps(32); original.set_charging_limit(80);
+  CHECK(original.regenerate_key() == -1);
+  original.start_pairing(); original.loop();
+  CHECK(original.vehicle_->pending_command_count() == pending);
+  CHECK(!host_nvs_record.empty());
+
+  // Simulated process reboot retains NVS but no old executable library work.
+  TeslaBLEVehicle rebooted;
+  rebooted.set_vin("5YJ30123456789ABC"); rebooted.set_recovery_proof(&proof); rebooted.setup();
+  CHECK(rebooted.recovery_held());
+  CHECK(rebooted.stop_recovery_.phase == 'q');
+  CHECK(rebooted.vehicle_->pending_command_count() == 0);
+  CHECK(rebooted.stop_recovery_.boot != original.stop_recovery_.boot);
+  auto state = stopped_sample();
+  host_millis += 2000;
+  rebooted.read_stop_recovery_sample_(state, std::string(32, '1'));
+  CHECK(rebooted.stop_recovery_.sequence == 1);
+  host_millis += 2000;
+  rebooted.read_stop_recovery_sample_(state, std::string(32, '1'));
+  CHECK(rebooted.stop_recovery_.sequence == 1); // replay cannot renew proof
+  rebooted.read_stop_recovery_sample_(state, std::string(32, '2'));
+  CHECK(rebooted.stop_recovery_.phase == 'v');
+  CHECK(proof.state.find("\"a\":0") != std::string::npos);
+  CHECK(proof.state.find("\"m\":\"v\"") != std::string::npos);
+  rebooted.request_stop_recovery("commit:"+std::string(32, 'b'));
+  CHECK(rebooted.recovery_held());
+  host_nvs_fail = true;
+  rebooted.request_stop_recovery("commit:"+nonce);
+  CHECK(rebooted.recovery_held());
+  CHECK(rebooted.stop_recovery_.phase == 'h');
+  host_nvs_fail = false;
+
+  // A failed commit cannot become unlocked on boot. The same recovery nonce
+  // is retained, and new native observations allow a later idempotent commit.
+  TeslaBLEVehicle resumed;
+  resumed.set_vin("5YJ30123456789ABC"); resumed.set_recovery_proof(&proof); resumed.setup();
+  CHECK(resumed.recovery_held());
+  host_millis += 2000; resumed.read_stop_recovery_sample_(state, std::string(32, '3'));
+  host_millis += 2000; resumed.read_stop_recovery_sample_(state, std::string(32, '4'));
+  CHECK(resumed.stop_recovery_.phase == 'v');
+  resumed.request_stop_recovery("commit:"+nonce);
+  CHECK(!resumed.recovery_held());
+  CHECK(resumed.stop_recovery_.phase == 'r');
+  resumed.vehicle_->set_connected(true); resumed.vehicle_->set_awake(true);
+  resumed.set_charging_state(true);
+  CHECK(resumed.vehicle_->pending_command_count() > 0);
+  resumed.request_stop_recovery("commit:"+nonce);
+  CHECK(!resumed.recovery_held()); // duplicate commit does not replay controls
+  const auto count = resumed.vehicle_->pending_command_count();
+  resumed.request_stop_recovery("hold:"+nonce);
+  CHECK(resumed.recovery_held());
+  resumed.loop(); CHECK(resumed.vehicle_->pending_command_count() == count);
+
+  TeslaBLEVehicle wrong_vin;
+  wrong_vin.set_vin("5YJ30123456789ABD"); wrong_vin.set_recovery_proof(&proof); wrong_vin.setup();
+  CHECK(wrong_vin.recovery_held()); CHECK(wrong_vin.stop_recovery_.phase == 'h');
+  host_nvs_record = {1, 2, 3};
+  TeslaBLEVehicle damaged;
+  damaged.set_vin("5YJ30123456789ABC"); damaged.set_recovery_proof(&proof); damaged.setup();
+  CHECK(damaged.recovery_held()); CHECK(damaged.stop_recovery_.phase == 'h');
+  host_nvs_record.clear(); host_nvs_pending.clear();
+}
+
 int main() {
   command_outcomes();
   warnings_and_pairing();
   awake_probe_lifecycle();
   active_observations_expire();
   charge_port_edges();
+  recovery_transaction();
   return test_summary();
 }
